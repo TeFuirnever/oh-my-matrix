@@ -1,3 +1,4 @@
+import { handleSessionEnd, handleSessionStart } from "./omm-hooks.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 
@@ -65,6 +66,16 @@ export function register(api: OmmPluginApi): void {
     },
     { optional: true, name: "omm_cancel" },
   );
+
+  if (typeof api.on === "function") {
+    const stateRoot = api.config?.stateRoot as string | undefined;
+    api.on("session_start", (args) =>
+      handleSessionStart(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("session_end", (args) =>
+      handleSessionEnd(args as Record<string, unknown>, { stateRoot }),
+    );
+  }
 }
 
 export default {
