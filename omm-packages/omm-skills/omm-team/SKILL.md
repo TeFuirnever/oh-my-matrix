@@ -6,7 +6,7 @@ disable-model-invocation: true
 command-dispatch: tool
 command-tool: omm_state_write
 command-arg-mode: raw
-version: 0.1.0
+version: 0.2.0
 ---
 
 Start or resume an omm-team multi-agent execution pipeline.
@@ -47,8 +47,18 @@ PLANNING → DECOMPOSING → EXECUTING → VERIFYING → COMPLETE
   "task": "<original task>",
   "current_phase": "executing",
   "subtasks": [
-    {"id": 1, "description": "...", "owner": "worker-1", "status": "completed"},
-    {"id": 2, "description": "...", "owner": "worker-2", "status": "in_progress"}
+    {
+      "id": 1,
+      "description": "...",
+      "owner": "worker-1",
+      "status": "completed"
+    },
+    {
+      "id": 2,
+      "description": "...",
+      "owner": "worker-2",
+      "status": "in_progress"
+    }
   ],
   "agent_count": 3,
   "fix_loop_count": 0,

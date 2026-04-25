@@ -105,7 +105,7 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
     respond(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "omm-state", version: "0.1.0" },
+      serverInfo: { name: "omm-state", version: "0.2.0" },
     });
     return;
   }

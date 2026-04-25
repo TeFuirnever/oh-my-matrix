@@ -6,7 +6,7 @@ disable-model-invocation: true
 command-dispatch: tool
 command-tool: omm_state_write
 command-arg-mode: raw
-version: 0.1.0
+version: 0.2.0
 ---
 
 Start or resume an omm-ralph persistent execution loop.

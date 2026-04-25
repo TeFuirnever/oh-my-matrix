@@ -19,7 +19,7 @@ interface OmmPluginApi {
 
 export const id = "omm";
 export const name = "omm";
-export const version = "0.1.0";
+export const version = "0.2.0";
 
 export function register(api: OmmPluginApi): void {
   if (typeof api.registerTool !== "function") {

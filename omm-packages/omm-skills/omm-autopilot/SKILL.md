@@ -6,7 +6,7 @@ disable-model-invocation: true
 command-dispatch: tool
 command-tool: omm_state_write
 command-arg-mode: raw
-version: 0.1.0
+version: 0.2.0
 ---
 
 Start or resume an omm-autopilot autonomous execution session.
@@ -49,9 +49,9 @@ ANALYZING → PLANNING → STEP_N → VERIFYING → COMPLETE
   "total_steps": 5,
   "status": "executing",
   "plan": [
-    {"step": 1, "description": "...", "status": "completed", "retries": 0},
-    {"step": 2, "description": "...", "status": "executing", "retries": 0},
-    {"step": 3, "description": "...", "status": "pending", "retries": 0}
+    { "step": 1, "description": "...", "status": "completed", "retries": 0 },
+    { "step": 2, "description": "...", "status": "executing", "retries": 0 },
+    { "step": 3, "description": "...", "status": "pending", "retries": 0 }
   ],
   "max_retries_per_step": 3,
   "startedAt": "...",

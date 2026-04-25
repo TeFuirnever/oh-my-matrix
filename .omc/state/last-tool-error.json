@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"E:/DevMind/MatrixAssistant\\\" && git add resources/claw-plugin/omm/ && git commit -m \\\"$(cat <<'EOF'\\nchore: update omm plugin with session lifecycle hooks\\n\\nPlugin now registers sess...",
+  "error": "Exit code 1\nOn branch dev\nYour branch is ahead of 'origin/multi-agent-v1-baseline' by 319 commits.\n  (use \"git push\" to publish your local commits)\n\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   .omc/wiki/log.md\n\tmodified:   .omc/wiki/session-log-2026-04-20-21a77d6f.md\n\tmodified:   .omc/wiki/session-log-2026-04-20-8288d358.md\n\tmodified:   .planning/STATE.md\n\tmodified...",
+  "timestamp": "2026-04-25T14:02:40.686Z",
+  "retry_count": 1
+}

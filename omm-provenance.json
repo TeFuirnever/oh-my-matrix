@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "bundle": "omm-suite-0.1.0",
+  "bundle": "omm-suite-0.2.0",
   "entries": [
     {
       "target": "omm-packages/omm-plugin",

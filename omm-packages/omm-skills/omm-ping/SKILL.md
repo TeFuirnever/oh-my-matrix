@@ -6,7 +6,7 @@ disable-model-invocation: true
 command-dispatch: tool
 command-tool: omm_ping
 command-arg-mode: raw
-version: 0.1.0
+version: 0.2.0
 ---
 
 # omm-ping
