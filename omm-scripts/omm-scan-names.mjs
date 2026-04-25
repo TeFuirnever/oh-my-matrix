@@ -22,6 +22,7 @@ const legalFiles = new Set([
   "NOTICE",
   "THIRD_PARTY_NOTICES.md",
   "omm-provenance.json",
+  "biome.json",
 ]);
 const textExtensions = new Set([
   ".json",
