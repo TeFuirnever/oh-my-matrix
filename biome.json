@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!omm-dist", "!node_modules", "!**/dist"]
+    "includes": ["**", "!omm-dist", "!node_modules", "!**/dist", "!.omc"]
   },
   "formatter": {
     "enabled": true,

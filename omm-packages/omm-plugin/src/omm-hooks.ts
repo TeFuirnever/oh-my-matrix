@@ -23,7 +23,7 @@ export function handleSessionStart(
 
   writeFileSync(
     join(stateDir, "session.json"),
-    JSON.stringify(record, null, 2) + "\n",
+    `${JSON.stringify(record, null, 2)}\n`,
     "utf8",
   );
 }
@@ -43,7 +43,7 @@ export function handleSessionEnd(
   try {
     writeFileSync(
       join(stateDir, "session.json"),
-      JSON.stringify(record, null, 2) + "\n",
+      `${JSON.stringify(record, null, 2)}\n`,
       "utf8",
     );
   } catch {
