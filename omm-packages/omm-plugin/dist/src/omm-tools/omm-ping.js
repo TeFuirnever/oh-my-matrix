@@ -2,7 +2,7 @@ import { writeOmmSmokeRecord } from "../omm-state.js";
 function normalizeMessage(value) {
     return typeof value === "string" && value.trim() !== "" ? value : "ping";
 }
-function normalizeNullableText(value) {
+export function normalizeNullableText(value) {
     return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 export async function runOmmPing(input, config = {}) {

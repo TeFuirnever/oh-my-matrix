@@ -19,7 +19,7 @@ function normalizeMessage(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value : "ping";
 }
 
-function normalizeNullableText(value: unknown): string | null {
+export function normalizeNullableText(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 

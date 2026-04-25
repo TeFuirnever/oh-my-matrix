@@ -13,6 +13,7 @@ const blockedHashes = new Set([
 ]);
 const ignoredPathParts = new Set([
   ".git",
+  // split to avoid self-match during scan
   ".o" + "mc",
   "node_modules",
   "omm-dist",

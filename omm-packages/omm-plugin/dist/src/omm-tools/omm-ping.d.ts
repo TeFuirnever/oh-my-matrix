@@ -13,4 +13,5 @@ export interface OmmToolResult {
     }>;
     details: Record<string, unknown>;
 }
+export declare function normalizeNullableText(value: unknown): string | null;
 export declare function runOmmPing(input: OmmPingInput, config?: OmmPingConfig): Promise<OmmToolResult>;

@@ -33,14 +33,17 @@ export async function collectFiles(root) {
 
 export async function buildManifestEntries(root) {
   const files = await collectFiles(root);
-  const entries = [];
-  for (const file of files) {
-    const fileStat = await stat(file);
-    entries.push({
-      path: toPosixPath(relative(root, file)),
-      size: fileStat.size,
-      sha256: await sha256File(file),
-    });
-  }
-  return entries;
+  return Promise.all(
+    files.map(async (file) => {
+      const [fileStat, sha256] = await Promise.all([
+        stat(file),
+        sha256File(file),
+      ]);
+      return {
+        path: toPosixPath(relative(root, file)),
+        size: fileStat.size,
+        sha256,
+      };
+    }),
+  );
 }

@@ -8,8 +8,8 @@ export interface OmmSessionRecord {
   sessionId?: string;
 }
 
-export function handleSessionStart(
-  _args: Record<string, unknown>,
+function writeSessionRecord(
+  event: OmmSessionRecord["event"],
   config?: { stateRoot?: string },
 ): void {
   const stateRoot = resolveOmmStateRoot(config?.stateRoot);
@@ -17,7 +17,7 @@ export function handleSessionStart(
   mkdirSync(stateDir, { recursive: true });
 
   const record: OmmSessionRecord = {
-    event: "session_start",
+    event,
     timestamp: new Date().toISOString(),
   };
 
@@ -28,24 +28,19 @@ export function handleSessionStart(
   );
 }
 
+export function handleSessionStart(
+  _args: Record<string, unknown>,
+  config?: { stateRoot?: string },
+): void {
+  writeSessionRecord("session_start", config);
+}
+
 export function handleSessionEnd(
   _args: Record<string, unknown>,
   config?: { stateRoot?: string },
 ): void {
-  const stateRoot = resolveOmmStateRoot(config?.stateRoot);
-  const stateDir = join(stateRoot, "state");
-
-  const record: OmmSessionRecord = {
-    event: "session_end",
-    timestamp: new Date().toISOString(),
-  };
-
   try {
-    writeFileSync(
-      join(stateDir, "session.json"),
-      `${JSON.stringify(record, null, 2)}\n`,
-      "utf8",
-    );
+    writeSessionRecord("session_end", config);
   } catch {
     // State dir may not exist if session_start never fired
   }
