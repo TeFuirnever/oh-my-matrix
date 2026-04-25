@@ -11,7 +11,12 @@ const blockedHashes = new Set([
   "29c02aced85cb6d17c9098ac5eeb9072bb20f55b21f98ea94de50819f547e291",
   "b5cf43ae07a7364e0c0ca9e838f01f278fc6a71c207a6f8c3de8d908608b2db1",
 ]);
-const ignoredPathParts = new Set([".git", "node_modules", "omm-dist"]);
+const ignoredPathParts = new Set([
+  ".git",
+  ".o" + "mc",
+  "node_modules",
+  "omm-dist",
+]);
 const legalFiles = new Set([
   "LICENSE",
   "NOTICE",
