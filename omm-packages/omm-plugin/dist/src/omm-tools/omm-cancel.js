@@ -2,6 +2,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "../omm-config.js";
 import { normalizeNullableText } from "./omm-ping.js";
+/** Execute omm_cancel tool — writes a cancellation record for the given session. */
 export async function runOmmCancel(input, config = {}) {
   const sessionId = normalizeNullableText(input.sessionId);
   const record = {

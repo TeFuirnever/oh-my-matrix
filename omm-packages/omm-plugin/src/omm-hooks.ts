@@ -28,6 +28,7 @@ function writeSessionRecord(
   );
 }
 
+/** Write a session_start record to omm state. */
 export function handleSessionStart(
   _args: Record<string, unknown>,
   config?: { stateRoot?: string },
@@ -35,6 +36,7 @@ export function handleSessionStart(
   writeSessionRecord("session_start", config);
 }
 
+/** Write a session_end record to omm state. Silently ignores errors. */
 export function handleSessionEnd(
   _args: Record<string, unknown>,
   config?: { stateRoot?: string },

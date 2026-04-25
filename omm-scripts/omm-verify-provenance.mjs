@@ -1,3 +1,4 @@
+/** Verifies omm-provenance.json entries reference real files. Usage: node omm-scripts/omm-verify-provenance.mjs */
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";

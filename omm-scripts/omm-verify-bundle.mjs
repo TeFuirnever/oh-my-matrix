@@ -1,3 +1,4 @@
+/** Verifies an omm-suite tarball against its embedded manifest. Usage: node omm-scripts/omm-verify-bundle.mjs <path-to-tgz> */
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

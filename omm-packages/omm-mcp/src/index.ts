@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/** omm-state MCP server — exposes omm state read/write over stdio JSON-RPC. */
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";

@@ -15,9 +15,11 @@ function writeSessionRecord(event, config) {
     "utf8",
   );
 }
+/** Write a session_start record to omm state. */
 export function handleSessionStart(_args, config) {
   writeSessionRecord("session_start", config);
 }
+/** Write a session_end record to omm state. Silently ignores errors. */
 export function handleSessionEnd(_args, config) {
   try {
     writeSessionRecord("session_end", config);

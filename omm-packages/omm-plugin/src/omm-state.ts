@@ -11,6 +11,7 @@ export interface OmmSmokeRecord {
   createdAt: string;
 }
 
+/** Atomically write a JSON record to the omm state directory (tmp + rename). */
 export async function writeOmmSmokeRecord(
   record: OmmSmokeRecord,
   configRoot?: unknown,

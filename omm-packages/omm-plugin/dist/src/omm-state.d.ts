@@ -6,6 +6,7 @@ export interface OmmSmokeRecord {
   skillName: string | null;
   createdAt: string;
 }
+/** Atomically write a JSON record to the omm state directory (tmp + rename). */
 export declare function writeOmmSmokeRecord(
   record: OmmSmokeRecord,
   configRoot?: unknown,

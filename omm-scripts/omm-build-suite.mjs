@@ -1,3 +1,4 @@
+/** Builds omm-suite tarball from compiled packages. Usage: pnpm omm:build-suite */
 import { spawnSync } from "node:child_process";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

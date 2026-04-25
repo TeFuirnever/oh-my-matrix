@@ -19,10 +19,12 @@ function normalizeMessage(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value : "ping";
 }
 
+/** Coerce unknown input to a trimmed string or null. */
 export function normalizeNullableText(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 
+/** Execute omm_ping tool — writes a smoke record and returns a pong response. */
 export async function runOmmPing(
   input: OmmPingInput,
   config: OmmPingConfig = {},

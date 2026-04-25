@@ -1,3 +1,4 @@
+/** Scans source files for forbidden naming using hash-based denylist. Usage: node omm-scripts/omm-scan-names.mjs [root-dir] */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";

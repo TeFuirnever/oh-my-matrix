@@ -1,3 +1,4 @@
+/** Shared utilities for omm build scripts (hashing, file collection, manifest generation). */
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
