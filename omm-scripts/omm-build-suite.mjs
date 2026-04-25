@@ -16,66 +16,58 @@ async function copyRequiredFiles() {
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
 
-  await cp(join(root, "LICENSE"), join(staging, "LICENSE"));
-  await cp(join(root, "NOTICE"), join(staging, "NOTICE"));
-  await cp(
-    join(root, "THIRD_PARTY_NOTICES.md"),
-    join(staging, "THIRD_PARTY_NOTICES.md"),
-  );
-  await cp(
-    join(root, "omm-provenance.json"),
-    join(staging, "omm-provenance.json"),
-  );
-  await cp(
-    join(root, "omm-packages", "omm-plugin", "package.json"),
-    join(staging, "omm-plugin", "package.json"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-plugin", "openclaw.plugin.json"),
-    join(staging, "omm-plugin", "openclaw.plugin.json"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-plugin", "dist"),
-    join(staging, "omm-plugin", "dist"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-skills", "omm-ping"),
-    join(staging, "omm-skills", "omm-ping"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-skills", "omm-cancel"),
-    join(staging, "omm-skills", "omm-cancel"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-skills", "omm-ralph"),
-    join(staging, "omm-skills", "omm-ralph"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-skills", "omm-team"),
-    join(staging, "omm-skills", "omm-team"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-skills", "omm-autopilot"),
-    join(staging, "omm-skills", "omm-autopilot"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-mcp", "package.json"),
-    join(staging, "omm-mcp", "package.json"),
-    { recursive: true },
-  );
-  await cp(
-    join(root, "omm-packages", "omm-mcp", "dist"),
-    join(staging, "omm-mcp", "dist"),
-    { recursive: true },
-  );
+  const pkg = (...p) => join(root, "omm-packages", ...p);
+  await Promise.all([
+    cp(join(root, "LICENSE"), join(staging, "LICENSE")),
+    cp(join(root, "NOTICE"), join(staging, "NOTICE")),
+    cp(
+      join(root, "THIRD_PARTY_NOTICES.md"),
+      join(staging, "THIRD_PARTY_NOTICES.md"),
+    ),
+    cp(join(root, "omm-provenance.json"), join(staging, "omm-provenance.json")),
+    cp(
+      pkg("omm-plugin", "package.json"),
+      join(staging, "omm-plugin", "package.json"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-plugin", "openclaw.plugin.json"),
+      join(staging, "omm-plugin", "openclaw.plugin.json"),
+      { recursive: true },
+    ),
+    cp(pkg("omm-plugin", "dist"), join(staging, "omm-plugin", "dist"), {
+      recursive: true,
+    }),
+    cp(pkg("omm-skills", "omm-ping"), join(staging, "omm-skills", "omm-ping"), {
+      recursive: true,
+    }),
+    cp(
+      pkg("omm-skills", "omm-cancel"),
+      join(staging, "omm-skills", "omm-cancel"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ralph"),
+      join(staging, "omm-skills", "omm-ralph"),
+      { recursive: true },
+    ),
+    cp(pkg("omm-skills", "omm-team"), join(staging, "omm-skills", "omm-team"), {
+      recursive: true,
+    }),
+    cp(
+      pkg("omm-skills", "omm-autopilot"),
+      join(staging, "omm-skills", "omm-autopilot"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-mcp", "package.json"),
+      join(staging, "omm-mcp", "package.json"),
+      { recursive: true },
+    ),
+    cp(pkg("omm-mcp", "dist"), join(staging, "omm-mcp", "dist"), {
+      recursive: true,
+    }),
+  ]);
 }
 
 async function writeManifest() {

@@ -46,19 +46,19 @@ function normalizeToken(token) {
 
 function shouldCheck(file) {
   const normalized = toPosixPath(file);
-  if (
-    [...ignoredPathParts].some(
-      (part) =>
-        normalized.includes(`/${part}/`) || normalized.endsWith(`/${part}`),
-    )
-  ) {
-    return false;
+  for (const part of ignoredPathParts) {
+    if (normalized.includes(`/${part}/`) || normalized.endsWith(`/${part}`)) {
+      return false;
+    }
   }
   const name = normalized.split("/").at(-1) ?? "";
   if (legalFiles.has(name)) {
     return false;
   }
-  return [...textExtensions].some((ext) => normalized.endsWith(ext));
+  for (const ext of textExtensions) {
+    if (normalized.endsWith(ext)) return true;
+  }
+  return false;
 }
 
 const failures = [];
