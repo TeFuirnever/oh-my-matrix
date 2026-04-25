@@ -52,6 +52,11 @@ async function copyRequiredFiles() {
     { recursive: true },
   );
   await cp(
+    join(root, "omm-packages", "omm-skills", "omm-ralph"),
+    join(staging, "omm-skills", "omm-ralph"),
+    { recursive: true },
+  );
+  await cp(
     join(root, "omm-packages", "omm-mcp", "package.json"),
     join(staging, "omm-mcp", "package.json"),
     { recursive: true },
