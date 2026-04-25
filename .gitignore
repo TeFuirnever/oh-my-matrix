@@ -1,0 +1,3 @@
+node_modules/
+omm-dist/
+*.tsbuildinfo

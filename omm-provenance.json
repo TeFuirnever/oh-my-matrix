@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "bundle": "omm-suite-0.1.0",
+  "entries": [
+    {
+      "target": "omm-packages/omm-plugin",
+      "source": "new",
+      "transform": "authored-from-scratch",
+      "license": "MIT",
+      "note": "Minimal MVP plugin created for OpenClaw ABI compatibility testing."
+    },
+    {
+      "target": "omm-packages/omm-skills/omm-ping/SKILL.md",
+      "source": "new",
+      "transform": "authored-from-scratch",
+      "license": "MIT",
+      "note": "Minimal deterministic command-dispatch skill for MVP smoke testing."
+    }
+  ]
+}

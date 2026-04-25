@@ -1,0 +1,19 @@
+{
+  "id": "omm",
+  "name": "omm",
+  "version": "0.1.0",
+  "description": "Minimal omm plugin for OpenClaw compatibility smoke testing.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "stateRoot": {
+        "type": "string"
+      }
+    }
+  }
+}

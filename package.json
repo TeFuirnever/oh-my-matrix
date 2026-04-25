@@ -1,0 +1,21 @@
+{
+  "name": "omm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw-native orchestration extension suite",
+  "type": "module",
+  "packageManager": "pnpm@10.24.0",
+  "scripts": {
+    "build": "pnpm --filter omm-plugin build && pnpm --filter omm-mcp build && node omm-scripts/omm-build-suite.mjs",
+    "lint": "biome check .",
+    "test": "node --test omm-packages/omm-plugin/dist/src/**/*.test.js",
+    "omm:scan-names": "node omm-scripts/omm-scan-names.mjs .",
+    "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.1.0.tgz",
+    "omm:verify-provenance": "node omm-scripts/omm-verify-provenance.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
