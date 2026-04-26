@@ -14,56 +14,53 @@ import { join } from "node:path";
 import { resolveOmmStateRoot } from "./omm-config.js";
 export const PROGRESS_FILENAME = "ralph-progress.jsonl";
 function progressPath(stateRoot) {
-  return join(resolveOmmStateRoot(stateRoot), "state", PROGRESS_FILENAME);
+    return join(resolveOmmStateRoot(stateRoot), "state", PROGRESS_FILENAME);
 }
 function isStringArray(value) {
-  return Array.isArray(value) && value.every((v) => typeof v === "string");
+    return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 /** Validate an entry candidate. Returns null when valid, an error string otherwise. */
 export function validateProgressEntry(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return "progress entry must be a JSON object";
-  }
-  const v = value;
-  if (
-    typeof v.iteration !== "number" ||
-    !Number.isInteger(v.iteration) ||
-    v.iteration < 0
-  ) {
-    return "iteration must be a non-negative integer";
-  }
-  if (
-    typeof v.timestamp !== "string" ||
-    !Number.isFinite(Date.parse(v.timestamp))
-  ) {
-    return "timestamp must be a valid ISO8601 string";
-  }
-  if (typeof v.summary !== "string") {
-    return "summary must be a string";
-  }
-  if (v.lessons !== undefined && !isStringArray(v.lessons)) {
-    return "lessons must be a string array when present";
-  }
-  return null;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return "progress entry must be a JSON object";
+    }
+    const v = value;
+    if (typeof v.iteration !== "number" ||
+        !Number.isInteger(v.iteration) ||
+        v.iteration < 0) {
+        return "iteration must be a non-negative integer";
+    }
+    if (typeof v.timestamp !== "string" ||
+        !Number.isFinite(Date.parse(v.timestamp))) {
+        return "timestamp must be a valid ISO8601 string";
+    }
+    if (typeof v.summary !== "string") {
+        return "summary must be a string";
+    }
+    if (v.lessons !== undefined && !isStringArray(v.lessons)) {
+        return "lessons must be a string array when present";
+    }
+    return null;
 }
 /**
  * Append one progress entry. Auto-stamps `timestamp` when omitted. Validates
  * structure before writing.
  */
 export async function appendProgressEntry(entry, stateRoot = "") {
-  const stamped = {
-    iteration: entry.iteration,
-    timestamp: entry.timestamp ?? new Date().toISOString(),
-    summary: entry.summary,
-    ...(entry.lessons !== undefined ? { lessons: entry.lessons } : {}),
-  };
-  const err = validateProgressEntry(stamped);
-  if (err) return { ok: false, error: err };
-  const dir = join(resolveOmmStateRoot(stateRoot), "state");
-  await mkdir(dir, { recursive: true });
-  const path = progressPath(stateRoot);
-  await appendFile(path, `${JSON.stringify(stamped)}\n`, "utf8");
-  return { ok: true };
+    const stamped = {
+        iteration: entry.iteration,
+        timestamp: entry.timestamp ?? new Date().toISOString(),
+        summary: entry.summary,
+        ...(entry.lessons !== undefined ? { lessons: entry.lessons } : {}),
+    };
+    const err = validateProgressEntry(stamped);
+    if (err)
+        return { ok: false, error: err };
+    const dir = join(resolveOmmStateRoot(stateRoot), "state");
+    await mkdir(dir, { recursive: true });
+    const path = progressPath(stateRoot);
+    await appendFile(path, `${JSON.stringify(stamped)}\n`, "utf8");
+    return { ok: true };
 }
 /**
  * Load all valid progress entries. Lines that fail to parse or fail
@@ -71,27 +68,30 @@ export async function appendProgressEntry(entry, stateRoot = "") {
  * not authoritative state.
  */
 export async function loadProgress(stateRoot = "") {
-  const path = progressPath(stateRoot);
-  let raw;
-  try {
-    raw = await readFile(path, "utf8");
-  } catch {
-    return [];
-  }
-  const entries = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    let parsed;
+    const path = progressPath(stateRoot);
+    let raw;
     try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      continue;
+        raw = await readFile(path, "utf8");
     }
-    if (validateProgressEntry(parsed) === null) {
-      entries.push(parsed);
+    catch {
+        return [];
     }
-  }
-  return entries;
+    const entries = [];
+    for (const line of raw.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed === "")
+            continue;
+        let parsed;
+        try {
+            parsed = JSON.parse(trimmed);
+        }
+        catch {
+            continue;
+        }
+        if (validateProgressEntry(parsed) === null) {
+            entries.push(parsed);
+        }
+    }
+    return entries;
 }
 //# sourceMappingURL=omm-ralph-progress.js.map

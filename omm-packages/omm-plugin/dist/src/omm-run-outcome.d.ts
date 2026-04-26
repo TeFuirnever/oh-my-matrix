@@ -11,10 +11,10 @@
  */
 export type RunOutcomeKind = "completed" | "failed" | "blocked" | "cancelled";
 export interface RunOutcome {
-  kind: RunOutcomeKind;
-  mode: "ralph" | "autopilot" | "team";
-  reason?: string;
-  finishedAt: string;
+    kind: RunOutcomeKind;
+    mode: "ralph" | "autopilot" | "team";
+    reason?: string;
+    finishedAt: string;
 }
 /**
  * Map a terminal phase string from a state record to a `RunOutcomeKind`,
@@ -22,9 +22,7 @@ export interface RunOutcome {
  * from the outcome kinds (`complete` vs `completed`) — this helper bridges
  * them.
  */
-export declare function phaseToOutcomeKind(
-  phase: string,
-): RunOutcomeKind | null;
+export declare function phaseToOutcomeKind(phase: string): RunOutcomeKind | null;
 /** Inverse of phaseToOutcomeKind — the phase string for a given outcome kind. */
 export declare function outcomeKindToPhase(kind: RunOutcomeKind): string;
 /**
@@ -33,10 +31,10 @@ export declare function outcomeKindToPhase(kind: RunOutcomeKind): string;
  * persisting nonsense.
  */
 export declare function makeRunOutcome(input: {
-  kind: RunOutcomeKind;
-  mode: RunOutcome["mode"];
-  reason?: string;
-  finishedAt?: string;
+    kind: RunOutcomeKind;
+    mode: RunOutcome["mode"];
+    reason?: string;
+    finishedAt?: string;
 }): RunOutcome;
 /** True when `value` is a structurally-valid `RunOutcome`. */
 export declare function isRunOutcome(value: unknown): value is RunOutcome;
@@ -45,6 +43,4 @@ export declare function isRunOutcome(value: unknown): value is RunOutcome;
  * is still active. Reads `mode`, the relevant phase field (`status` for
  * ralph/autopilot, `current_phase` for team), and `completedAt`.
  */
-export declare function deriveOutcomeFromState(
-  state: Record<string, unknown>,
-): RunOutcome | null;
+export declare function deriveOutcomeFromState(state: Record<string, unknown>): RunOutcome | null;

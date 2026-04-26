@@ -64,6 +64,52 @@ ANALYZING → PLANNING → STEP_N → VERIFYING → COMPLETE
 - If retries exhausted for any step, write `status=blocked` with the failure details and stop.
 - Never skip a step or proceed past a failed verification.
 
+### Recommended API (omm v0.2 onwards)
+
+Prefer the typed pipeline helpers in `omm-plugin/src/omm-autopilot-pipeline.ts`
+over hand-editing the `plan` array. Each helper returns a state patch that
+the caller persists via `updateModeState("autopilot", patch)`:
+
+```ts
+import { startMode, updateModeState, getModeState, cancelMode } from "omm-plugin";
+import {
+  validatePlan,
+  getCurrentStage,
+  markStageStatus,
+  advanceStage,
+  incrementRetry,
+} from "omm-plugin";
+
+await startMode("autopilot", { goal });
+
+// Persist the plan once at PLANNING.
+const stages = [...]; // Stage[] = { step, description, status, retries }
+if (!validatePlan(stages).ok) throw new Error("invalid plan");
+await updateModeState("autopilot", { plan: stages, total_steps: stages.length });
+
+// Per step:
+const state = await getModeState("autopilot");
+const current = getCurrentStage(state);  // null when past the last stage
+// ...do the work...
+const done = markStageStatus(state, current.step, "complete", "tests pass");
+if (done.ok) await updateModeState("autopilot", done.patch);
+
+// Move to next stage. advanceStage refuses unless current is `complete`.
+const adv = advanceStage(await getModeState("autopilot"));
+if (adv.ok) await updateModeState("autopilot", adv.patch);
+else // step did not finish; loop back into work.
+
+// On failure, bump retry counter (cap policy is up to this skill, not the helper).
+const retry = incrementRetry(state, current.step);
+if (retry.ok) await updateModeState("autopilot", retry.patch);
+
+await cancelMode("autopilot", "goal achieved", { kind: "completed" });
+```
+
+These wrappers enforce immutability (no in-place mutation of the `plan`
+array), reject duplicate stage IDs, and refuse to advance past a stage
+that is not `complete`.
+
 ### Self-Correction
 
 - On step failure, read the error output and adjust the approach.

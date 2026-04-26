@@ -3,9 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
-    "omm-mcp-memory": "dist/index.js"
+    "omm-mcp-memory": "dist/src/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json"

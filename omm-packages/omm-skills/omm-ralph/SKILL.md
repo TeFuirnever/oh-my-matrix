@@ -43,7 +43,43 @@ INIT → PLANNING → EXECUTING → VERIFYING → COMPLETE
 
 ### State Updates
 
-Write state after every phase transition:
+**Recommended API (omm v0.2 onwards).** Prefer the unified mode-lifecycle
+helpers from `omm-plugin/src/omm-mode-lifecycle.ts` over hand-assembling
+state objects:
+
+```ts
+import {
+  startMode,
+  updateModeState,
+  cancelMode,
+  getModeState,
+} from "omm-plugin";
+
+// init
+await startMode("ralph", { task });
+
+// transition
+await updateModeState("ralph", { status: "executing", iteration: 1 });
+
+// terminate (stamps RunOutcome on `outcome` field)
+await cancelMode("ralph", "all stories pass", { kind: "completed" });
+```
+
+These wrap the workflow exclusivity guard, atomic write, validator, and
+RunOutcome stamping in one call each.
+
+For PRD-driven runs, persist the structured story list separately:
+
+```ts
+import { savePrd, loadPrd, markStoryPasses } from "omm-plugin";
+import { appendProgressEntry, loadProgress } from "omm-plugin";
+
+await savePrd({ version: 1, task, stories });
+await appendProgressEntry({ iteration: 1, summary: "started" });
+await markStoryPasses("US-001", true);
+```
+
+**Raw `omm_state_write` shape (legacy / when helpers are unavailable):**
 
 ```json
 {
@@ -70,7 +106,18 @@ Write state after every phase transition:
 
 ### Resume
 
-On invocation, first read state via `omm_state_read` with `key=ralph`. If `active=true` and `status` is non-terminal, resume from the current phase rather than starting over.
+On invocation, first call `getResumePoint()` from `omm-plugin/src/omm-ralph-resume.ts` to read mode state, PRD, and the progress ledger together:
+
+```ts
+import { getResumePoint, pendingStories } from "omm-plugin";
+
+const resume = await getResumePoint();
+if (resume.active) {
+  // continue from resume.modeState; iterate through pendingStories(resume)
+}
+```
+
+Without the helper, fall back to `omm_state_read` with `key=ralph`. If `active=true` and `status` is non-terminal, resume from the current phase rather than starting over.
 
 ### Completion
 
