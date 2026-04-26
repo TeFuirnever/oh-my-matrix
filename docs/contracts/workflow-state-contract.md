@@ -90,11 +90,11 @@ analyzing → planning → executing → verifying ↔ retry → complete | bloc
 
 ### Additional Fields
 
-| Field  | Type          | Description                                         |
-| ------ | ------------- | --------------------------------------------------- |
-| `goal` | string        | Original goal description                           |
-| `plan` | object[]      | Step list: `{ step, description, status, retries }` |
-| `mode` | `"autopilot"` | Mode identifier                                     |
+| Field  | Type          | Description                                                   |
+| ------ | ------------- | ------------------------------------------------------------- |
+| `goal` | string        | Original goal description                                     |
+| `plan` | object[]      | Step list: `{ step, description, status, retries, summary? }` |
+| `mode` | `"autopilot"` | Mode identifier                                               |
 
 ---
 
@@ -175,6 +175,7 @@ When `active=true` and fields are null, validators inject defaults:
 Only one of `ralph`, `autopilot`, `team` may have `active=true` at any time. Enforced by `assertWorkflowExclusivity()` in `omm-packages/omm-plugin/src/omm-workflow-guard.ts` and mirrored inline in `omm-packages/omm-mcp/src/index.ts`.
 
 **Rules:**
+
 - A workflow write with `active !== true` always passes through.
 - A non-workflow key (anything other than `ralph`/`autopilot`/`team` after `value.mode ?? key` resolution) always passes through.
 - Same-key overwrites are allowed (re-activating the same mode).
@@ -184,6 +185,7 @@ Only one of `ralph`, `autopilot`, `team` may have `active=true` at any time. Enf
   - All other combinations of two active workflow modes → rejected with `cannot activate <mode>: <other> is already active`.
 
 **Failure-safe defaults:**
+
 - State directory missing → no conflict, write allowed.
 - Individual JSON file unreadable or corrupt → that file is skipped (not treated as a conflict).
 
