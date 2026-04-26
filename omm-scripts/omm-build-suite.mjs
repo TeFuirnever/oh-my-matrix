@@ -61,6 +61,11 @@ async function copyRequiredFiles() {
       { recursive: true },
     ),
     cp(
+      pkg("omm-skills", "agent-prompts"),
+      join(staging, "omm-skills", "agent-prompts"),
+      { recursive: true },
+    ),
+    cp(
       pkg("omm-mcp", "package.json"),
       join(staging, "omm-mcp", "package.json"),
       { recursive: true },
