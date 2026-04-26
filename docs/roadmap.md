@@ -26,13 +26,13 @@ See [Architecture Overview](architecture.md) for module details.
 | Deliverable                           | Description                                                                                                    | Reference                                      | Status              |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------- |
 | Workflow transition guard（互斥守卫） | Enforce single active workflow mode at a time; reject `active=true` writes when another mode is already active | oh-my-codex `workflow-transition-reconcile.ts` | ✓ Done (2026-04-26) |
-| Ralph persistence                     | Progress ledger（进度账本）and PRD management; enable resume across sessions                                   | oh-my-codex `ralph/persistence.ts`             | Pending             |
+| Ralph persistence                     | Progress ledger（进度账本）and PRD management; enable resume across sessions                                   | oh-my-codex `ralph/persistence.ts`             | ✓ Done (2026-04-26) |
 | Pipeline stage definitions            | Define autopilot stage sequence (analyze → plan → execute → verify); enable structured multi-step execution    | oh-my-codex `pipeline/orchestrator.ts`         | Pending             |
 
 **Exit criteria:**
 
 - [x] Only one of ralph/autopilot/team can be `active=true` at any time
-- [ ] Ralph can resume from persisted state after session restart
+- [x] Ralph can resume from persisted state after session restart
 - [ ] Autopilot executes a multi-step plan with per-step verification
 - [x] All existing tests continue to pass + new tests for transition guard
 
