@@ -15,6 +15,20 @@ import { createInterface } from "node:readline";
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
+/* ── Per-session serialization queue (in-process, zero-dep) ── */
+
+const recordQueues = new Map<string, Promise<unknown>>();
+function withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const tail = recordQueues.get(key) ?? Promise.resolve();
+  const next = tail.then(fn, fn);
+  const tracker: Promise<unknown> = next.catch(() => undefined);
+  recordQueues.set(key, tracker);
+  tracker.then(() => {
+    if (recordQueues.get(key) === tracker) recordQueues.delete(key);
+  });
+  return next;
+}
+
 /**
  * Rotation policy: when a session JSONL crosses TRACE_ROTATE_BYTES,
  * rename it to `${name}.${ms}` and start fresh. Archives accumulate
@@ -114,9 +128,13 @@ async function toolRecord(sessionId: string, event: unknown): Promise<string> {
   const dir = traceDir();
   await mkdir(dir, { recursive: true });
   const path = tracePath(sessionId);
-  await rotateIfNeeded(path);
-  await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
-  return `Recorded: ${path}`;
+  // Serialize per-session so rotateIfNeeded → appendFile is atomic against
+  // concurrent records that would otherwise race on the rotation rename.
+  return withKeyLock(`record::${sessionId.trim()}`, async () => {
+    await rotateIfNeeded(path);
+    await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
+    return `Recorded: ${path}`;
+  });
 }
 
 /** Rename `path` to `path.${ms}` and prune archives if it has grown past the rotate threshold. */
