@@ -68,17 +68,17 @@ See [Architecture Overview](architecture.md) for module details.
 
 **Priority:** Low — quality-of-life improvements
 
-| Deliverable            | Description                                                    | Reference                          | Status              |
-| ---------------------- | -------------------------------------------------------------- | ---------------------------------- | ------------------- |
-| Hook plugin system     | Dynamic hook loading from `.omm/hooks/*.mjs`（动态钩子加载）   | oh-my-codex hook loader/dispatcher | ✓ Done (2026-04-26) |
-| Agent prompt library   | Reusable role prompts (planner, architect, executor, verifier) | oh-my-codex 33 agent prompt files  | ✓ Done (2026-04-26) |
-| Expanded test coverage | Integration tests, MCP server tests, edge case coverage        | Target 80%+ coverage               | In progress         |
+| Deliverable            | Description                                                    | Reference                          | Status                                                                                                |
+| ---------------------- | -------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Hook plugin system     | Dynamic hook loading from `.omm/hooks/*.mjs`（动态钩子加载）   | oh-my-codex hook loader/dispatcher | ✓ Done (2026-04-26)                                                                                   |
+| Agent prompt library   | Reusable role prompts (planner, architect, executor, verifier) | oh-my-codex 33 agent prompt files  | ✓ Done (2026-04-26)                                                                                   |
+| Expanded test coverage | Integration tests, MCP server tests, edge case coverage        | Target 80%+ coverage               | ✓ Done (2026-04-26) — 96.83% statements / 98.27% functions / 91.07% branches via `pnpm test:coverage` |
 
 **Exit criteria:**
 
 - [x] Custom hooks can be loaded and dispatched at session lifecycle points
 - [x] At least 5 agent prompts available for common workflow roles
-- [ ] Test coverage ≥ 80% across all packages
+- [x] Test coverage ≥ 80% across all packages
 
 ---
 

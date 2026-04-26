@@ -9,6 +9,7 @@
     "build": "pnpm --filter omm-plugin build && pnpm --filter omm-mcp build && pnpm --filter omm-mcp-memory build && pnpm --filter omm-mcp-trace build && node omm-scripts/omm-build-suite.mjs",
     "lint": "biome check .",
     "test": "node --test omm-packages/omm-plugin/dist/src/**/*.test.js omm-packages/omm-mcp/dist/src/**/*.test.js omm-packages/omm-mcp-memory/dist/src/**/*.test.js omm-packages/omm-mcp-trace/dist/src/**/*.test.js",
+    "test:coverage": "npx -y c8 --reporter=text-summary --reporter=text --include='omm-packages/**/dist/src/**/*.js' --exclude='**/*.test.js' --exclude='**/*.d.ts' pnpm test",
     "omm:scan-names": "node omm-scripts/omm-scan-names.mjs .",
     "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.2.0.tgz",
     "omm:verify-provenance": "node omm-scripts/omm-verify-provenance.mjs"
