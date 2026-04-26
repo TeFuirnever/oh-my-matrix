@@ -309,5 +309,18 @@ describe("omm-mcp server", () => {
         assert.equal(r.error?.code, -32601);
       });
     });
+
+    it("returns -32600 for requests exceeding 1 MiB", async () => {
+      await withClient(async (client) => {
+        // Build a >1 MiB single line. Use raw line because send() would
+        // wait by id, but the cap response uses id=null.
+        const filler = "x".repeat(1 << 20);
+        const r = await client.sendRaw(
+          `{"jsonrpc":"2.0","id":99,"method":"tools/list","params":"${filler}"}`,
+        );
+        assert.equal(r.error?.code, -32600);
+        assert.match(r.error?.message ?? "", /exceeds \d+-byte limit/);
+      });
+    });
   });
 });

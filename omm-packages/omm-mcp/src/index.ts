@@ -327,7 +327,22 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
 
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
+const MAX_REQUEST_BYTES = 1 << 20; // 1 MiB hard cap on a single JSON-RPC line
+
 rl.on("line", (line) => {
+  if (Buffer.byteLength(line, "utf8") > MAX_REQUEST_BYTES) {
+    process.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32600,
+          message: `request exceeds ${MAX_REQUEST_BYTES}-byte limit`,
+        },
+      })}\n`,
+    );
+    return;
+  }
   const trimmed = line.trim();
   if (!trimmed) return;
   let req: JsonRpcRequest;
