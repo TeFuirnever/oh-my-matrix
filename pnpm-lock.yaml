@@ -19,6 +19,8 @@ importers:
 
   omm-packages/omm-mcp: {}
 
+  omm-packages/omm-mcp-memory: {}
+
   omm-packages/omm-plugin: {}
 
 packages:
