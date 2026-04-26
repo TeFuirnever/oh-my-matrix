@@ -114,6 +114,57 @@ async function toolRead(key) {
     const filePath = join(stateDir(), `${key.trim()}.json`);
     return readFile(filePath, "utf8");
 }
+const WORKFLOW_MODES = new Set(["ralph", "autopilot", "team"]);
+function detectWorkflowMode(key, value) {
+    const mode = value.mode ?? key;
+    return WORKFLOW_MODES.has(mode) ? mode : null;
+}
+function isLinkedPair(incomingMode, incoming, existingMode, existing) {
+    if (incomingMode === "ralph" && existingMode === "team") {
+        return existing.linked_ralph === true;
+    }
+    if (incomingMode === "team" && existingMode === "ralph") {
+        return incoming.linked_ralph === true;
+    }
+    return false;
+}
+async function assertExclusivity(dir, incomingKey, incoming) {
+    if (incoming.active !== true)
+        return;
+    const incomingMode = detectWorkflowMode(incomingKey, incoming);
+    if (!incomingMode)
+        return;
+    let entries;
+    try {
+        entries = await readdir(dir);
+    }
+    catch {
+        return;
+    }
+    for (const entry of entries) {
+        if (!entry.endsWith(".json"))
+            continue;
+        const existingKey = entry.slice(0, -5);
+        if (existingKey === incomingKey)
+            continue;
+        let parsed;
+        try {
+            const raw = await readFile(join(dir, entry), "utf8");
+            parsed = JSON.parse(raw);
+        }
+        catch {
+            continue;
+        }
+        const existingMode = detectWorkflowMode(existingKey, parsed);
+        if (!existingMode)
+            continue;
+        if (parsed.active !== true)
+            continue;
+        if (isLinkedPair(incomingMode, incoming, existingMode, parsed))
+            continue;
+        throw new Error(`cannot activate ${incomingMode}: ${existingMode} is already active (only one workflow mode may be active at a time)`);
+    }
+}
 async function toolWrite(key, value) {
     assertSafeKey(key);
     const safeKey = key.trim();
@@ -123,6 +174,7 @@ async function toolWrite(key, value) {
     }
     const dir = stateDir();
     await mkdir(dir, { recursive: true });
+    await assertExclusivity(dir, safeKey, validation.state);
     const filePath = join(dir, `${safeKey}.json`);
     const tmpPath = `${filePath}.tmp`;
     const data = `${JSON.stringify(validation.state, null, 2)}\n`;

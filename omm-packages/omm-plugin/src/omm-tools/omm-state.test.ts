@@ -176,3 +176,43 @@ describe("path traversal defense (integration)", () => {
     });
   });
 });
+
+describe("workflow exclusivity (integration via runOmmStateWrite)", () => {
+  it("rejects autopilot active=true while ralph is active", async () => {
+    await withTmpDir(async (dir) => {
+      const a = await runOmmStateWrite(
+        { key: "ralph", value: { mode: "ralph", active: true } },
+        { stateRoot: dir },
+      );
+      assert.ok(a.content[0].text.startsWith("omm_state_write: ralph"));
+
+      const b = await runOmmStateWrite(
+        { key: "autopilot", value: { mode: "autopilot", active: true } },
+        { stateRoot: dir },
+      );
+      assert.ok(b.content[0].text.includes("error"));
+      assert.match(b.content[0].text, /ralph is already active/);
+    });
+  });
+
+  it("allows autopilot active=true after ralph terminates", async () => {
+    await withTmpDir(async (dir) => {
+      await runOmmStateWrite(
+        { key: "ralph", value: { mode: "ralph", active: true } },
+        { stateRoot: dir },
+      );
+      await runOmmStateWrite(
+        {
+          key: "ralph",
+          value: { mode: "ralph", active: false, status: "complete" },
+        },
+        { stateRoot: dir },
+      );
+      const r = await runOmmStateWrite(
+        { key: "autopilot", value: { mode: "autopilot", active: true } },
+        { stateRoot: dir },
+      );
+      assert.ok(r.content[0].text.startsWith("omm_state_write: autopilot"));
+    });
+  });
+});

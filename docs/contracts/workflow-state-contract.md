@@ -170,10 +170,23 @@ When `active=true` and fields are null, validators inject defaults:
 | autopilot | `current_step=0`, `total_steps=0`, `max_retries_per_step=3`, `status="analyzing"`, `startedAt=now`          |
 | team      | `fix_loop_count=0`, `max_fix_loops=3`, `current_phase="planning"`, `startedAt=now`                          |
 
-## Known Gap: Workflow Transition Guard（已知缺陷：工作流互斥）
+## Workflow Exclusivity Guard（工作流互斥）
 
-Currently, multiple modes can be `active=true` simultaneously. For example, both `ralph.json` and `team.json` can have `active=true` at the same time.
+Only one of `ralph`, `autopilot`, `team` may have `active=true` at any time. Enforced by `assertWorkflowExclusivity()` in `omm-packages/omm-plugin/src/omm-workflow-guard.ts` and mirrored inline in `omm-packages/omm-mcp/src/index.ts`.
 
-**Planned fix (Phase 1):** A transition guard that checks all `*.json` files in the state directory before allowing a new `active=true` write. If another mode is already active, the write is rejected unless it's a `linked_ralph` team invocation.
+**Rules:**
+- A workflow write with `active !== true` always passes through.
+- A non-workflow key (anything other than `ralph`/`autopilot`/`team` after `value.mode ?? key` resolution) always passes through.
+- Same-key overwrites are allowed (re-activating the same mode).
+- **Linked exception (unidirectional):** `team` writes `linked_ralph: true` to declare it was launched inside a ralph persistence loop. In that case ralph and team may both be active simultaneously. Ralph itself never writes any linkage field.
+  - Incoming `ralph` + existing `team` with `linked_ralph === true` → allowed
+  - Incoming `team` with `linked_ralph === true` + existing `ralph` → allowed
+  - All other combinations of two active workflow modes → rejected with `cannot activate <mode>: <other> is already active`.
 
-See [Roadmap Phase 1](../roadmap.md) and [ADR-004](../adr/004-three-mode-state-machine.md).
+**Failure-safe defaults:**
+- State directory missing → no conflict, write allowed.
+- Individual JSON file unreadable or corrupt → that file is skipped (not treated as a conflict).
+
+**Race window:** the check is read-then-write without locking. For omm's single-user desktop deployment this is acceptable. Multi-session deployments would need a `state/.lock` file with `O_EXCL` semantics.
+
+See [ADR-004](../adr/004-three-mode-state-machine.md).

@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "../omm-config.js";
 import { validateStateWrite } from "../omm-state-validation.js";
+import { assertWorkflowExclusivity } from "../omm-workflow-guard.js";
 import type { OmmToolResult } from "./omm-ping.js";
 
 export interface OmmStateWriteInput {
@@ -85,6 +86,24 @@ export async function runOmmStateWrite(
 
   const stateDir = join(resolveOmmStateRoot(config.stateRoot), "state");
   await mkdir(stateDir, { recursive: true });
+
+  const exclusivity = await assertWorkflowExclusivity(
+    stateDir,
+    key,
+    validation.state as Record<string, unknown>,
+  );
+  if (!exclusivity.ok) {
+    return {
+      content: [
+        { type: "text", text: `omm_state_write error: ${exclusivity.error}` },
+      ],
+      details: {
+        error: exclusivity.error,
+        conflictingMode: exclusivity.conflictingMode,
+      },
+    };
+  }
+
   const filePath = join(stateDir, `${key}.json`);
   const tmpPath = `${filePath}.tmp`;
   const data = `${JSON.stringify(validation.state, null, 2)}\n`;
