@@ -14,7 +14,17 @@ interface OmmPluginApi {
       label?: string;
       description?: string;
       parameters?: Record<string, unknown>;
-      execute: (params: Record<string, unknown>) => Promise<unknown>;
+      // OpenClaw runtime invokes execute as (toolCallId, params, signal, onUpdate).
+      // The toolCallId is a string (e.g. "toolu_abc123"); params holds the
+      // schema-validated argument object the LLM produced. Capturing only the
+      // first arg (the id) — as a 1-arg signature would — silently treats the
+      // id as the params object and breaks every field access.
+      execute: (
+        toolCallId: string,
+        params: Record<string, unknown>,
+        signal?: AbortSignal,
+        onUpdate?: (delta: string) => void,
+      ) => Promise<unknown>;
     },
     options?: { optional?: boolean; name?: string },
   ) => void;
@@ -47,7 +57,7 @@ export function register(api: OmmPluginApi): void {
           skillName: { type: "string" },
         },
       },
-      execute: (params) =>
+      execute: (_toolCallId, params) =>
         runOmmPing(params, { stateRoot: api.config?.stateRoot }),
     },
     { optional: true, name: "omm_ping" },
@@ -65,7 +75,7 @@ export function register(api: OmmPluginApi): void {
           sessionId: { type: "string" },
         },
       },
-      execute: (params) =>
+      execute: (_toolCallId, params) =>
         runOmmCancel(params, {
           stateRoot: api.config?.stateRoot as string | undefined,
         }),
@@ -88,7 +98,7 @@ export function register(api: OmmPluginApi): void {
         },
         required: ["key", "value"],
       },
-      execute: (params) =>
+      execute: (_toolCallId, params) =>
         runOmmStateWrite(params, {
           stateRoot: api.config?.stateRoot as string | undefined,
         }),
@@ -109,7 +119,7 @@ export function register(api: OmmPluginApi): void {
         },
         required: ["key"],
       },
-      execute: (params) =>
+      execute: (_toolCallId, params) =>
         runOmmStateRead(params, {
           stateRoot: api.config?.stateRoot as string | undefined,
         }),
@@ -127,7 +137,7 @@ export function register(api: OmmPluginApi): void {
         additionalProperties: false,
         properties: {},
       },
-      execute: (params) =>
+      execute: (_toolCallId, params) =>
         runOmmStateList(params, {
           stateRoot: api.config?.stateRoot as string | undefined,
         }),

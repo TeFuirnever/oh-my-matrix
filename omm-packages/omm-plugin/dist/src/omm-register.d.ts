@@ -4,7 +4,7 @@ interface OmmPluginApi {
         label?: string;
         description?: string;
         parameters?: Record<string, unknown>;
-        execute: (params: Record<string, unknown>) => Promise<unknown>;
+        execute: (toolCallId: string, params: Record<string, unknown>, signal?: AbortSignal, onUpdate?: (delta: string) => void) => Promise<unknown>;
     }, options?: {
         optional?: boolean;
         name?: string;

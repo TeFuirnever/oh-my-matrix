@@ -23,7 +23,7 @@ export function register(api) {
                 skillName: { type: "string" },
             },
         },
-        execute: (params) => runOmmPing(params, { stateRoot: api.config?.stateRoot }),
+        execute: (_toolCallId, params) => runOmmPing(params, { stateRoot: api.config?.stateRoot }),
     }, { optional: true, name: "omm_ping" });
     api.registerTool({
         name: "omm_cancel",
@@ -36,7 +36,7 @@ export function register(api) {
                 sessionId: { type: "string" },
             },
         },
-        execute: (params) => runOmmCancel(params, {
+        execute: (_toolCallId, params) => runOmmCancel(params, {
             stateRoot: api.config?.stateRoot,
         }),
     }, { optional: true, name: "omm_cancel" });
@@ -53,7 +53,7 @@ export function register(api) {
             },
             required: ["key", "value"],
         },
-        execute: (params) => runOmmStateWrite(params, {
+        execute: (_toolCallId, params) => runOmmStateWrite(params, {
             stateRoot: api.config?.stateRoot,
         }),
     }, { optional: true, name: "omm_state_write" });
@@ -69,7 +69,7 @@ export function register(api) {
             },
             required: ["key"],
         },
-        execute: (params) => runOmmStateRead(params, {
+        execute: (_toolCallId, params) => runOmmStateRead(params, {
             stateRoot: api.config?.stateRoot,
         }),
     }, { optional: true, name: "omm_state_read" });
@@ -82,7 +82,7 @@ export function register(api) {
             additionalProperties: false,
             properties: {},
         },
-        execute: (params) => runOmmStateList(params, {
+        execute: (_toolCallId, params) => runOmmStateList(params, {
             stateRoot: api.config?.stateRoot,
         }),
     }, { optional: true, name: "omm_state_list" });
