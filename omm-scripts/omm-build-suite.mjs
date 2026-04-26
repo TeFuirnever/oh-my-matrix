@@ -68,6 +68,22 @@ async function copyRequiredFiles() {
     cp(pkg("omm-mcp", "dist"), join(staging, "omm-mcp", "dist"), {
       recursive: true,
     }),
+    cp(
+      pkg("omm-mcp-memory", "package.json"),
+      join(staging, "omm-mcp-memory", "package.json"),
+      { recursive: true },
+    ),
+    cp(pkg("omm-mcp-memory", "dist"), join(staging, "omm-mcp-memory", "dist"), {
+      recursive: true,
+    }),
+    cp(
+      pkg("omm-mcp-trace", "package.json"),
+      join(staging, "omm-mcp-trace", "package.json"),
+      { recursive: true },
+    ),
+    cp(pkg("omm-mcp-trace", "dist"), join(staging, "omm-mcp-trace", "dist"), {
+      recursive: true,
+    }),
   ]);
 }
 

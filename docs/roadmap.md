@@ -56,7 +56,7 @@ See [Architecture Overview](architecture.md) for module details.
 - [x] Memory MCP: read/write/list/delete operations over stdio
 - [x] Trace MCP: record execution events, query by session/time range
 - [x] Both servers follow zero-dependency pattern ([ADR-003](adr/003-zero-dependency-mcp.md))
-- [ ] Consumer integration updated (seed config, bundle manifest)
+- [x] Consumer integration updated (seed config, bundle manifest)
 
 **Estimated scope:** ~4-6 new files, ~400-600 lines
 
