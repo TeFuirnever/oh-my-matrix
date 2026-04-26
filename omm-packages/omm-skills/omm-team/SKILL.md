@@ -49,6 +49,30 @@ omm-team provides **state tracking and integration coordination** while delegati
    }
    ```
 
+## Recommended API (omm v0.2 onwards)
+
+Prefer the unified mode-lifecycle helpers from `omm-plugin/src/omm-mode-lifecycle.ts`
+over hand-assembling state objects. The team mode uses `current_phase` (not
+`status`) — the helpers handle this automatically.
+
+```ts
+import { startMode, updateModeState, cancelMode } from "omm-plugin";
+
+// init
+await startMode("team", { task, agent_count: 3, linked_ralph: false });
+
+// during run, e.g. after delegating
+await updateModeState("team", { current_phase: "delegating" });
+
+// when the upstream team skill returns success
+await cancelMode("team", "all subtasks verified", { kind: "completed" });
+```
+
+When invoked under ralph, set `linked_ralph: true` at startMode time so
+the workflow exclusivity guard allows team to coexist with the active
+ralph mode (the unidirectional `linked_ralph` exception is enforced by
+`omm-workflow-guard.ts`).
+
 ## State Schema
 
 ```json
