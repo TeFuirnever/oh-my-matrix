@@ -4,6 +4,19 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+/* ── Per-key serialization queue (in-process; cross-process is single-user only) ── */
+const writeQueues = new Map();
+function withKeyLock(key, fn) {
+    const tail = writeQueues.get(key) ?? Promise.resolve();
+    const next = tail.then(fn, fn);
+    const tracker = next.catch(() => undefined);
+    writeQueues.set(key, tracker);
+    tracker.then(() => {
+        if (writeQueues.get(key) === tracker)
+            writeQueues.delete(key);
+    });
+    return next;
+}
 /* ── Inline validation (mirrors omm-plugin/src/omm-state-validation.ts) ── */
 const RALPH_PHASES = new Set([
     "init",
@@ -174,13 +187,15 @@ async function toolWrite(key, value) {
     }
     const dir = stateDir();
     await mkdir(dir, { recursive: true });
-    await assertExclusivity(dir, safeKey, validation.state);
-    const filePath = join(dir, `${safeKey}.json`);
-    const tmpPath = `${filePath}.tmp`;
-    const data = `${JSON.stringify(validation.state, null, 2)}\n`;
-    await writeFile(tmpPath, data, "utf8");
-    await rename(tmpPath, filePath);
-    return `Written: ${filePath}`;
+    return withKeyLock(`${dir}::${safeKey}`, async () => {
+        await assertExclusivity(dir, safeKey, validation.state);
+        const filePath = join(dir, `${safeKey}.json`);
+        const tmpPath = `${filePath}.tmp`;
+        const data = `${JSON.stringify(validation.state, null, 2)}\n`;
+        await writeFile(tmpPath, data, "utf8");
+        await rename(tmpPath, filePath);
+        return `Written: ${filePath}`;
+    });
 }
 async function toolList() {
     const dir = stateDir();

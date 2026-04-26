@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "../omm-config.js";
+import { withKeyLock } from "../omm-fs-queue.js";
 import { validateStateWrite } from "../omm-state-validation.js";
 import { assertWorkflowExclusivity } from "../omm-workflow-guard.js";
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
@@ -55,30 +56,32 @@ export async function runOmmStateWrite(input, config = {}) {
     }
     const stateDir = join(resolveOmmStateRoot(config.stateRoot), "state");
     await mkdir(stateDir, { recursive: true });
-    const exclusivity = await assertWorkflowExclusivity(stateDir, key, validation.state);
-    if (!exclusivity.ok) {
+    return withKeyLock(`${stateDir}::${key}`, async () => {
+        const exclusivity = await assertWorkflowExclusivity(stateDir, key, validation.state);
+        if (!exclusivity.ok) {
+            return {
+                content: [
+                    { type: "text", text: `omm_state_write error: ${exclusivity.error}` },
+                ],
+                details: {
+                    error: exclusivity.error,
+                    conflictingMode: exclusivity.conflictingMode,
+                },
+            };
+        }
+        const filePath = join(stateDir, `${key}.json`);
+        const tmpPath = `${filePath}.tmp`;
+        const data = `${JSON.stringify(validation.state, null, 2)}\n`;
+        await writeFile(tmpPath, data, "utf8");
+        await rename(tmpPath, filePath);
+        const text = validation.warning
+            ? `omm_state_write: ${key} (warning: ${validation.warning})`
+            : `omm_state_write: ${key}`;
         return {
-            content: [
-                { type: "text", text: `omm_state_write error: ${exclusivity.error}` },
-            ],
-            details: {
-                error: exclusivity.error,
-                conflictingMode: exclusivity.conflictingMode,
-            },
+            content: [{ type: "text", text }],
+            details: { path: filePath, key, state: validation.state },
         };
-    }
-    const filePath = join(stateDir, `${key}.json`);
-    const tmpPath = `${filePath}.tmp`;
-    const data = `${JSON.stringify(validation.state, null, 2)}\n`;
-    await writeFile(tmpPath, data, "utf8");
-    await rename(tmpPath, filePath);
-    const text = validation.warning
-        ? `omm_state_write: ${key} (warning: ${validation.warning})`
-        : `omm_state_write: ${key}`;
-    return {
-        content: [{ type: "text", text }],
-        details: { path: filePath, key, state: validation.state },
-    };
+    });
 }
 /** Read JSON state by key. Returns null content if not found. */
 export async function runOmmStateRead(input, config = {}) {
