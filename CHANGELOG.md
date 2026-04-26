@@ -1,11 +1,44 @@
 # omm Changelog
 
-All notable changes to oh-my-matrix (omm). The version line is currently
-`0.2.0` across all packages; this changelog records what landed inside that
-line by date and Phase. A `0.2.1` bump is deferred until the next consumer-
-facing release window.
+All notable changes to oh-my-matrix (omm).
 
-## [Unreleased] — 0.2.0 in-line work, 2026-04-26
+## [0.2.1] — 2026-04-26
+
+### Added — Hardening (post-architecture-review)
+
+- `omm-fs-queue.ts`: in-process per-key serialization queue. Wraps the
+  validate→exclusivity-check→write→rename window in `runOmmStateWrite`
+  (omm-plugin) and `toolWrite` (omm-mcp) so two concurrent writers to
+  the same key cannot last-write-wins past the exclusivity guard.
+- MCP servers: 1 MiB hard cap on each JSON-RPC request line in all 3
+  servers (omm-mcp, omm-mcp-memory, omm-mcp-trace). Oversized requests
+  return JSON-RPC error -32600 instead of buffering unboundedly.
+- `omm-mcp-trace`: size-based rotation. Sessions over 8 MiB are rolled
+  over to `${session}.jsonl.${ms}` archives; up to 4 archives retained
+  (40 MiB ceiling per session). Query reads across archive + current
+  in chronological order. Per-session in-process lock closes the
+  rotate→appendFile TOCTOU window.
+
+### Documentation
+
+- `.gitattributes` locks LF on text files to keep dist/ stable on
+  Windows checkouts (autocrlf=true was churning artifacts).
+- `AGENTS.md` / `CLAUDE.md` (alias) committed for repo conventions.
+
+### Test count
+
+256 unit tests (was 248 in 0.2.0). All green.
+
+### Security posture
+
+The single-user desktop deployment model remains the operational
+contract. Cross-process write races between plugin and MCP server are
+still possible — single-writer-per-stateRoot is the documented
+invariant. Multi-process locking is out of 0.2.x scope.
+
+---
+
+## [0.2.0] — 2026-04-26
 
 ### Added — Phase 1: Workflow Runtime
 

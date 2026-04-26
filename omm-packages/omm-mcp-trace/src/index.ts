@@ -284,7 +284,7 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
     respond(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "omm-trace", version: "0.2.0" },
+      serverInfo: { name: "omm-trace", version: "0.2.1" },
     });
     return;
   }

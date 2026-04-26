@@ -4,7 +4,7 @@ import { runOmmPing } from "./omm-tools/omm-ping.js";
 import { runOmmStateList, runOmmStateRead, runOmmStateWrite, } from "./omm-tools/omm-state.js";
 export const id = "omm";
 export const name = "omm";
-export const version = "0.2.0";
+export const version = "0.2.1";
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api) {
     if (typeof api.registerTool !== "function") {
