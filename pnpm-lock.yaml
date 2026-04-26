@@ -21,6 +21,8 @@ importers:
 
   omm-packages/omm-mcp-memory: {}
 
+  omm-packages/omm-mcp-trace: {}
+
   omm-packages/omm-plugin: {}
 
 packages:

@@ -6,9 +6,9 @@
   "type": "module",
   "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "build": "pnpm --filter omm-plugin build && pnpm --filter omm-mcp build && pnpm --filter omm-mcp-memory build && node omm-scripts/omm-build-suite.mjs",
+    "build": "pnpm --filter omm-plugin build && pnpm --filter omm-mcp build && pnpm --filter omm-mcp-memory build && pnpm --filter omm-mcp-trace build && node omm-scripts/omm-build-suite.mjs",
     "lint": "biome check .",
-    "test": "node --test omm-packages/omm-plugin/dist/src/**/*.test.js omm-packages/omm-mcp/dist/src/**/*.test.js omm-packages/omm-mcp-memory/dist/src/**/*.test.js",
+    "test": "node --test omm-packages/omm-plugin/dist/src/**/*.test.js omm-packages/omm-mcp/dist/src/**/*.test.js omm-packages/omm-mcp-memory/dist/src/**/*.test.js omm-packages/omm-mcp-trace/dist/src/**/*.test.js",
     "omm:scan-names": "node omm-scripts/omm-scan-names.mjs .",
     "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.2.0.tgz",
     "omm:verify-provenance": "node omm-scripts/omm-verify-provenance.mjs"

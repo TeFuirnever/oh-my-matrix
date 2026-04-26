@@ -49,12 +49,12 @@ See [Architecture Overview](architecture.md) for module details.
 | Deliverable       | Description                                                                  | Reference              | Status              |
 | ----------------- | ---------------------------------------------------------------------------- | ---------------------- | ------------------- |
 | Memory MCP server | Persistent key-value memory store（持久化记忆存储）for cross-session context | oh-my-codex memory MCP | ✓ Done (2026-04-26) |
-| Trace MCP server  | Execution trace recording and querying（执行轨迹记录）                       | oh-my-codex trace MCP  | Pending             |
+| Trace MCP server  | Execution trace recording and querying（执行轨迹记录）                       | oh-my-codex trace MCP  | ✓ Done (2026-04-26) |
 
 **Exit criteria:**
 
 - [x] Memory MCP: read/write/list/delete operations over stdio
-- [ ] Trace MCP: record execution events, query by session/time range
+- [x] Trace MCP: record execution events, query by session/time range
 - [x] Both servers follow zero-dependency pattern ([ADR-003](adr/003-zero-dependency-mcp.md))
 - [ ] Consumer integration updated (seed config, bundle manifest)
 

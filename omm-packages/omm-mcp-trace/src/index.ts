@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+/** omm-trace MCP server — append-only execution event log over stdio JSON-RPC. */
+import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
+
+const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+function assertSafeKey(key: string, label = "session_id"): void {
+  if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
+    throw new Error(
+      `${label} must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)`,
+    );
+  }
+}
+
+function traceRoot(): string {
+  const env = process.env.OMM_STATE_ROOT;
+  return typeof env === "string" && env.trim() !== ""
+    ? env.trim()
+    : join(homedir(), ".openclaw", "omm");
+}
+
+function traceDir(): string {
+  return join(traceRoot(), "trace");
+}
+
+function tracePath(sessionId: string): string {
+  return join(traceDir(), `${sessionId.trim()}.jsonl`);
+}
+
+interface TraceEvent {
+  timestamp: string;
+  type: string;
+  [key: string]: unknown;
+}
+
+function validateEvent(value: unknown): TraceEvent | string {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "event must be a JSON object";
+  }
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.timestamp !== "string" ||
+    !Number.isFinite(Date.parse(v.timestamp))
+  ) {
+    return "event.timestamp must be a valid ISO8601 string";
+  }
+  if (typeof v.type !== "string" || v.type.trim() === "") {
+    return "event.type must be a non-empty string";
+  }
+  return v as TraceEvent;
+}
+
+const TOOLS = [
+  {
+    name: "omm_trace_record",
+    description:
+      "Append a trace event to the session log. Event must include `timestamp` (ISO8601) and `type` fields.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: { type: "string" },
+        event: { type: "object" },
+      },
+      required: ["session_id", "event"],
+    },
+  },
+  {
+    name: "omm_trace_query",
+    description:
+      "Read trace events for a session. Optional `since` and `until` ISO8601 timestamps filter inclusively.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: { type: "string" },
+        since: { type: "string" },
+        until: { type: "string" },
+      },
+      required: ["session_id"],
+    },
+  },
+  {
+    name: "omm_trace_list_sessions",
+    description: "List session IDs that have a trace log.",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
+async function toolRecord(sessionId: string, event: unknown): Promise<string> {
+  assertSafeKey(sessionId);
+  const validated = validateEvent(event);
+  if (typeof validated === "string") {
+    throw new Error(validated);
+  }
+  const dir = traceDir();
+  await mkdir(dir, { recursive: true });
+  const path = tracePath(sessionId);
+  await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
+  return `Recorded: ${path}`;
+}
+
+async function toolQuery(
+  sessionId: string,
+  since?: string,
+  until?: string,
+): Promise<TraceEvent[]> {
+  assertSafeKey(sessionId);
+  if (since !== undefined && !Number.isFinite(Date.parse(since))) {
+    throw new Error("since must be a valid ISO8601 timestamp when provided");
+  }
+  if (until !== undefined && !Number.isFinite(Date.parse(until))) {
+    throw new Error("until must be a valid ISO8601 timestamp when provided");
+  }
+  const sinceMs =
+    since !== undefined ? Date.parse(since) : Number.NEGATIVE_INFINITY;
+  const untilMs =
+    until !== undefined ? Date.parse(until) : Number.POSITIVE_INFINITY;
+
+  let raw: string;
+  try {
+    raw = await readFile(tracePath(sessionId), "utf8");
+  } catch {
+    return [];
+  }
+  const events: TraceEvent[] = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const validated = validateEvent(parsed);
+    if (typeof validated === "string") continue;
+    const ts = Date.parse(validated.timestamp);
+    if (ts < sinceMs || ts > untilMs) continue;
+    events.push(validated);
+  }
+  return events;
+}
+
+async function toolListSessions(): Promise<string[]> {
+  const dir = traceDir();
+  try {
+    const files = await readdir(dir);
+    return files.filter((f) => f.endsWith(".jsonl")).map((f) => f.slice(0, -6));
+  } catch {
+    return [];
+  }
+}
+
+type JsonRpcRequest = {
+  jsonrpc: "2.0";
+  id?: string | number | null;
+  method: string;
+  params?: unknown;
+};
+
+type JsonRpcResponse = {
+  jsonrpc: "2.0";
+  id: string | number | null;
+  result?: unknown;
+  error?: { code: number; message: string };
+};
+
+function respond(id: string | number | null, result: unknown): void {
+  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, result };
+  process.stdout.write(`${JSON.stringify(msg)}\n`);
+}
+
+function respondError(
+  id: string | number | null,
+  code: number,
+  message: string,
+): void {
+  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, error: { code, message } };
+  process.stdout.write(`${JSON.stringify(msg)}\n`);
+}
+
+async function handleRequest(req: JsonRpcRequest): Promise<void> {
+  const id = req.id ?? null;
+
+  if (req.method === "initialize") {
+    respond(id, {
+      protocolVersion: "2024-11-05",
+      capabilities: { tools: {} },
+      serverInfo: { name: "omm-trace", version: "0.2.0" },
+    });
+    return;
+  }
+
+  if (req.method === "notifications/initialized") {
+    return;
+  }
+
+  if (req.method === "tools/list") {
+    respond(id, { tools: TOOLS });
+    return;
+  }
+
+  if (req.method === "tools/call") {
+    const params = req.params as {
+      name: string;
+      arguments?: Record<string, unknown>;
+    };
+    const args = params.arguments ?? {};
+
+    try {
+      let content: string;
+      if (params.name === "omm_trace_record") {
+        const sessionId = args.session_id as string;
+        const event = args.event;
+        content = await toolRecord(sessionId, event);
+      } else if (params.name === "omm_trace_query") {
+        const sessionId = args.session_id as string;
+        const since = args.since as string | undefined;
+        const until = args.until as string | undefined;
+        const events = await toolQuery(sessionId, since, until);
+        content = JSON.stringify(events);
+      } else if (params.name === "omm_trace_list_sessions") {
+        const sessions = await toolListSessions();
+        content = JSON.stringify(sessions);
+      } else {
+        respondError(id, -32601, `Unknown tool: ${params.name}`);
+        return;
+      }
+      respond(id, { content: [{ type: "text", text: content }] });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      respondError(id, -32000, message);
+    }
+    return;
+  }
+
+  respondError(id, -32601, `Method not found: ${req.method}`);
+}
+
+const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
+
+rl.on("line", (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  let req: JsonRpcRequest;
+  try {
+    req = JSON.parse(trimmed) as JsonRpcRequest;
+  } catch {
+    process.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "Parse error" },
+      })}\n`,
+    );
+    return;
+  }
+  handleRequest(req).catch((err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: req.id ?? null,
+        error: { code: -32603, message },
+      })}\n`,
+    );
+  });
+});
