@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -309,6 +309,81 @@ describe("omm-trace MCP server", () => {
             await withClient(async (client) => {
                 const r = await callTool(client, "omm_trace_bogus", {});
                 assert.equal(r.error?.code, -32601);
+            });
+        });
+    });
+    describe("rotation", () => {
+        // Rotation triggers at 8 MiB. We pre-seed an oversized JSONL so that
+        // the next record() call rotates the file rather than appending past
+        // the threshold. This avoids writing 8 MiB inside the test.
+        const ROTATE_BYTES = 8 << 20;
+        it("rotates the session JSONL when it exceeds 8 MiB and queries still see all events", async () => {
+            await withClient(async (client, stateRoot) => {
+                const traceDir = join(stateRoot, "trace");
+                await mkdir(traceDir, { recursive: true });
+                const sessionFile = join(traceDir, "rotsess.jsonl");
+                // Seed: one valid event followed by padding to push size past the
+                // rotate threshold. Padding is a JSON line that fails validation
+                // (no `type`) — it is preserved across rotation but skipped at
+                // query time.
+                const seedEvent = `${JSON.stringify(ev("2026-04-26T00:00:00Z", "seed"))}\n`;
+                const padding = `${"x".repeat(ROTATE_BYTES)}\n`;
+                await writeFile(sessionFile, seedEvent + padding, "utf8");
+                // Trigger rotation by recording a fresh event.
+                const r1 = await callTool(client, "omm_trace_record", {
+                    session_id: "rotsess",
+                    event: ev("2026-04-26T01:00:00Z", "post-rotate"),
+                });
+                assert.equal(r1.error, undefined);
+                // After rotation: directory contains the archive + a fresh current.
+                const files = await readdir(traceDir);
+                const archives = files.filter((f) => /^rotsess\.jsonl\.\d+$/.test(f));
+                assert.equal(archives.length, 1, `expected one archive, got ${files.join(", ")}`);
+                assert.ok(files.includes("rotsess.jsonl"), "expected fresh current file after rotation");
+                // Query reads across archive + current, returning the seed event
+                // and the post-rotate event in chronological order.
+                const r2 = await callTool(client, "omm_trace_query", {
+                    session_id: "rotsess",
+                });
+                const text = r2.result
+                    .content[0].text;
+                const events = JSON.parse(text);
+                assert.deepEqual(events.map((e) => e.type), ["seed", "post-rotate"]);
+            });
+        });
+        it("prunes oldest archives beyond the retention cap of 4", async () => {
+            await withClient(async (client, stateRoot) => {
+                const traceDir = join(stateRoot, "trace");
+                await mkdir(traceDir, { recursive: true });
+                // Pre-create 5 archives (already past retention) and one current.
+                for (let i = 0; i < 5; i++) {
+                    await writeFile(join(traceDir, `pruned.jsonl.${1700000000000 + i}`), "", "utf8");
+                }
+                const current = join(traceDir, "pruned.jsonl");
+                await writeFile(current, "x".repeat(ROTATE_BYTES + 1), "utf8");
+                // Triggering one more rotation must keep at most 4 archives + the
+                // newly-rotated archive that came from `current`.
+                await callTool(client, "omm_trace_record", {
+                    session_id: "pruned",
+                    event: ev("2026-04-26T02:00:00Z", "trigger"),
+                });
+                const files = await readdir(traceDir);
+                const archives = files.filter((f) => /^pruned\.jsonl\.\d+$/.test(f));
+                assert.ok(archives.length <= 4, `expected ≤4 archives after prune, got ${archives.length}: ${archives.join(", ")}`);
+            });
+        });
+        it("list_sessions deduplicates a session that has both current and archives", async () => {
+            await withClient(async (client, stateRoot) => {
+                const traceDir = join(stateRoot, "trace");
+                await mkdir(traceDir, { recursive: true });
+                await writeFile(join(traceDir, "dup.jsonl"), "", "utf8");
+                await writeFile(join(traceDir, "dup.jsonl.1700000000000"), "", "utf8");
+                await writeFile(join(traceDir, "dup.jsonl.1700000000001"), "", "utf8");
+                const r = await callTool(client, "omm_trace_list_sessions", {});
+                const text = r.result
+                    .content[0].text;
+                const sessions = JSON.parse(text);
+                assert.deepEqual(sessions, ["dup"]);
             });
         });
     });

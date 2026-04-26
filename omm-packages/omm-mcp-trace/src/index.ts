@@ -1,11 +1,28 @@
 #!/usr/bin/env node
 /** omm-trace MCP server — append-only execution event log over stdio JSON-RPC. */
-import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+} from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+/**
+ * Rotation policy: when a session JSONL crosses TRACE_ROTATE_BYTES,
+ * rename it to `${name}.${ms}` and start fresh. Archives accumulate
+ * up to TRACE_MAX_ARCHIVES; older ones are pruned. Total per-session
+ * disk = (TRACE_MAX_ARCHIVES + 1) * TRACE_ROTATE_BYTES bytes max.
+ */
+const TRACE_ROTATE_BYTES = 8 << 20;
+const TRACE_MAX_ARCHIVES = 4;
 
 function assertSafeKey(key: string, label = "session_id"): void {
   if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
@@ -97,8 +114,60 @@ async function toolRecord(sessionId: string, event: unknown): Promise<string> {
   const dir = traceDir();
   await mkdir(dir, { recursive: true });
   const path = tracePath(sessionId);
+  await rotateIfNeeded(path);
   await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
   return `Recorded: ${path}`;
+}
+
+/** Rename `path` to `path.${ms}` and prune archives if it has grown past the rotate threshold. */
+async function rotateIfNeeded(path: string): Promise<void> {
+  let size = 0;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    return; // not yet created — nothing to rotate
+  }
+  if (size < TRACE_ROTATE_BYTES) return;
+  const archive = `${path}.${Date.now()}`;
+  await rename(path, archive);
+  await pruneArchives(path);
+}
+
+async function pruneArchives(currentPath: string): Promise<void> {
+  const dir = dirname(currentPath);
+  const prefix = `${basename(currentPath)}.`;
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return;
+  }
+  const archives = entries
+    .filter((f) => f.startsWith(prefix))
+    .sort()
+    .reverse(); // newest first by timestamp suffix
+  for (const stale of archives.slice(TRACE_MAX_ARCHIVES)) {
+    await unlink(join(dir, stale)).catch(() => undefined);
+  }
+}
+
+/** Return all session-log files (archives + current) ordered oldest → newest. */
+async function listSessionFiles(sessionId: string): Promise<string[]> {
+  const dir = traceDir();
+  const current = tracePath(sessionId);
+  const baseName = basename(current);
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const archives = entries
+    .filter((f) => f.startsWith(`${baseName}.`))
+    .sort() // ascending by ms timestamp suffix
+    .map((f) => join(dir, f));
+  if (entries.includes(baseName)) archives.push(current);
+  return archives;
 }
 
 async function toolQuery(
@@ -118,27 +187,30 @@ async function toolQuery(
   const untilMs =
     until !== undefined ? Date.parse(until) : Number.POSITIVE_INFINITY;
 
-  let raw: string;
-  try {
-    raw = await readFile(tracePath(sessionId), "utf8");
-  } catch {
-    return [];
-  }
+  const files = await listSessionFiles(sessionId);
   const events: TraceEvent[] = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    let parsed: unknown;
+  for (const path of files) {
+    let raw: string;
     try {
-      parsed = JSON.parse(trimmed);
+      raw = await readFile(path, "utf8");
     } catch {
       continue;
     }
-    const validated = validateEvent(parsed);
-    if (typeof validated === "string") continue;
-    const ts = Date.parse(validated.timestamp);
-    if (ts < sinceMs || ts > untilMs) continue;
-    events.push(validated);
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed === "") continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      const validated = validateEvent(parsed);
+      if (typeof validated === "string") continue;
+      const ts = Date.parse(validated.timestamp);
+      if (ts < sinceMs || ts > untilMs) continue;
+      events.push(validated);
+    }
   }
   return events;
 }
@@ -147,7 +219,13 @@ async function toolListSessions(): Promise<string[]> {
   const dir = traceDir();
   try {
     const files = await readdir(dir);
-    return files.filter((f) => f.endsWith(".jsonl")).map((f) => f.slice(0, -6));
+    const ids = new Set<string>();
+    for (const f of files) {
+      // Match `${id}.jsonl` (current) or `${id}.jsonl.${ms}` (archive).
+      const m = f.match(/^([a-z0-9][a-z0-9_-]{0,63})\.jsonl(?:\.\d+)?$/i);
+      if (m) ids.add(m[1]);
+    }
+    return Array.from(ids).sort();
   } catch {
     return [];
   }
