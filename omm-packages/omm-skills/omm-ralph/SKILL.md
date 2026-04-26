@@ -2,10 +2,7 @@
 name: omm-ralph
 description: Persistent task execution loop with retry and verification
 user-invocable: true
-disable-model-invocation: true
-command-dispatch: tool
-command-tool: omm_state_write
-command-arg-mode: raw
+disable-model-invocation: false
 version: 0.2.0
 ---
 

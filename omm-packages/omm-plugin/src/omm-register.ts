@@ -1,6 +1,11 @@
 import { handleSessionEnd, handleSessionStart } from "./omm-hooks.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
+import {
+  runOmmStateList,
+  runOmmStateRead,
+  runOmmStateWrite,
+} from "./omm-tools/omm-state.js";
 
 interface OmmPluginApi {
   registerTool?: (
@@ -66,6 +71,68 @@ export function register(api: OmmPluginApi): void {
         }),
     },
     { optional: true, name: "omm_cancel" },
+  );
+
+  api.registerTool(
+    {
+      name: "omm_state_write",
+      label: "omm state write",
+      description:
+        "Write a validated JSON state object by key. Validates ralph/autopilot/team schemas.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          key: { type: "string" },
+          value: { type: "object" },
+        },
+        required: ["key", "value"],
+      },
+      execute: (params) =>
+        runOmmStateWrite(params, {
+          stateRoot: api.config?.stateRoot as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_state_write" },
+  );
+
+  api.registerTool(
+    {
+      name: "omm_state_read",
+      label: "omm state read",
+      description: "Read a JSON state file by key. Returns null if not found.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          key: { type: "string" },
+        },
+        required: ["key"],
+      },
+      execute: (params) =>
+        runOmmStateRead(params, {
+          stateRoot: api.config?.stateRoot as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_state_read" },
+  );
+
+  api.registerTool(
+    {
+      name: "omm_state_list",
+      label: "omm state list",
+      description: "List all state keys.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      execute: (params) =>
+        runOmmStateList(params, {
+          stateRoot: api.config?.stateRoot as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_state_list" },
   );
 
   if (typeof api.on === "function") {

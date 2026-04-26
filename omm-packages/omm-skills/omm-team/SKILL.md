@@ -1,11 +1,8 @@
 ---
 name: omm-team
-description: Multi-agent team orchestration with staged pipeline
+description: Multi-agent team orchestration with external team skill bridge
 user-invocable: true
-disable-model-invocation: true
-command-dispatch: tool
-command-tool: omm_state_write
-command-arg-mode: raw
+disable-model-invocation: false
 version: 0.2.0
 ---
 
@@ -15,83 +12,79 @@ Start or resume an omm-team multi-agent execution pipeline.
 
 ```
 /omm-team <task description>
+/omm-team N:agent-type <task description>
 ```
+
+## Architecture
+
+omm-team provides **state tracking and integration coordination** while delegating actual parallel execution to the host environment's team skill. This avoids reimplementing worker spawning — the native `Task` tool with `TeamCreate`/`TaskCreate`/`SendMessage` handles parallelism.
 
 ## Lifecycle
 
-Team decomposes a task into subtasks, assigns them to parallel workers, and runs a verify/fix loop.
+1. **Receive** user task description and optional `N:agent-type` parameter.
+2. **Read state** via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal, resume from that phase.
+3. **Write initial state** via `omm_state_write`:
+   ```json
+   {
+     "mode": "team",
+     "active": true,
+     "task": "<original task>",
+     "current_phase": "delegating",
+     "agent_count": 3,
+     "fix_loop_count": 0,
+     "max_fix_loops": 3,
+     "linked_ralph": false,
+     "startedAt": "..."
+   }
+   ```
+4. **Delegate** to the upstream team skill. Invoke via `Skill()` with the team skill name and pass `args="<N:agent-type> <task>"`.
+5. The upstream team skill handles the full pipeline: `TeamCreate` → task decomposition → `TaskCreate` → worker spawn → monitor → verify/fix loop → `TeamDelete`.
+6. **On completion**, write terminal state via `omm_state_write`:
+   ```json
+   {
+     "mode": "team",
+     "active": false,
+     "current_phase": "complete",
+     "task": "<original task>"
+   }
+   ```
 
-### Pipeline Stages
-
-```
-PLANNING → DECOMPOSING → EXECUTING → VERIFYING → COMPLETE
-                             ↑            ↓
-                             └── FIXING ←─┘
-```
-
-### Stage Descriptions
-
-1. **PLANNING**: Analyze the codebase and task scope. Identify files, modules, and dependencies involved.
-2. **DECOMPOSING**: Break the task into independent, file-scoped subtasks. Each subtask should be completable without conflicts. Write the task list to state.
-3. **EXECUTING**: Assign subtasks to workers. Workers execute in parallel on non-overlapping file sets. Track per-worker progress in state.
-4. **VERIFYING**: After all workers complete, verify the combined result. Run typecheck, tests, and acceptance checks.
-5. **FIXING**: If verification fails, create fix tasks targeting specific failures. Route to workers and re-verify.
-6. **COMPLETE**: All checks pass. Write `status=complete`.
-
-### State Schema
+## State Schema
 
 ```json
 {
   "mode": "team",
   "active": true,
   "task": "<original task>",
-  "current_phase": "executing",
-  "subtasks": [
-    {
-      "id": 1,
-      "description": "...",
-      "owner": "worker-1",
-      "status": "completed"
-    },
-    {
-      "id": 2,
-      "description": "...",
-      "owner": "worker-2",
-      "status": "in_progress"
-    }
-  ],
+  "current_phase": "delegating",
+  "subtasks": [],
   "agent_count": 3,
   "fix_loop_count": 0,
   "max_fix_loops": 3,
+  "linked_ralph": false,
   "startedAt": "...",
   "lastUpdatedAt": "..."
 }
 ```
 
-### Decomposition Rules
+### Valid Phases
 
-- Each subtask targets a specific file or module to avoid merge conflicts.
-- Shared types or interfaces should be a separate task completed first (dependency).
-- Subtask descriptions must be self-contained: include file paths, expected behavior, and verification command.
-- Maximum subtask count equals worker count; consolidate if tasks are too granular.
+`planning` → `decomposing` → `executing` → `verifying` → `fixing` → `complete`
 
-### Worker Coordination
+The `delegating` phase indicates the upstream team skill is in control.
 
-- Workers must not edit the same files.
-- If a worker is blocked, it reports the blocker and stands by.
-- The lead monitors progress and reassigns failed tasks.
-- Workers report completion with a summary of changes made.
+## Linked Ralph
 
-### Fix Loop
+When invoked as part of omm-ralph, set `linked_ralph=true` in state. On failure, ralph handles retry at the iteration level. omm-team writes `current_phase=failed` and ralph reads team state to decide whether to re-plan.
 
-- Maximum `max_fix_loops` (default: 3) iterations of verify → fix → re-verify.
-- Each fix iteration targets specific verification failures, not the entire task.
-- If max fix loops exceeded, write `status=failed` with remaining issues.
+## Resume
 
-### Resume
+Read state via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal, resume by re-delegating to the upstream team skill.
 
-Read state via `omm_state_read` with `key=team`. If `active=true`, resume from `current_phase`.
+## Completion
 
-### Linked Ralph
+When the upstream team skill finishes, write `current_phase=complete`, `active=false`. Report what was accomplished.
 
-When invoked as part of omm-ralph, team writes `linked_ralph=true` in state. On failure, ralph handles retry at the iteration level.
+## Failure
+
+If the upstream team skill fails or max fix loops exceeded, write `current_phase=failed`, `active=false`. Report remaining issues.

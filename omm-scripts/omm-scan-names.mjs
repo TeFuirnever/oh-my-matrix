@@ -18,6 +18,7 @@ const ignoredPathParts = new Set([
   ".o" + "mc",
   "node_modules",
   "omm-dist",
+  "docs",
 ]);
 const legalFiles = new Set([
   "LICENSE",
