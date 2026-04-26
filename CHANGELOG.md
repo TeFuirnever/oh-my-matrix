@@ -2,6 +2,50 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.2.2] — 2026-04-27
+
+### Fixed — P0 production bug (escaped 0.2.1)
+
+- `omm-register.ts`: corrected all 5 plugin tool `execute` signatures
+  from the wrong 1-arg form `(params)` to the OpenClaw runtime's actual
+  4-arg shape `(toolCallId, params, signal?, onUpdate?)`. The 1-arg
+  form silently captured the `toolCallId` string as `params`, so every
+  `params.field` access returned `undefined`. omm_state_read/write/list
+  rejected with `"key is required"`; omm_ping/cancel silently fell
+  through to defaults. The MCP server path was unaffected (uses
+  standard MCP `tools/call` envelope), which is why both
+  `pnpm omm:smoke-mcp` and `omm-bundle-smoke.mjs` passed despite the
+  plugin path being broken.
+- Hardened the local `OmmPluginApi.execute` type to the 4-arg shape so
+  future regressions are caught at compile time, not by users in
+  production Electron sessions.
+
+### Added — Tests
+
+- `omm-register.test.ts`: 7 integration tests that mock the OpenClaw
+  `registerTool` API and invoke each registered tool's `execute` with
+  the real 4-arg shape. Direct regression guard for the 0.2.1 bug:
+  `omm_state_read({key:"x"})` must return `"null"` (not
+  `"key is required"`) when the file is missing.
+
+### Test count
+
+342 passing (was 339; +3 register integration tests for state-read,
+state-write+list+round-trip, ping; +2 for cancel + signal-omitted; +1
+fixture).
+
+### Discovery context
+
+Real-Electron smoke 2026-04-26 surfaced the bug: the model in
+MatrixAssistant kept hallucinating "tool unavailable" after seeing
+the wrong error string from omm_state_read. Architect + verifier +
+same-class-bug-sweep reviewer trio confirmed the diagnosis: 5
+instances all in `omm-register.ts`, 0 collateral elsewhere. SKILL.md
+"null is not an error" hint shipped in 0.2.1 doesn't help — calls
+never reached the success path because params were lost first.
+
+---
+
 ## [0.2.1] — 2026-04-26
 
 ### Added — Hardening (post-architecture-review)

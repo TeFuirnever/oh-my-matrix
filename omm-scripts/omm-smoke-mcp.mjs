@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const VERBOSE = process.env.OMM_SMOKE_VERBOSE === "1";
-const EXPECTED_VERSION = "0.2.1";
+const EXPECTED_VERSION = "0.2.2";
 
 const SERVERS = [
   {

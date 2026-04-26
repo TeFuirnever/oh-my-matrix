@@ -116,7 +116,7 @@ async function handleRequest(req) {
         respond(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {} },
-            serverInfo: { name: "omm-memory", version: "0.2.1" },
+            serverInfo: { name: "omm-memory", version: "0.2.2" },
         });
         return;
     }
