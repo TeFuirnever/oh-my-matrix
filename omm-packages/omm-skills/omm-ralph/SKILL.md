@@ -119,6 +119,8 @@ if (resume.active) {
 
 Without the helper, fall back to `omm_state_read` with `key=ralph`. If `active=true` and `status` is non-terminal, resume from the current phase rather than starting over.
 
+> **Important — interpreting `omm_state_read` responses**: when no state file exists yet (first run, or after `cancel`), the tool returns the literal text `null`. **This is normal — it means "not started yet", not an error.** Do not retry, do not assume the tool is broken. Proceed by initializing state via `omm_state_write` with `key=ralph` and `active=true` (or call `startMode("ralph", ...)`).
+
 ### Completion
 
 When verified, write `status=complete`, `active=false`. Report what was accomplished and what was verified.

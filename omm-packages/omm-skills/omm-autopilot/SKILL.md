@@ -126,6 +126,8 @@ that is not `complete`.
 
 Read state via `omm_state_read` with `key=autopilot`. If `active=true` and `status` is non-terminal, resume from `current_step`.
 
+> **Important — interpreting `omm_state_read` responses**: when no state file exists yet (first run, or after `cancel`), the tool returns the literal text `null`. **This is normal — it means "not started yet", not an error.** Do not retry, do not assume the tool is broken. Proceed by initializing state via `omm_state_write` with `key=autopilot` and `active=true`.
+
 ### Completion
 
 When final verification passes, write `status=complete`, `active=false`. Summarize all steps taken and their outcomes.

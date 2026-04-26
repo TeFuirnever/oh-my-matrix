@@ -23,6 +23,9 @@ omm-team provides **state tracking and integration coordination** while delegati
 
 1. **Receive** user task description and optional `N:agent-type` parameter.
 2. **Read state** via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal, resume from that phase.
+
+   > **Important — interpreting `omm_state_read` responses**: when no state file exists yet (first run, or after `cancel`), the tool returns the literal text `null`. **This is normal — it means "not started yet", not an error.** Do not retry, do not assume the tool is broken. Proceed by initializing state via `omm_state_write` with `key=team` and `active=true` (or call `startMode("team", ...)`).
+
 3. **Write initial state** via `omm_state_write`:
    ```json
    {
