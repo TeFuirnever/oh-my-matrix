@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "../omm-config.js";
-import { withKeyLock } from "../omm-fs-queue.js";
+import { withCrossProcessLock } from "../omm-fs-queue.js";
 import { validateStateWrite } from "../omm-state-validation.js";
 import { assertWorkflowExclusivity } from "../omm-workflow-guard.js";
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
@@ -56,7 +56,7 @@ export async function runOmmStateWrite(input, config = {}) {
     }
     const stateDir = join(resolveOmmStateRoot(config.stateRoot), "state");
     await mkdir(stateDir, { recursive: true });
-    return withKeyLock(`${stateDir}::${key}`, async () => {
+    return withCrossProcessLock(stateDir, key, async () => {
         const exclusivity = await assertWorkflowExclusivity(stateDir, key, validation.state);
         if (!exclusivity.ok) {
             return {

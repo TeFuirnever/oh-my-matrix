@@ -2,6 +2,71 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.3.0-alpha.1] — 2026-04-27
+
+### Added — P0 hardening (multi-process safety)
+
+- `omm-fs-queue.ts`: new `withCrossProcessLock(lockDir, key, fn,
+  { timeoutMs?, staleMs? })` — `O_EXCL`-based file lock at
+  `${lockDir}/.locks/${key}.lock` with 50 ms ± 20 ms jitter polling,
+  30 s stale-lock recovery (mtime + PID liveness via
+  `process.kill(pid, 0)`), and `try/finally` release. Wrapped in the
+  existing in-process `withKeyLock` so same-process awaiters do not
+  fight for the file. Throws
+  `Error("OMM_E_LOCK_TIMEOUT: <key>")` after `timeoutMs` (default
+  5 s).
+- `omm-tools/omm-state.ts`: `runOmmStateWrite` now uses
+  `withCrossProcessLock(stateDir, key, …)` so the
+  validate→exclusivity-check→write→rename window is serialized across
+  the plugin process AND every MCP server process sharing the same
+  `${stateRoot}`.
+- `omm-mcp`, `omm-mcp-memory`, `omm-mcp-trace`: each server inlines a
+  byte-equivalent `withCrossProcessLock` (zero-dep per ADR-003 — they
+  cannot import `omm-plugin`). Callsites:
+  - `omm-mcp` `toolWrite` → wraps validate+rename window.
+  - `omm-mcp-memory` `toolSet` / `toolDelete` → wraps tmp+rename / unlink.
+  - `omm-mcp-trace` `toolRecord` → wraps rotate→appendFile.
+
+### Added — Documentation
+
+- `docs/adr/005-cross-process-locking.md`: rationale for the
+  `O_EXCL` self-implementation, the inlined-copy maintenance cost,
+  failure semantics, and rejected alternatives (`proper-lockfile`,
+  POSIX `flock` via native addon, SQLite, single shared-mutex daemon).
+
+### Added — Tooling
+
+- `omm-scripts/omm-stress-cross-process.mjs`: spawns 4 child processes
+  (2 plugin direct-call, 2 MCP-server stdio) hammering the same key
+  100× each. Reports P50 / P99 latency. Exits 0 only when no lock
+  errors occur AND P99 < 100 ms.
+
+### Added — Tests
+
+- `omm-fs-queue.test.ts`: 5 new cases covering happy-path
+  serialization, EEXIST retry until release, stale-lock cleanup with
+  dead PID, `OMM_E_LOCK_TIMEOUT` exhaustion, and try/finally cleanup
+  on throwing `fn`.
+
+### Changed — Versions
+
+- Root `package.json` 0.2.2 → 0.3.0-alpha.1.
+- `omm-plugin`, `omm-mcp`, `omm-mcp-memory`, `omm-mcp-trace`
+  sub-packages 0.2.2 → 0.3.0-alpha.1.
+- All three MCP `serverInfo.version` strings 0.2.2 → 0.3.0-alpha.1.
+- `omm-smoke-mcp.mjs` `EXPECTED_VERSION` synced.
+
+### Security posture
+
+The cross-process write race documented as known-limitation in 0.2.x
+is now mechanically prevented across the plugin process and the three
+MCP server processes. Single-host operation only — `process.kill` PID
+liveness checks cannot detect remote-crashed PIDs on a shared NFS
+stateRoot, in which case stale recovery waits the full `staleMs`
+window (30 s by default).
+
+---
+
 ## [0.2.2] — 2026-04-27
 
 ### Fixed — P0 production bug (escaped 0.2.1)
