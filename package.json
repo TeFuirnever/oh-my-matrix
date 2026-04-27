@@ -13,11 +13,15 @@
     "omm:scan-names": "node omm-scripts/omm-scan-names.mjs .",
     "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.3.0-alpha.2.tgz",
     "omm:verify-provenance": "node omm-scripts/omm-verify-provenance.mjs",
-    "omm:smoke-mcp": "node omm-scripts/omm-smoke-mcp.mjs"
+    "omm:smoke-mcp": "node omm-scripts/omm-smoke-mcp.mjs",
+    "docs:dev": "vitepress dev website",
+    "docs:build": "vitepress build website",
+    "docs:preview": "vitepress preview website"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitepress": "^1.6.4"
   }
 }
