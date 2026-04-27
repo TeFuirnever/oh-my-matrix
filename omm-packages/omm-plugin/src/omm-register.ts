@@ -1,4 +1,10 @@
-import { handleSessionEnd, handleSessionStart } from "./omm-hooks.js";
+import {
+  handleModeChange,
+  handlePostToolUse,
+  handlePreToolUse,
+  handleSessionEnd,
+  handleSessionStart,
+} from "./omm-hooks.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 import {
@@ -165,6 +171,23 @@ export function register(api: OmmPluginApi): void {
     );
     api.on("session_end", (args) =>
       handleSessionEnd(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("pre_tool_use", (args) =>
+      handlePreToolUse(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("post_tool_use", (args) =>
+      handlePostToolUse(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("mode_change", (args) =>
+      handleModeChange(args as Record<string, unknown>, { stateRoot }),
+    );
+  } else {
+    // F3: silent host = invisible debugging. One-time stderr line tells the
+    // operator "hooks are loadable but no events will fire". Cheap signal,
+    // does not affect tool execution.
+    process.stderr.write(
+      "[omm-register] host did not provide api.on(); hook events will not fire " +
+        "(install hooks under {stateRoot}/hooks/{event}/ once the host wires lifecycle events)\n",
     );
   }
 }

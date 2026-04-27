@@ -1,6 +1,26 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "./omm-config.js";
+import {
+  dispatchHooks,
+  type HookDispatchOutcome,
+  type HookLoadIssue,
+} from "./omm-hook-loader.js";
+
+/**
+ * omm event names emitted to plugin hooks. Hosts (OpenClaw, MatrixAssistant)
+ * inject these by calling `api.on(event, handler)`; omm-register.ts wires the
+ * handlers below so user-supplied hook modules in `{stateRoot}/hooks/{event}/`
+ * are loaded and dispatched on every event.
+ *
+ * @since 0.3.0
+ */
+export type OmmHookEvent =
+  | "session_start"
+  | "session_end"
+  | "pre_tool_use"
+  | "post_tool_use"
+  | "mode_change";
 
 export interface OmmSessionRecord {
   event: "session_start" | "session_end";
@@ -8,8 +28,16 @@ export interface OmmSessionRecord {
   sessionId?: string;
 }
 
+export interface OmmHookDispatchResult {
+  outcomes: HookDispatchOutcome[];
+  issues: HookLoadIssue[];
+}
+
+const HOOKS_DIR_NAME = "hooks";
+
 async function writeSessionRecord(
   event: OmmSessionRecord["event"],
+  args: Record<string, unknown>,
   config?: { stateRoot?: string },
 ): Promise<void> {
   const stateRoot = resolveOmmStateRoot(config?.stateRoot);
@@ -20,6 +48,11 @@ async function writeSessionRecord(
     event,
     timestamp: new Date().toISOString(),
   };
+  // F2: populate sessionId when host emits it; otherwise leave the field
+  // off the JSON output so absent doesn't masquerade as null.
+  if (typeof args.sessionId === "string" && args.sessionId !== "") {
+    record.sessionId = args.sessionId;
+  }
 
   await writeFile(
     join(stateDir, "session.json"),
@@ -28,22 +61,80 @@ async function writeSessionRecord(
   );
 }
 
-/** Write a session_start record to omm state. */
-export async function handleSessionStart(
-  _args: Record<string, unknown>,
+/**
+ * Load and dispatch user-installed hooks for `event`.
+ *
+ * Hook modules live in `{stateRoot}/hooks/{event}/*.mjs`. Each module
+ * must export `{ event, handler }` where `event` matches the directory name
+ * and `handler(args)` is the callback. See docs/contracts/hooks.md.
+ *
+ * Errors during load or dispatch are surfaced via the returned outcome but
+ * never thrown — host event emission must not crash because a user hook is
+ * broken.
+ */
+export async function dispatchOmmHooks(
+  event: OmmHookEvent,
+  args: Record<string, unknown>,
   config?: { stateRoot?: string },
-): Promise<void> {
-  await writeSessionRecord("session_start", config);
+): Promise<OmmHookDispatchResult | null> {
+  try {
+    const stateRoot = resolveOmmStateRoot(config?.stateRoot);
+    const hooksDir = join(stateRoot, HOOKS_DIR_NAME, event);
+    return await dispatchHooks(hooksDir, event, args);
+  } catch (err) {
+    // F1: infrastructure failure (config root unresolvable). Log to stderr
+    // so operators see a signal even though we still return null to keep
+    // the host event path crash-free.
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[omm-hooks] dispatchOmmHooks(${event}) failed: ${message}\n`,
+    );
+    return null;
+  }
 }
 
-/** Write a session_end record to omm state. Silently ignores errors. */
+/** Write session_start record + dispatch user hooks. */
+export async function handleSessionStart(
+  args: Record<string, unknown>,
+  config?: { stateRoot?: string },
+): Promise<void> {
+  await writeSessionRecord("session_start", args, config);
+  await dispatchOmmHooks("session_start", args, config);
+}
+
+/** Write session_end record + dispatch user hooks. Errors silenced. */
 export async function handleSessionEnd(
-  _args: Record<string, unknown>,
+  args: Record<string, unknown>,
   config?: { stateRoot?: string },
 ): Promise<void> {
   try {
-    await writeSessionRecord("session_end", config);
+    await writeSessionRecord("session_end", args, config);
   } catch {
     // State dir may not exist if session_start never fired
   }
+  await dispatchOmmHooks("session_end", args, config);
+}
+
+/** Dispatch user-installed pre_tool_use hooks. */
+export async function handlePreToolUse(
+  args: Record<string, unknown>,
+  config?: { stateRoot?: string },
+): Promise<void> {
+  await dispatchOmmHooks("pre_tool_use", args, config);
+}
+
+/** Dispatch user-installed post_tool_use hooks. */
+export async function handlePostToolUse(
+  args: Record<string, unknown>,
+  config?: { stateRoot?: string },
+): Promise<void> {
+  await dispatchOmmHooks("post_tool_use", args, config);
+}
+
+/** Dispatch user-installed mode_change hooks. */
+export async function handleModeChange(
+  args: Record<string, unknown>,
+  config?: { stateRoot?: string },
+): Promise<void> {
+  await dispatchOmmHooks("mode_change", args, config);
 }
