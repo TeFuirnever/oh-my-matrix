@@ -45,6 +45,10 @@ export default defineConfig({
               text: "Workflow State",
               link: "/reference/contracts/workflow-state",
             },
+            {
+              text: "Degradation",
+              link: "/reference/contracts/degradation",
+            },
           ],
         },
         {
