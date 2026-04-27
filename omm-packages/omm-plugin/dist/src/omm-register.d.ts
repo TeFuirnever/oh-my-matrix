@@ -1,3 +1,15 @@
+/**
+ * Plugin/MCP API contract version. Hosts that depend on a specific shape
+ * for tool results, error envelopes, or state semantics should compare
+ * against this constant rather than parsing `package.json` version strings.
+ *
+ * Bump on breaking surface changes (tool signatures, error envelope, state
+ * file layout). Patch and minor releases keep `API_VERSION` stable.
+ *
+ * @see docs/contracts/error-codes.md
+ * @since 0.3.0
+ */
+export declare const OMM_API_VERSION: "0.3";
 interface OmmPluginApi {
     registerTool?: (tool: {
         name: string;

@@ -1,3 +1,4 @@
+import { type OmmErrorCode } from "../omm-error-codes.js";
 import type { OmmToolResult } from "./omm-ping.js";
 export interface OmmStateWriteInput {
     key?: unknown;
@@ -14,6 +15,7 @@ export declare function sanitizeStateKey(raw: unknown): {
     ok: boolean;
     key?: string;
     error?: string;
+    code?: OmmErrorCode;
 };
 /** Write validated JSON state by key with atomic tmp+rename. */
 export declare function runOmmStateWrite(input: OmmStateWriteInput, config?: OmmStateConfig): Promise<OmmToolResult>;

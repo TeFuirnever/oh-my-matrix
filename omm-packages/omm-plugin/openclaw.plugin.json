@@ -2,6 +2,7 @@
   "id": "omm",
   "name": "omm",
   "version": "0.3.0-alpha.1",
+  "apiVersion": "0.3",
   "description": "Minimal omm plugin for OpenClaw compatibility smoke testing.",
   "configSchema": {
     "type": "object",
