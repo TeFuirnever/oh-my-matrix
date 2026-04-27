@@ -2,6 +2,43 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.3.0-alpha.2] — 2026-04-27
+
+### Added
+
+- **observability**: `omm_trace_metrics` MCP tool aggregates execution
+  metrics from trace records — returns `{ count, errorRate, p50, p99,
+  byTool: { [toolName]: { count, errorRate, p50, p99 } } }`. Optional
+  `sessionId` and `sinceMs` filters. `omm_trace_record` schema now
+  accepts optional `durationMs`, `toolName`, `ok` fields for hosts
+  that want to surface tool perf to operators. Backward compatible —
+  existing callers omitting these fields keep working. See
+  `docs/contracts/observability.md`.
+
+- **errors (mcp)**: All three MCP servers (omm-state, omm-memory,
+  omm-trace) now emit structured error codes via JSON-RPC
+  `error.data.code`, completing the migration started in
+  0.3.0-alpha.1. Hosts can branch on stable identifiers like
+  `OMM_E_KEY_INVALID`, `OMM_E_VALUE_INVALID`, `OMM_E_IO_FAILED`
+  rather than substring-matching free-form strings. `error.message`
+  preserved for backward compat. See `docs/contracts/error-codes.md`.
+
+### Fixed
+
+- `omm-fs-queue.ts` and inline copies in 3 MCP servers: O_EXCL retry
+  loop now also catches Windows `EPERM` (not just `EEXIST`) — Windows
+  reports EPERM when racing on an already-open file. Without this fix
+  the cross-process lock spuriously failed on Windows under contention.
+
+### Changed
+
+- `omm-stress-cross-process.mjs`: P99 budget raised from 100 ms to
+  200 ms to reflect the Windows EPERM retry cost (~50 ms extra per
+  contention event). The budget still detects pathological contention
+  but is honest about platform-dependent jitter. Linux/macOS
+  performance unchanged (P99 still ~65 ms). See ADR-005 Windows quirk
+  section for details.
+
 ## [0.3.0-alpha.1] — 2026-04-27
 
 ### Added — P0 hardening (multi-process safety)

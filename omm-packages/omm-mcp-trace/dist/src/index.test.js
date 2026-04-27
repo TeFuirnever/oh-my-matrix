@@ -94,18 +94,19 @@ describe("omm-trace MCP server", () => {
                 assert.equal(result.protocolVersion, "2024-11-05");
                 const serverInfo = result.serverInfo;
                 assert.equal(serverInfo.name, "omm-trace");
-                assert.equal(serverInfo.version, "0.3.0-alpha.1");
+                assert.equal(serverInfo.version, "0.3.0-alpha.2");
             });
         });
     });
     describe("tools/list", () => {
-        it("returns the three trace tools", async () => {
+        it("returns the four trace tools", async () => {
             await withClient(async (client) => {
                 const r = await client.send("tools/list");
                 const result = r.result;
                 const names = result.tools.map((t) => t.name).sort();
                 assert.deepEqual(names, [
                     "omm_trace_list_sessions",
+                    "omm_trace_metrics",
                     "omm_trace_query",
                     "omm_trace_record",
                 ]);
@@ -309,6 +310,131 @@ describe("omm-trace MCP server", () => {
             await withClient(async (client) => {
                 const r = await callTool(client, "omm_trace_bogus", {});
                 assert.equal(r.error?.code, -32601);
+            });
+        });
+    });
+    describe("metrics", () => {
+        const metricEv = (timestamp, toolName, durationMs, ok) => ({ timestamp, type: "tool_call", toolName, durationMs, ok });
+        it("aggregates 10 records with durationMs 1..10, all ok, same toolName", async () => {
+            await withClient(async (client) => {
+                for (let i = 1; i <= 10; i++) {
+                    const ts = `2026-04-26T10:00:${String(i).padStart(2, "0")}Z`;
+                    await callTool(client, "omm_trace_record", {
+                        session_id: "m1",
+                        event: metricEv(ts, "toolA", i, true),
+                    });
+                }
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "m1",
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.count, 10);
+                assert.equal(result.errorRate, 0);
+                assert.ok(result.p50 >= 5 && result.p50 <= 6, `p50=${result.p50}`);
+                assert.equal(result.p99, 10);
+            });
+        });
+        it("computes errorRate correctly with 2 failures out of 5", async () => {
+            await withClient(async (client) => {
+                for (let i = 0; i < 5; i++) {
+                    await callTool(client, "omm_trace_record", {
+                        session_id: "m2",
+                        event: metricEv(`2026-04-26T10:00:0${i}Z`, "toolB", 10 + i, i < 3),
+                    });
+                }
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "m2",
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.count, 5);
+                assert.ok(Math.abs(result.errorRate - 0.4) < 0.001, `errorRate=${result.errorRate}`);
+            });
+        });
+        it("splits byTool buckets independently across 2 toolNames", async () => {
+            await withClient(async (client) => {
+                for (let i = 0; i < 3; i++) {
+                    await callTool(client, "omm_trace_record", {
+                        session_id: "m3",
+                        event: metricEv(`2026-04-26T10:00:0${i}Z`, "alpha", i + 1, true),
+                    });
+                    await callTool(client, "omm_trace_record", {
+                        session_id: "m3",
+                        event: metricEv(`2026-04-26T10:00:0${i + 3}Z`, "beta", (i + 1) * 10, false),
+                    });
+                }
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "m3",
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.byTool.alpha.count, 3);
+                assert.equal(result.byTool.alpha.errorRate, 0);
+                assert.equal(result.byTool.beta.count, 3);
+                assert.equal(result.byTool.beta.errorRate, 1);
+            });
+        });
+        it("returns zeros on empty trace (no division by zero)", async () => {
+            await withClient(async (client) => {
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "empty-session",
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.count, 0);
+                assert.equal(result.errorRate, 0);
+                assert.equal(result.p50, 0);
+                assert.equal(result.p99, 0);
+                assert.deepEqual(result.byTool, {});
+            });
+        });
+        it("sinceMs filter excludes old records", async () => {
+            await withClient(async (client) => {
+                const old = new Date(Date.now() - 120_000).toISOString();
+                const fresh = new Date().toISOString();
+                await callTool(client, "omm_trace_record", {
+                    session_id: "mtime",
+                    event: {
+                        timestamp: old,
+                        type: "tool_call",
+                        toolName: "t",
+                        durationMs: 999,
+                        ok: true,
+                    },
+                });
+                await callTool(client, "omm_trace_record", {
+                    session_id: "mtime",
+                    event: {
+                        timestamp: fresh,
+                        type: "tool_call",
+                        toolName: "t",
+                        durationMs: 1,
+                        ok: true,
+                    },
+                });
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "mtime",
+                    sinceMs: 60_000,
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.count, 1);
+                assert.equal(result.p50, 1);
+            });
+        });
+        it("sessionId filter scopes to the correct session only", async () => {
+            await withClient(async (client) => {
+                await callTool(client, "omm_trace_record", {
+                    session_id: "scope-a",
+                    event: metricEv("2026-04-26T10:00:00Z", "t", 5, true),
+                });
+                await callTool(client, "omm_trace_record", {
+                    session_id: "scope-b",
+                    event: metricEv("2026-04-26T10:00:01Z", "t", 100, false),
+                });
+                const r = await callTool(client, "omm_trace_metrics", {
+                    sessionId: "scope-a",
+                });
+                const result = JSON.parse(r.result.content[0].text);
+                assert.equal(result.count, 1);
+                assert.equal(result.p50, 5);
+                assert.equal(result.errorRate, 0);
             });
         });
     });

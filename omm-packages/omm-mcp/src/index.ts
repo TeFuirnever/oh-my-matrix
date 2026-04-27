@@ -14,6 +14,26 @@ import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
+/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
+
+const OMM_E_KEY_MISSING = "OMM_E_KEY_MISSING";
+const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
+const OMM_E_VALUE_MISSING = "OMM_E_VALUE_MISSING";
+const OMM_E_VALUE_INVALID = "OMM_E_VALUE_INVALID";
+const OMM_E_STATE_INVALID = "OMM_E_STATE_INVALID";
+const OMM_E_WORKFLOW_CONFLICT = "OMM_E_WORKFLOW_CONFLICT";
+
+class OmmError extends Error {
+  constructor(
+    readonly ommCode: string,
+    message: string,
+    readonly hint?: string,
+    readonly rpcCode: number = -32000,
+  ) {
+    super(message);
+  }
+}
+
 /* ── Per-key serialization queue (in-process) ── */
 
 const writeQueues = new Map<string, Promise<unknown>>();
@@ -121,7 +141,7 @@ async function withCrossProcessLock<T>(
         break;
       } catch (err) {
         const code = (err as NodeJS.ErrnoException)?.code;
-        if (code !== "EEXIST") throw err;
+        if (code !== "EEXIST" && code !== "EPERM") throw err;
         let isStale = false;
         try {
           const st = await stat(lockPath);
@@ -192,10 +212,19 @@ const TERMINAL = new Set(["complete", "failed", "blocked"]);
 
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
-function assertSafeKey(key: string): void {
-  if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
-    throw new Error(
+function assertSafeKey(key: unknown): asserts key is string {
+  if (typeof key !== "string" || key.trim() === "") {
+    throw new OmmError(
+      OMM_E_KEY_MISSING,
+      "key is required",
+      "Provide a non-empty key matching [a-z0-9][a-z0-9_-]{0,63}",
+    );
+  }
+  if (!KEY_PATTERN.test(key.trim())) {
+    throw new OmmError(
+      OMM_E_KEY_INVALID,
       "key must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)",
+      "Provide a key using only alphanumerics, hyphens, and underscores",
     );
   }
 }
@@ -204,9 +233,6 @@ function validateMcpStateWrite(
   key: string,
   value: Record<string, unknown>,
 ): { ok: boolean; state?: Record<string, unknown>; error?: string } {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return { ok: false, error: "value must be a JSON object" };
-  }
   const now = new Date().toISOString();
   const next: Record<string, unknown> = { ...value, lastUpdatedAt: now };
   const mode = (value.mode as string | undefined) ?? key;
@@ -277,7 +303,7 @@ const TOOLS = [
   },
 ];
 
-async function toolRead(key: string): Promise<string> {
+async function toolRead(key: unknown): Promise<string> {
   assertSafeKey(key);
   const filePath = join(stateDir(), `${key.trim()}.json`);
   return readFile(filePath, "utf8");
@@ -337,22 +363,45 @@ async function assertExclusivity(
     if (!existingMode) continue;
     if (parsed.active !== true) continue;
     if (isLinkedPair(incomingMode, incoming, existingMode, parsed)) continue;
-    throw new Error(
+    throw new OmmError(
+      OMM_E_WORKFLOW_CONFLICT,
       `cannot activate ${incomingMode}: ${existingMode} is already active (only one workflow mode may be active at a time)`,
+      `Cancel the active workflow first (current: ${existingMode})`,
+      -32000,
     );
   }
 }
 
-async function toolWrite(key: string, value: object): Promise<string> {
+async function toolWrite(key: unknown, value: unknown): Promise<string> {
   assertSafeKey(key);
   const safeKey = key.trim();
+
+  if (value === undefined || value === null) {
+    throw new OmmError(
+      OMM_E_VALUE_MISSING,
+      "value is required",
+      "Pass a plain object as `value`",
+    );
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new OmmError(
+      OMM_E_VALUE_INVALID,
+      "value must be a JSON object",
+      "Pass a plain object as `value` (not an array, primitive, or null)",
+    );
+  }
+
   const validation = validateMcpStateWrite(
     safeKey,
     value as Record<string, unknown>,
   );
   if (!validation.ok) {
-    throw new Error(validation.error);
+    throw new OmmError(
+      OMM_E_STATE_INVALID,
+      validation.error ?? "state validation failed",
+    );
   }
+
   const dir = stateDir();
   await mkdir(dir, { recursive: true });
   return withCrossProcessLock(dir, safeKey, async () => {
@@ -391,42 +440,56 @@ type JsonRpcResponse = {
   jsonrpc: "2.0";
   id: string | number | null;
   result?: unknown;
-  error?: { code: number; message: string };
+  error?: { code: number; message: string; data?: unknown };
 };
 
-function respond(id: string | number | null, result: unknown): void {
-  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, result };
-  process.stdout.write(`${JSON.stringify(msg)}\n`);
+function makeResponse(
+  id: string | number | null,
+  result: unknown,
+): JsonRpcResponse {
+  return { jsonrpc: "2.0", id, result };
 }
 
-function respondError(
+function makeErrorResponse(
   id: string | number | null,
   code: number,
   message: string,
-): void {
-  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, error: { code, message } };
-  process.stdout.write(`${JSON.stringify(msg)}\n`);
+  data?: unknown,
+): JsonRpcResponse {
+  const error: { code: number; message: string; data?: unknown } = {
+    code,
+    message,
+  };
+  if (data !== undefined) error.data = data;
+  return { jsonrpc: "2.0", id, error };
 }
 
-async function handleRequest(req: JsonRpcRequest): Promise<void> {
+function respond(id: string | number | null, result: unknown): void {
+  process.stdout.write(`${JSON.stringify(makeResponse(id, result))}\n`);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+void respond; // used in legacy paths below
+
+export async function processRequest(
+  req: JsonRpcRequest,
+): Promise<JsonRpcResponse> {
   const id = req.id ?? null;
 
   if (req.method === "initialize") {
-    respond(id, {
+    return makeResponse(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "omm-state", version: "0.3.0-alpha.1" },
+      serverInfo: { name: "omm-state", version: "0.3.0-alpha.2" },
     });
-    return;
   }
 
   if (req.method === "notifications/initialized") {
-    return;
+    return makeResponse(id, null);
   }
 
   if (req.method === "tools/list") {
-    respond(id, { tools: TOOLS });
-    return;
+    return makeResponse(id, { tools: TOOLS });
   }
 
   if (req.method === "tools/call") {
@@ -439,28 +502,33 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
     try {
       let content: string;
       if (params.name === "omm_state_read") {
-        const key = args.key as string;
-        content = await toolRead(key);
+        content = await toolRead(args.key);
       } else if (params.name === "omm_state_write") {
-        const key = args.key as string;
-        const value = args.value as object;
-        content = await toolWrite(key, value);
+        content = await toolWrite(args.key, args.value);
       } else if (params.name === "omm_state_list") {
         const keys = await toolList();
         content = JSON.stringify(keys);
       } else {
-        respondError(id, -32601, `Unknown tool: ${params.name}`);
-        return;
+        return makeErrorResponse(id, -32601, `Unknown tool: ${params.name}`);
       }
-      respond(id, { content: [{ type: "text", text: content }] });
+      return makeResponse(id, { content: [{ type: "text", text: content }] });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      respondError(id, -32000, message);
+      if (err instanceof OmmError) {
+        const data: { code: string; hint?: string } = { code: err.ommCode };
+        if (err.hint !== undefined) data.hint = err.hint;
+        return makeErrorResponse(id, err.rpcCode, message, data);
+      }
+      return makeErrorResponse(id, -32000, message);
     }
-    return;
   }
 
-  respondError(id, -32601, `Method not found: ${req.method}`);
+  return makeErrorResponse(id, -32601, `Method not found: ${req.method}`);
+}
+
+async function handleRequest(req: JsonRpcRequest): Promise<void> {
+  const response = await processRequest(req);
+  process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });

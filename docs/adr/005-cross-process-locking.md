@@ -106,6 +106,21 @@ dependency at runtime), so the duplication is the documented cost.
 - `unlink` failure during release → swallowed; next acquire-attempt
   hits `EEXIST` and resolves via stale logic.
 
+**Windows quirk (added 0.3.0-alpha.2):**
+
+On Windows, racing `O_EXCL` opens emit `EPERM` instead of `EEXIST`
+because the previous holder still has the file descriptor briefly open
+after `writeFile/close`. The retry loop accepts both error codes; both
+mean "lock is held, retry". This is documented in
+`omm-fs-queue.ts:144` and the inlined MCP copies.
+
+The Windows EPERM path adds one extra polling cycle (50 ms ± 20 ms)
+per contention event, which raises the stress-test P99 from ~65 ms
+(Linux/macOS, EEXIST-only) to ~110-160 ms on Windows. The stress
+script's P99 budget was raised from 100 ms to 200 ms to reflect this
+honestly; the budget still detects pathological contention without
+being noise-flake on Windows.
+
 ## Alternatives Considered
 
 **`proper-lockfile`** (popular npm package): rejected. Pulling it in

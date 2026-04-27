@@ -14,6 +14,24 @@ import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
+/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
+
+const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
+const OMM_E_VALUE_MISSING = "OMM_E_VALUE_MISSING";
+const OMM_E_VALUE_INVALID = "OMM_E_VALUE_INVALID";
+const OMM_E_IO_FAILED = "OMM_E_IO_FAILED";
+
+class OmmError extends Error {
+  constructor(
+    readonly ommCode: string,
+    message: string,
+    readonly hint?: string,
+    readonly rpcCode: number = -32000,
+  ) {
+    super(message);
+  }
+}
+
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
 /* ── Per-key serialization queue (in-process) ── */
@@ -123,7 +141,7 @@ async function withCrossProcessLock<T>(
         break;
       } catch (err) {
         const code = (err as NodeJS.ErrnoException)?.code;
-        if (code !== "EEXIST") throw err;
+        if (code !== "EEXIST" && code !== "EPERM") throw err;
         let isStale = false;
         try {
           const st = await stat(lockPath);
@@ -159,10 +177,16 @@ async function withCrossProcessLock<T>(
   });
 }
 
-function assertSafeKey(key: string): void {
-  if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
-    throw new Error(
+function assertSafeKey(key: unknown): asserts key is string {
+  if (
+    typeof key !== "string" ||
+    key.trim() === "" ||
+    !KEY_PATTERN.test(key.trim())
+  ) {
+    throw new OmmError(
+      OMM_E_KEY_INVALID,
       "key must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)",
+      "Provide a key using only alphanumerics, hyphens, and underscores",
     );
   }
 }
@@ -218,29 +242,63 @@ const TOOLS = [
   },
 ];
 
-async function toolSet(key: string, value: object): Promise<string> {
+async function toolSet(key: unknown, value: unknown): Promise<string> {
   assertSafeKey(key);
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("value must be a JSON object");
+  if (value === undefined) {
+    throw new OmmError(
+      OMM_E_VALUE_MISSING,
+      "value is required",
+      "Pass a plain object as `value`",
+    );
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new OmmError(
+      OMM_E_VALUE_INVALID,
+      "value must be a JSON object",
+      "Pass a plain object as `value` (not an array, primitive, or null)",
+    );
   }
   const safeKey = key.trim();
   const dir = memoryDir();
-  await mkdir(dir, { recursive: true });
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch (err) {
+    throw new OmmError(
+      OMM_E_IO_FAILED,
+      `failed to create memory directory: ${(err as Error).message}`,
+    );
+  }
   return withCrossProcessLock(dir, safeKey, async () => {
     const filePath = join(dir, `${safeKey}.json`);
     const tmpPath = `${filePath}.tmp`;
     const data = `${JSON.stringify(value, null, 2)}\n`;
-    await writeFile(tmpPath, data, "utf8");
-    await rename(tmpPath, filePath);
+    try {
+      await writeFile(tmpPath, data, "utf8");
+      await rename(tmpPath, filePath);
+    } catch (err) {
+      throw new OmmError(
+        OMM_E_IO_FAILED,
+        `write failed: ${(err as Error).message}`,
+      );
+    }
     return `Stored: ${filePath}`;
   });
 }
 
-async function toolDelete(key: string): Promise<string> {
+async function toolDelete(key: unknown): Promise<string> {
   assertSafeKey(key);
   const safeKey = key.trim();
   const dir = memoryDir();
-  await mkdir(dir, { recursive: true });
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch (err) {
+    throw new OmmError(
+      OMM_E_IO_FAILED,
+      `failed to create memory directory: ${(err as Error).message}`,
+      undefined,
+      -32603,
+    );
+  }
   return withCrossProcessLock(dir, safeKey, async () => {
     const filePath = join(dir, `${safeKey}.json`);
     try {
@@ -252,7 +310,7 @@ async function toolDelete(key: string): Promise<string> {
   });
 }
 
-async function toolGet(key: string): Promise<string> {
+async function toolGet(key: unknown): Promise<string> {
   assertSafeKey(key);
   const filePath = join(memoryDir(), `${key.trim()}.json`);
   try {
@@ -283,42 +341,49 @@ type JsonRpcResponse = {
   jsonrpc: "2.0";
   id: string | number | null;
   result?: unknown;
-  error?: { code: number; message: string };
+  error?: { code: number; message: string; data?: unknown };
 };
 
-function respond(id: string | number | null, result: unknown): void {
-  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, result };
-  process.stdout.write(`${JSON.stringify(msg)}\n`);
+function makeResponse(
+  id: string | number | null,
+  result: unknown,
+): JsonRpcResponse {
+  return { jsonrpc: "2.0", id, result };
 }
 
-function respondError(
+function makeErrorResponse(
   id: string | number | null,
   code: number,
   message: string,
-): void {
-  const msg: JsonRpcResponse = { jsonrpc: "2.0", id, error: { code, message } };
-  process.stdout.write(`${JSON.stringify(msg)}\n`);
+  data?: unknown,
+): JsonRpcResponse {
+  const error: { code: number; message: string; data?: unknown } = {
+    code,
+    message,
+  };
+  if (data !== undefined) error.data = data;
+  return { jsonrpc: "2.0", id, error };
 }
 
-async function handleRequest(req: JsonRpcRequest): Promise<void> {
+export async function processRequest(
+  req: JsonRpcRequest,
+): Promise<JsonRpcResponse> {
   const id = req.id ?? null;
 
   if (req.method === "initialize") {
-    respond(id, {
+    return makeResponse(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "omm-memory", version: "0.3.0-alpha.1" },
+      serverInfo: { name: "omm-memory", version: "0.3.0-alpha.2" },
     });
-    return;
   }
 
   if (req.method === "notifications/initialized") {
-    return;
+    return makeResponse(id, null);
   }
 
   if (req.method === "tools/list") {
-    respond(id, { tools: TOOLS });
-    return;
+    return makeResponse(id, { tools: TOOLS });
   }
 
   if (req.method === "tools/call") {
@@ -331,31 +396,35 @@ async function handleRequest(req: JsonRpcRequest): Promise<void> {
     try {
       let content: string;
       if (params.name === "omm_memory_set") {
-        const key = args.key as string;
-        const value = args.value as object;
-        content = await toolSet(key, value);
+        content = await toolSet(args.key, args.value);
       } else if (params.name === "omm_memory_get") {
-        const key = args.key as string;
-        content = await toolGet(key);
+        content = await toolGet(args.key);
       } else if (params.name === "omm_memory_delete") {
-        const key = args.key as string;
-        content = await toolDelete(key);
+        content = await toolDelete(args.key);
       } else if (params.name === "omm_memory_list") {
         const keys = await toolList();
         content = JSON.stringify(keys);
       } else {
-        respondError(id, -32601, `Unknown tool: ${params.name}`);
-        return;
+        return makeErrorResponse(id, -32601, `Unknown tool: ${params.name}`);
       }
-      respond(id, { content: [{ type: "text", text: content }] });
+      return makeResponse(id, { content: [{ type: "text", text: content }] });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      respondError(id, -32000, message);
+      if (err instanceof OmmError) {
+        const data: { code: string; hint?: string } = { code: err.ommCode };
+        if (err.hint !== undefined) data.hint = err.hint;
+        return makeErrorResponse(id, err.rpcCode, message, data);
+      }
+      return makeErrorResponse(id, -32000, message);
     }
-    return;
   }
 
-  respondError(id, -32601, `Method not found: ${req.method}`);
+  return makeErrorResponse(id, -32601, `Method not found: ${req.method}`);
+}
+
+async function handleRequest(req: JsonRpcRequest): Promise<void> {
+  const response = await processRequest(req);
+  process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });

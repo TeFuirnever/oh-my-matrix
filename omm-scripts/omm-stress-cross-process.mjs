@@ -7,7 +7,16 @@
  *
  * Each writer issues 100 writes (`stress-key`) with a unique counter
  * payload. The driver collects per-write latency (hrtime) and reports
- * P50 + P99. Exit code 0 only if no lock errors occurred AND P99 < 100 ms.
+ * P50 + P99. Exit code 0 only if no lock errors occurred AND P99 < 200 ms.
+ *
+ * Why 200 ms (raised from 100 ms in 0.3.0-alpha.2): On Windows, racing
+ * O_EXCL opens emit EPERM (not EEXIST) because the previous holder
+ * still has the FD briefly open after writeFile/close — the retry loop
+ * accepts both codes (see omm-fs-queue.ts) and waits ~50 ms ± 20 ms
+ * jitter per attempt. With 4 concurrent writers the P99 includes 1-2
+ * retry cycles (~70-160 ms on Windows). 200 ms gives ~1 retry of
+ * headroom; still detects pathological contention but tolerates the
+ * Windows kernel jitter exposed by the EPERM/EEXIST gap.
  *
  * Usage: node omm-scripts/omm-stress-cross-process.mjs
  *
@@ -26,7 +35,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const VERBOSE = process.env.OMM_STRESS_VERBOSE === "1";
 const WRITES_PER_CHILD = Number(process.env.OMM_STRESS_WRITES ?? 100);
 const KEY = "stress-key";
-const P99_BUDGET_MS = 100;
+const P99_BUDGET_MS = 200;
 
 const PLUGIN_WORKER = join(
   ROOT,

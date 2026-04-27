@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { buildManifestEntries, sha256File } from "./omm-shared.mjs";
 
 const bundle = resolve(
-  process.argv[2] ?? "omm-dist/omm-suite-0.3.0-alpha.1.tgz",
+  process.argv[2] ?? "omm-dist/omm-suite-0.3.0-alpha.2.tgz",
 );
 const bundleDir = dirname(bundle);
 const bundleName = basename(bundle);
@@ -28,7 +28,7 @@ try {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (
     manifest.name !== "omm-suite" ||
-    manifest.version !== "0.3.0-alpha.1" ||
+    manifest.version !== "0.3.0-alpha.2" ||
     !Array.isArray(manifest.entries)
   ) {
     throw new Error("invalid omm manifest");

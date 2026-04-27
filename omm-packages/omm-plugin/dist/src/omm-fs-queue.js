@@ -128,7 +128,9 @@ export async function withCrossProcessLock(lockDir, key, fn, options = {}) {
             }
             catch (err) {
                 const code = err?.code;
-                if (code !== "EEXIST")
+                // Windows reports EPERM (not EEXIST) when O_EXCL races on an
+                // already-open file; both mean "lock is held, retry".
+                if (code !== "EEXIST" && code !== "EPERM")
                     throw err;
                 // Inspect the existing lock for staleness.
                 let isStale = false;

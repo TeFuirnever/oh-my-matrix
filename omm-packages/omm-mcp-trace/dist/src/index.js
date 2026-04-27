@@ -4,6 +4,21 @@ import { appendFile, mkdir, open, readdir, readFile, rename, stat, unlink, } fro
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
+const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
+const OMM_E_VALUE_INVALID = "OMM_E_VALUE_INVALID";
+const OMM_E_IO_FAILED = "OMM_E_IO_FAILED";
+class OmmError extends Error {
+    ommCode;
+    hint;
+    rpcCode;
+    constructor(ommCode, message, hint, rpcCode = -32000) {
+        super(message);
+        this.ommCode = ommCode;
+        this.hint = hint;
+        this.rpcCode = rpcCode;
+    }
+}
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 /* ── Per-session serialization queue (in-process, zero-dep) ── */
 const recordQueues = new Map();
@@ -95,7 +110,7 @@ async function withCrossProcessLock(lockDir, key, fn, options = {}) {
             }
             catch (err) {
                 const code = err?.code;
-                if (code !== "EEXIST")
+                if (code !== "EEXIST" && code !== "EPERM")
                     throw err;
                 let isStale = false;
                 try {
@@ -140,8 +155,10 @@ async function withCrossProcessLock(lockDir, key, fn, options = {}) {
 const TRACE_ROTATE_BYTES = 8 << 20;
 const TRACE_MAX_ARCHIVES = 4;
 function assertSafeKey(key, label = "session_id") {
-    if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
-        throw new Error(`${label} must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)`);
+    if (typeof key !== "string" ||
+        key.trim() === "" ||
+        !KEY_PATTERN.test(key.trim())) {
+        throw new OmmError(OMM_E_KEY_INVALID, `${label} must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)`, "Provide a session_id using only alphanumerics, hyphens, and underscores");
     }
 }
 function traceRoot() {
@@ -201,21 +218,45 @@ const TOOLS = [
         description: "List session IDs that have a trace log.",
         inputSchema: { type: "object", properties: {} },
     },
+    {
+        name: "omm_trace_metrics",
+        description: "Compute latency percentiles and error rate for tool_call events in a session. Optional sinceMs limits to the last N milliseconds.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                sessionId: { type: "string" },
+                sinceMs: { type: "number" },
+            },
+            required: ["sessionId"],
+        },
+    },
 ];
 async function toolRecord(sessionId, event) {
     assertSafeKey(sessionId);
     const validated = validateEvent(event);
     if (typeof validated === "string") {
-        throw new Error(validated);
+        throw new OmmError(OMM_E_VALUE_INVALID, validated, "Provide an event object with `timestamp` (ISO8601) and `type` (non-empty string) fields");
     }
     const dir = traceDir();
-    await mkdir(dir, { recursive: true });
+    try {
+        await mkdir(dir, { recursive: true });
+    }
+    catch (err) {
+        throw new OmmError(OMM_E_IO_FAILED, `failed to create trace directory: ${err.message}`);
+    }
     const path = tracePath(sessionId);
     // Serialize per-session so rotateIfNeeded → appendFile is atomic against
     // concurrent records that would otherwise race on the rotation rename.
     return withCrossProcessLock(dir, `record::${sessionId.trim()}`, async () => {
-        await rotateIfNeeded(path);
-        await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
+        try {
+            await rotateIfNeeded(path);
+            await appendFile(path, `${JSON.stringify(validated)}\n`, "utf8");
+        }
+        catch (err) {
+            if (err instanceof OmmError)
+                throw err;
+            throw new OmmError(OMM_E_IO_FAILED, `append failed: ${err.message}`);
+        }
         return `Recorded: ${path}`;
     });
 }
@@ -331,30 +372,110 @@ async function toolListSessions() {
         return [];
     }
 }
-function respond(id, result) {
-    const msg = { jsonrpc: "2.0", id, result };
-    process.stdout.write(`${JSON.stringify(msg)}\n`);
+function percentile(sorted, pct) {
+    if (sorted.length === 0)
+        return 0;
+    return sorted[Math.floor(sorted.length * pct)] ?? sorted[sorted.length - 1];
 }
-function respondError(id, code, message) {
-    const msg = { jsonrpc: "2.0", id, error: { code, message } };
-    process.stdout.write(`${JSON.stringify(msg)}\n`);
+function aggregateMetrics(records) {
+    if (records.length === 0)
+        return { count: 0, errorRate: 0, p50: 0, p99: 0 };
+    const sorted = records.map((r) => r.durationMs).sort((a, b) => a - b);
+    const errors = records.filter((r) => !r.ok).length;
+    return {
+        count: records.length,
+        errorRate: errors / records.length,
+        p50: percentile(sorted, 0.5),
+        p99: percentile(sorted, 0.99),
+    };
 }
-async function handleRequest(req) {
+async function toolMetrics(sessionId, sinceMs) {
+    const cutoff = sinceMs !== undefined ? Date.now() - sinceMs : Number.NEGATIVE_INFINITY;
+    let sessionIds;
+    if (sessionId !== undefined) {
+        assertSafeKey(sessionId, "sessionId");
+        sessionIds = [sessionId];
+    }
+    else {
+        sessionIds = await toolListSessions();
+    }
+    const metricRecords = [];
+    for (const sid of sessionIds) {
+        const files = await listSessionFiles(sid);
+        for (const path of files) {
+            let raw;
+            try {
+                raw = await readFile(path, "utf8");
+            }
+            catch {
+                continue;
+            }
+            for (const line of raw.split("\n")) {
+                const trimmed = line.trim();
+                if (trimmed === "")
+                    continue;
+                let parsed;
+                try {
+                    parsed = JSON.parse(trimmed);
+                }
+                catch {
+                    continue;
+                }
+                const validated = validateEvent(parsed);
+                if (typeof validated === "string")
+                    continue;
+                const ts = Date.parse(validated.timestamp);
+                if (ts < cutoff)
+                    continue;
+                const { durationMs, toolName, ok } = validated;
+                if (typeof durationMs !== "number" ||
+                    typeof toolName !== "string" ||
+                    typeof ok !== "boolean") {
+                    continue;
+                }
+                metricRecords.push({ durationMs, toolName, ok });
+            }
+        }
+    }
+    const overall = aggregateMetrics(metricRecords);
+    const byToolMap = new Map();
+    for (const rec of metricRecords) {
+        const bucket = byToolMap.get(rec.toolName) ?? [];
+        bucket.push(rec);
+        byToolMap.set(rec.toolName, bucket);
+    }
+    const byTool = {};
+    for (const [name, recs] of byToolMap) {
+        byTool[name] = aggregateMetrics(recs);
+    }
+    return { ...overall, byTool };
+}
+function makeResponse(id, result) {
+    return { jsonrpc: "2.0", id, result };
+}
+function makeErrorResponse(id, code, message, data) {
+    const error = {
+        code,
+        message,
+    };
+    if (data !== undefined)
+        error.data = data;
+    return { jsonrpc: "2.0", id, error };
+}
+export async function processRequest(req) {
     const id = req.id ?? null;
     if (req.method === "initialize") {
-        respond(id, {
+        return makeResponse(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {} },
-            serverInfo: { name: "omm-trace", version: "0.3.0-alpha.1" },
+            serverInfo: { name: "omm-trace", version: "0.3.0-alpha.2" },
         });
-        return;
     }
     if (req.method === "notifications/initialized") {
-        return;
+        return makeResponse(id, null);
     }
     if (req.method === "tools/list") {
-        respond(id, { tools: TOOLS });
-        return;
+        return makeResponse(id, { tools: TOOLS });
     }
     if (req.method === "tools/call") {
         const params = req.params;
@@ -362,34 +483,45 @@ async function handleRequest(req) {
         try {
             let content;
             if (params.name === "omm_trace_record") {
-                const sessionId = args.session_id;
-                const event = args.event;
-                content = await toolRecord(sessionId, event);
+                content = await toolRecord(args.session_id, args.event);
             }
             else if (params.name === "omm_trace_query") {
-                const sessionId = args.session_id;
                 const since = args.since;
                 const until = args.until;
-                const events = await toolQuery(sessionId, since, until);
+                const events = await toolQuery(args.session_id, since, until);
                 content = JSON.stringify(events);
             }
             else if (params.name === "omm_trace_list_sessions") {
                 const sessions = await toolListSessions();
                 content = JSON.stringify(sessions);
             }
-            else {
-                respondError(id, -32601, `Unknown tool: ${params.name}`);
-                return;
+            else if (params.name === "omm_trace_metrics") {
+                const sessionId = args.sessionId;
+                const sinceMs = args.sinceMs;
+                const metrics = await toolMetrics(sessionId, sinceMs);
+                content = JSON.stringify(metrics);
             }
-            respond(id, { content: [{ type: "text", text: content }] });
+            else {
+                return makeErrorResponse(id, -32601, `Unknown tool: ${params.name}`);
+            }
+            return makeResponse(id, { content: [{ type: "text", text: content }] });
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            respondError(id, -32000, message);
+            if (err instanceof OmmError) {
+                const data = { code: err.ommCode };
+                if (err.hint !== undefined)
+                    data.hint = err.hint;
+                return makeErrorResponse(id, err.rpcCode, message, data);
+            }
+            return makeErrorResponse(id, -32000, message);
         }
-        return;
     }
-    respondError(id, -32601, `Method not found: ${req.method}`);
+    return makeErrorResponse(id, -32601, `Method not found: ${req.method}`);
+}
+async function handleRequest(req) {
+    const response = await processRequest(req);
+    process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const MAX_REQUEST_BYTES = 1 << 20; // 1 MiB hard cap on a single JSON-RPC line

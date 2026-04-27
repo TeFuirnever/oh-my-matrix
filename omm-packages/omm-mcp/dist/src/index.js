@@ -4,6 +4,24 @@ import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile, } from
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
+const OMM_E_KEY_MISSING = "OMM_E_KEY_MISSING";
+const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
+const OMM_E_VALUE_MISSING = "OMM_E_VALUE_MISSING";
+const OMM_E_VALUE_INVALID = "OMM_E_VALUE_INVALID";
+const OMM_E_STATE_INVALID = "OMM_E_STATE_INVALID";
+const OMM_E_WORKFLOW_CONFLICT = "OMM_E_WORKFLOW_CONFLICT";
+class OmmError extends Error {
+    ommCode;
+    hint;
+    rpcCode;
+    constructor(ommCode, message, hint, rpcCode = -32000) {
+        super(message);
+        this.ommCode = ommCode;
+        this.hint = hint;
+        this.rpcCode = rpcCode;
+    }
+}
 /* ── Per-key serialization queue (in-process) ── */
 const writeQueues = new Map();
 function withKeyLock(key, fn) {
@@ -94,7 +112,7 @@ async function withCrossProcessLock(lockDir, key, fn, options = {}) {
             }
             catch (err) {
                 const code = err?.code;
-                if (code !== "EEXIST")
+                if (code !== "EEXIST" && code !== "EPERM")
                     throw err;
                 let isStale = false;
                 try {
@@ -163,14 +181,14 @@ const TEAM_PHASES = new Set([
 const TERMINAL = new Set(["complete", "failed", "blocked"]);
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 function assertSafeKey(key) {
-    if (typeof key !== "string" || !KEY_PATTERN.test(key.trim())) {
-        throw new Error("key must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)");
+    if (typeof key !== "string" || key.trim() === "") {
+        throw new OmmError(OMM_E_KEY_MISSING, "key is required", "Provide a non-empty key matching [a-z0-9][a-z0-9_-]{0,63}");
+    }
+    if (!KEY_PATTERN.test(key.trim())) {
+        throw new OmmError(OMM_E_KEY_INVALID, "key must match /^[a-z0-9][a-z0-9_-]{0,63}$/i (no path separators, dots, or reserved characters)", "Provide a key using only alphanumerics, hyphens, and underscores");
     }
 }
 function validateMcpStateWrite(key, value) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        return { ok: false, error: "value must be a JSON object" };
-    }
     const now = new Date().toISOString();
     const next = { ...value, lastUpdatedAt: now };
     const mode = value.mode ?? key;
@@ -288,15 +306,21 @@ async function assertExclusivity(dir, incomingKey, incoming) {
             continue;
         if (isLinkedPair(incomingMode, incoming, existingMode, parsed))
             continue;
-        throw new Error(`cannot activate ${incomingMode}: ${existingMode} is already active (only one workflow mode may be active at a time)`);
+        throw new OmmError(OMM_E_WORKFLOW_CONFLICT, `cannot activate ${incomingMode}: ${existingMode} is already active (only one workflow mode may be active at a time)`, `Cancel the active workflow first (current: ${existingMode})`, -32000);
     }
 }
 async function toolWrite(key, value) {
     assertSafeKey(key);
     const safeKey = key.trim();
+    if (value === undefined || value === null) {
+        throw new OmmError(OMM_E_VALUE_MISSING, "value is required", "Pass a plain object as `value`");
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+        throw new OmmError(OMM_E_VALUE_INVALID, "value must be a JSON object", "Pass a plain object as `value` (not an array, primitive, or null)");
+    }
     const validation = validateMcpStateWrite(safeKey, value);
     if (!validation.ok) {
-        throw new Error(validation.error);
+        throw new OmmError(OMM_E_STATE_INVALID, validation.error ?? "state validation failed");
     }
     const dir = stateDir();
     await mkdir(dir, { recursive: true });
@@ -320,30 +344,37 @@ async function toolList() {
         return [];
     }
 }
+function makeResponse(id, result) {
+    return { jsonrpc: "2.0", id, result };
+}
+function makeErrorResponse(id, code, message, data) {
+    const error = {
+        code,
+        message,
+    };
+    if (data !== undefined)
+        error.data = data;
+    return { jsonrpc: "2.0", id, error };
+}
 function respond(id, result) {
-    const msg = { jsonrpc: "2.0", id, result };
-    process.stdout.write(`${JSON.stringify(msg)}\n`);
+    process.stdout.write(`${JSON.stringify(makeResponse(id, result))}\n`);
 }
-function respondError(id, code, message) {
-    const msg = { jsonrpc: "2.0", id, error: { code, message } };
-    process.stdout.write(`${JSON.stringify(msg)}\n`);
-}
-async function handleRequest(req) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+void respond; // used in legacy paths below
+export async function processRequest(req) {
     const id = req.id ?? null;
     if (req.method === "initialize") {
-        respond(id, {
+        return makeResponse(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {} },
-            serverInfo: { name: "omm-state", version: "0.3.0-alpha.1" },
+            serverInfo: { name: "omm-state", version: "0.3.0-alpha.2" },
         });
-        return;
     }
     if (req.method === "notifications/initialized") {
-        return;
+        return makeResponse(id, null);
     }
     if (req.method === "tools/list") {
-        respond(id, { tools: TOOLS });
-        return;
+        return makeResponse(id, { tools: TOOLS });
     }
     if (req.method === "tools/call") {
         const params = req.params;
@@ -351,31 +382,36 @@ async function handleRequest(req) {
         try {
             let content;
             if (params.name === "omm_state_read") {
-                const key = args.key;
-                content = await toolRead(key);
+                content = await toolRead(args.key);
             }
             else if (params.name === "omm_state_write") {
-                const key = args.key;
-                const value = args.value;
-                content = await toolWrite(key, value);
+                content = await toolWrite(args.key, args.value);
             }
             else if (params.name === "omm_state_list") {
                 const keys = await toolList();
                 content = JSON.stringify(keys);
             }
             else {
-                respondError(id, -32601, `Unknown tool: ${params.name}`);
-                return;
+                return makeErrorResponse(id, -32601, `Unknown tool: ${params.name}`);
             }
-            respond(id, { content: [{ type: "text", text: content }] });
+            return makeResponse(id, { content: [{ type: "text", text: content }] });
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            respondError(id, -32000, message);
+            if (err instanceof OmmError) {
+                const data = { code: err.ommCode };
+                if (err.hint !== undefined)
+                    data.hint = err.hint;
+                return makeErrorResponse(id, err.rpcCode, message, data);
+            }
+            return makeErrorResponse(id, -32000, message);
         }
-        return;
     }
-    respondError(id, -32601, `Method not found: ${req.method}`);
+    return makeErrorResponse(id, -32601, `Method not found: ${req.method}`);
+}
+async function handleRequest(req) {
+    const response = await processRequest(req);
+    process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const MAX_REQUEST_BYTES = 1 << 20; // 1 MiB hard cap on a single JSON-RPC line
