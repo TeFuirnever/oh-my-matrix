@@ -21,19 +21,19 @@ are silently skipped; existing callers that omit them are unaffected.
 
 #### Inputs
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `sessionId` | `string` | No | Restrict aggregation to a single session. If omitted, all sessions are scanned. |
-| `sinceMs` | `number` | No | Exclude records whose timestamp is older than `now - sinceMs` milliseconds. |
+| Field       | Type     | Required | Description                                                                     |
+| ----------- | -------- | -------- | ------------------------------------------------------------------------------- |
+| `sessionId` | `string` | No       | Restrict aggregation to a single session. If omitted, all sessions are scanned. |
+| `sinceMs`   | `number` | No       | Exclude records whose timestamp is older than `now - sinceMs` milliseconds.     |
 
 #### Output
 
 ```ts
 interface MetricsResult {
-  count: number;       // total metric records matched
-  errorRate: number;   // fraction where ok=false (0–1); 0 when count=0
-  p50: number;         // 50th-percentile durationMs; 0 when count=0
-  p99: number;         // 99th-percentile durationMs; 0 when count=0
+  count: number; // total metric records matched
+  errorRate: number; // fraction where ok=false (0–1); 0 when count=0
+  p50: number; // 50th-percentile durationMs; 0 when count=0
+  p99: number; // 99th-percentile durationMs; 0 when count=0
   byTool: {
     [toolName: string]: {
       count: number;

@@ -1,6 +1,6 @@
 {
   "name": "omm",
-  "version": "0.3.0-alpha.2",
+  "version": "0.3.0-beta.1",
   "private": true,
   "description": "OpenClaw-native orchestration extension suite",
   "type": "module",

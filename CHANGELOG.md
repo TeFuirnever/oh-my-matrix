@@ -2,13 +2,50 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.3.0-beta.1] — 2026-04-28
+
+### Added
+
+- **agent-prompts (plugin tool)**: New plugin tools `omm_agent_prompt_get`
+  and `omm_agent_prompt_list` expose the agent persona library to hosts.
+  The loader (`omm-agent-prompts.ts`) was already shipped in 0.3.0-alpha.1
+  but was not callable from the LLM layer. Hosts now have a structured
+  surface to delegate a turn to a specialised persona (architect / reviewer
+  / planner …) via the same JSON-RPC channel used for state and memory.
+  - `omm_agent_prompt_get({ name })` returns `{ body, details: { name,
+modelTier, purpose } }`. Throws on missing/invalid name.
+  - `omm_agent_prompt_list({})` returns `{ names, count }` sorted ascending.
+  - Plugin config: `promptsDir` (optional override for tests / out-of-bundle
+    prompt sets).
+
+### Changed
+
+- Version bumped to **0.3.0-beta.1** across `package.json` and all four
+  packages (`omm-plugin`, `omm-mcp`, `omm-mcp-memory`, `omm-mcp-trace`).
+  All P0 commercial-blocker work is now closed:
+  - P0-1 cross-process locking — shipped in alpha.2
+    (`withCrossProcessLock` + ADR-005 + 3 MCP server adoption + Windows
+    EPERM retry fix).
+  - P0-2 plugin tool real-machine smoke — `scripts/omm-plugin-smoke.mjs`
+    in MatrixAssistant.
+  - P0-3 mcporter startup health check — `electron/main/services/mcp/
+omm-health.ts` in MatrixAssistant + dialog on miss + 30s retry.
+
+### Outstanding for 0.3.0 GA
+
+- **P1-1 hook event sources**: `dispatchHooks()` exists in `omm-plugin`
+  but no OpenClaw runtime emits the lifecycle events (session_start,
+  session_end, pre/post_tool_use, mode_change). Requires an OpenClaw
+  upstream PR to wire runtime events through the plugin `api.on` surface.
+  Tracked separately.
+
 ## [0.3.0-alpha.2] — 2026-04-27
 
 ### Added
 
 - **observability**: `omm_trace_metrics` MCP tool aggregates execution
   metrics from trace records — returns `{ count, errorRate, p50, p99,
-  byTool: { [toolName]: { count, errorRate, p50, p99 } } }`. Optional
+byTool: { [toolName]: { count, errorRate, p50, p99 } } }`. Optional
   `sessionId` and `sinceMs` filters. `omm_trace_record` schema now
   accepts optional `durationMs`, `toolName`, `ok` fields for hosts
   that want to surface tool perf to operators. Backward compatible —
@@ -44,7 +81,7 @@ All notable changes to oh-my-matrix (omm).
 ### Added — P0 hardening (multi-process safety)
 
 - `omm-fs-queue.ts`: new `withCrossProcessLock(lockDir, key, fn,
-  { timeoutMs?, staleMs? })` — `O_EXCL`-based file lock at
+{ timeoutMs?, staleMs? })` — `O_EXCL`-based file lock at
   `${lockDir}/.locks/${key}.lock` with 50 ms ± 20 ms jitter polling,
   30 s stale-lock recovery (mtime + PID liveness via
   `process.kill(pid, 0)`), and `try/finally` release. Wrapped in the

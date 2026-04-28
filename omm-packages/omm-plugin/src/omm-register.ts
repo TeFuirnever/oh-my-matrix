@@ -5,6 +5,10 @@ import {
   handleSessionEnd,
   handleSessionStart,
 } from "./omm-hooks.js";
+import {
+  runOmmAgentPromptGet,
+  runOmmAgentPromptList,
+} from "./omm-tools/omm-agent-prompt.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 import {
@@ -53,7 +57,7 @@ interface OmmPluginApi {
 
 export const id = "omm";
 export const name = "omm";
-export const version = "0.3.0-alpha.2";
+export const version = "0.3.0-beta.1";
 
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api: OmmPluginApi): void {
@@ -162,6 +166,46 @@ export function register(api: OmmPluginApi): void {
         }),
     },
     { optional: true, name: "omm_state_list" },
+  );
+
+  api.registerTool(
+    {
+      name: "omm_agent_prompt_get",
+      label: "omm agent prompt get",
+      description:
+        "Load a single agent prompt by name. Returns the prompt body plus modelTier and purpose metadata. Hosts can use this to delegate a turn to a specialised persona.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+        },
+        required: ["name"],
+      },
+      execute: (_toolCallId, params) =>
+        runOmmAgentPromptGet(params, {
+          promptsDir: api.config?.promptsDir as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_agent_prompt_get" },
+  );
+
+  api.registerTool(
+    {
+      name: "omm_agent_prompt_list",
+      label: "omm agent prompt list",
+      description: "List the names of all available agent prompts.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      execute: (_toolCallId, params) =>
+        runOmmAgentPromptList(params, {
+          promptsDir: api.config?.promptsDir as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_agent_prompt_list" },
   );
 
   if (typeof api.on === "function") {

@@ -99,7 +99,7 @@ dependency at runtime), so the duplication is the documented cost.
 
 - Lock acquisition timeout → `Error("OMM_E_LOCK_TIMEOUT: <key>")` propagates
   to the caller. In the plugin tools this surfaces as `omm_state_write
-  error: OMM_E_LOCK_TIMEOUT: <key>`. In MCP responses it becomes a
+error: OMM_E_LOCK_TIMEOUT: <key>`. In MCP responses it becomes a
   JSON-RPC `-32000` error.
 - Lock metadata corruption → treated as no-metadata; falls through to
   the staleMs/PID liveness check.

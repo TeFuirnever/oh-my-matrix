@@ -59,13 +59,13 @@ still run.
 
 ## Supported Events
 
-| Event | When Emitted | Typical args |
-|---|---|---|
-| `session_start` | Host begins an omm-aware session | `{ sessionId, timestamp }` |
-| `session_end` | Host ends an omm-aware session | `{ sessionId, timestamp, reason? }` |
-| `pre_tool_use` | Before any omm plugin tool executes | `{ toolName, params, toolCallId }` |
-| `post_tool_use` | After omm plugin tool returns | `{ toolName, result, durationMs, toolCallId }` |
-| `mode_change` | Workflow mode transition (ralph/autopilot/team start/stop) | `{ mode, fromState, toState }` |
+| Event           | When Emitted                                               | Typical args                                   |
+| --------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `session_start` | Host begins an omm-aware session                           | `{ sessionId, timestamp }`                     |
+| `session_end`   | Host ends an omm-aware session                             | `{ sessionId, timestamp, reason? }`            |
+| `pre_tool_use`  | Before any omm plugin tool executes                        | `{ toolName, params, toolCallId }`             |
+| `post_tool_use` | After omm plugin tool returns                              | `{ toolName, result, durationMs, toolCallId }` |
+| `mode_change`   | Workflow mode transition (ralph/autopilot/team start/stop) | `{ mode, fromState, toState }`                 |
 
 The exact payload depends on the host's emitter. omm passes the args
 through verbatim to user hook handlers.

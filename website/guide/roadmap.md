@@ -23,11 +23,11 @@ See [Architecture Overview](/guide/architecture) for module details.
 
 **Priority:** High — blocks workflow usability
 
-| Deliverable                           | Description                                                                                                    | Status              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------- |
-| Workflow transition guard             | Enforce single active workflow mode at a time; reject `active=true` writes when another mode is already active | Done (2026-04-26)   |
-| Ralph persistence                     | Progress ledger and PRD management; enable resume across sessions                                              | Done (2026-04-26)   |
-| Pipeline stage definitions            | Define autopilot stage sequence (analyze → plan → execute → verify); enable structured multi-step execution    | Done (2026-04-26)   |
+| Deliverable                | Description                                                                                                    | Status            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Workflow transition guard  | Enforce single active workflow mode at a time; reject `active=true` writes when another mode is already active | Done (2026-04-26) |
+| Ralph persistence          | Progress ledger and PRD management; enable resume across sessions                                              | Done (2026-04-26) |
+| Pipeline stage definitions | Define autopilot stage sequence (analyze → plan → execute → verify); enable structured multi-step execution    | Done (2026-04-26) |
 
 **Exit criteria:**
 
@@ -44,10 +44,10 @@ See [Architecture Overview](/guide/architecture) for module details.
 
 **Priority:** Medium — enhances workflow quality but not blocking
 
-| Deliverable       | Description                                                                  | Status              |
-| ----------------- | ---------------------------------------------------------------------------- | ------------------- |
-| Memory MCP server | Persistent key-value memory store for cross-session context                  | Done (2026-04-26)   |
-| Trace MCP server  | Execution trace recording and querying                                       | Done (2026-04-26)   |
+| Deliverable       | Description                                                 | Status            |
+| ----------------- | ----------------------------------------------------------- | ----------------- |
+| Memory MCP server | Persistent key-value memory store for cross-session context | Done (2026-04-26) |
+| Trace MCP server  | Execution trace recording and querying                      | Done (2026-04-26) |
 
 **Exit criteria:**
 
@@ -64,11 +64,11 @@ See [Architecture Overview](/guide/architecture) for module details.
 
 **Priority:** Low — quality-of-life improvements
 
-| Deliverable            | Description                                                    | Status                                                                       |
-| ---------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Hook plugin system     | Dynamic hook loading from `.omm/hooks/*.mjs`                   | Done (2026-04-26)                                                            |
-| Agent prompt library   | Reusable role prompts (planner, architect, executor, verifier) | Done (2026-04-26)                                                            |
-| Expanded test coverage | Integration tests, MCP server tests, edge case coverage        | Done (2026-04-26) — 96.83% statements / 98.27% functions / 91.07% branches  |
+| Deliverable            | Description                                                    | Status                                                                     |
+| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Hook plugin system     | Dynamic hook loading from `.omm/hooks/*.mjs`                   | Done (2026-04-26)                                                          |
+| Agent prompt library   | Reusable role prompts (planner, architect, executor, verifier) | Done (2026-04-26)                                                          |
+| Expanded test coverage | Integration tests, MCP server tests, edge case coverage        | Done (2026-04-26) — 96.83% statements / 98.27% functions / 91.07% branches |
 
 **Exit criteria:**
 
@@ -82,11 +82,11 @@ See [Architecture Overview](/guide/architecture) for module details.
 
 These are deliberately excluded based on architectural decisions:
 
-| Feature                   | Reason                                           | ADR                               |
-| ------------------------- | ------------------------------------------------ | --------------------------------- |
-| Standalone CLI            | OpenClaw Gateway provides tool dispatch          | [ADR-001](/reference/adrs/001)    |
-| tmux/worktree parallelism | Host provides team primitives                    | [ADR-002](/reference/adrs/002)    |
-| HUD / status bar          | Host UI layer (Electron) provides equivalent     | N/A                               |
-| Notification subsystem    | Host (MatrixAssistant) has its own notifications | N/A                               |
-| Rust native crates        | Not needed for plugin-only architecture          | [ADR-001](/reference/adrs/001)    |
-| Code-intel MCP            | OpenClaw may provide LSP integration natively    | N/A                               |
+| Feature                   | Reason                                           | ADR                            |
+| ------------------------- | ------------------------------------------------ | ------------------------------ |
+| Standalone CLI            | OpenClaw Gateway provides tool dispatch          | [ADR-001](/reference/adrs/001) |
+| tmux/worktree parallelism | Host provides team primitives                    | [ADR-002](/reference/adrs/002) |
+| HUD / status bar          | Host UI layer (Electron) provides equivalent     | N/A                            |
+| Notification subsystem    | Host (MatrixAssistant) has its own notifications | N/A                            |
+| Rust native crates        | Not needed for plugin-only architecture          | [ADR-001](/reference/adrs/001) |
+| Code-intel MCP            | OpenClaw may provide LSP integration natively    | N/A                            |

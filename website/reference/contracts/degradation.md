@@ -22,14 +22,14 @@ omm-memory is an optional observability aid. It provides the `omm_memory_set`, `
 
 **Behavior table:**
 
-| Tool | Availability | Error returned |
-|---|---|---|
-| `omm_memory_set` | Unavailable | MCP transport error (host-level) |
-| `omm_memory_get` | Unavailable | MCP transport error (host-level) |
-| `omm_memory_delete` | Unavailable | MCP transport error (host-level) |
-| `omm_memory_list` | Unavailable | MCP transport error (host-level) |
-| `omm_state_write` | Unaffected | — |
-| ralph skill execution | Unaffected | — |
+| Tool                  | Availability | Error returned                   |
+| --------------------- | ------------ | -------------------------------- |
+| `omm_memory_set`      | Unavailable  | MCP transport error (host-level) |
+| `omm_memory_get`      | Unavailable  | MCP transport error (host-level) |
+| `omm_memory_delete`   | Unavailable  | MCP transport error (host-level) |
+| `omm_memory_list`     | Unavailable  | MCP transport error (host-level) |
+| `omm_state_write`     | Unaffected   | —                                |
+| ralph skill execution | Unaffected   | —                                |
 
 ---
 
@@ -72,13 +72,13 @@ When the MCP server is unavailable but the plugin is loaded:
 
 **Behavior table:**
 
-| Access path | Status | Effect |
-|---|---|---|
-| Plugin `omm_state_write` | Functional | Writes succeed |
-| Plugin `omm_state_read` | Functional | Reads succeed |
-| MCP `omm_state_write` | Unavailable | JSON-RPC transport error |
-| MCP `omm_state_read` | Unavailable | JSON-RPC transport error |
-| ralph / autopilot / team | Unaffected | Continue normally |
+| Access path              | Status      | Effect                   |
+| ------------------------ | ----------- | ------------------------ |
+| Plugin `omm_state_write` | Functional  | Writes succeed           |
+| Plugin `omm_state_read`  | Functional  | Reads succeed            |
+| MCP `omm_state_write`    | Unavailable | JSON-RPC transport error |
+| MCP `omm_state_read`     | Unavailable | JSON-RPC transport error |
+| ralph / autopilot / team | Unaffected  | Continue normally        |
 
 Host integrators should treat this mode as a degraded-but-stable state: log the MCP server absence, suppress external dashboard features, and allow workflows to proceed.
 
@@ -218,9 +218,9 @@ Implement the following in any host that embeds the omm plugin:
 ### Branch on missing servers
 
 ```ts
-const memoryAvailable = await mcporter.status("omm-memory") === "running";
-const traceAvailable  = await mcporter.status("omm-trace")  === "running";
-const stateMcpAvailable = await mcporter.status("omm-state") === "running";
+const memoryAvailable = (await mcporter.status("omm-memory")) === "running";
+const traceAvailable = (await mcporter.status("omm-trace")) === "running";
+const stateMcpAvailable = (await mcporter.status("omm-state")) === "running";
 
 // Only block new workflows on plugin-level IO failure, not MCP failure
 if (lastStateWriteError?.code === "OMM_E_IO_FAILED") {
@@ -246,10 +246,10 @@ if (result.details?.structured) {
 
 ### Retry guidance by error code
 
-| Error code | Host action |
-|---|---|
-| `OMM_E_IO_FAILED` | Block new workflows; surface disk/permission guidance; require user acknowledgement before retry |
-| `OMM_E_LOCK_TIMEOUT` | Retry twice with 2 s / 5 s backoff; if still failing, surface to user with "another process may be stuck" guidance |
-| `OMM_E_INTERNAL` | Log full context; surface generic error; do not retry automatically |
-| MCP transport error (memory/trace) | Log; skip the step; do not surface to user unless persistent |
-| MCP transport error (state) | Log; check plugin path still functional; disable external clients only |
+| Error code                         | Host action                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `OMM_E_IO_FAILED`                  | Block new workflows; surface disk/permission guidance; require user acknowledgement before retry                   |
+| `OMM_E_LOCK_TIMEOUT`               | Retry twice with 2 s / 5 s backoff; if still failing, surface to user with "another process may be stuck" guidance |
+| `OMM_E_INTERNAL`                   | Log full context; surface generic error; do not retry automatically                                                |
+| MCP transport error (memory/trace) | Log; skip the step; do not surface to user unless persistent                                                       |
+| MCP transport error (state)        | Log; check plugin path still functional; disable external clients only                                             |

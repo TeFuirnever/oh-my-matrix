@@ -26,7 +26,7 @@ interface OmmPluginApi {
 }
 export declare const id = "omm";
 export declare const name = "omm";
-export declare const version = "0.3.0-alpha.2";
+export declare const version = "0.3.0-beta.1";
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export declare function register(api: OmmPluginApi): void;
 declare const _default: {

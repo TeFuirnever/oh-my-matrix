@@ -7,12 +7,12 @@
 omm provides persistent workflow capabilities (ralph/autopilot/team) for any OpenClaw-compatible host.
 It is modeled after [oh-my-codex](https://github.com/anthropics/oh-my-codex) but redesigned as a **pure plugin** — no standalone CLI, no Rust native modules, zero runtime dependencies.
 
-| Dimension          | oh-my-codex                    | omm                                      |
-| ------------------ | ------------------------------ | ---------------------------------------- |
-| Runtime            | Standalone CLI (`omx`)         | OpenClaw plugin loaded by Gateway        |
-| Team parallelism   | Self-built tmux + git worktree | Delegates to host team skill             |
-| MCP implementation | `@modelcontextprotocol/sdk`    | Hand-written JSON-RPC (zero-dependency)  |
-| Distribution       | npm binary + 4 Rust crates     | Single tarball, JS-only                  |
+| Dimension          | oh-my-codex                    | omm                                     |
+| ------------------ | ------------------------------ | --------------------------------------- |
+| Runtime            | Standalone CLI (`omx`)         | OpenClaw plugin loaded by Gateway       |
+| Team parallelism   | Self-built tmux + git worktree | Delegates to host team skill            |
+| MCP implementation | `@modelcontextprotocol/sdk`    | Hand-written JSON-RPC (zero-dependency) |
+| Distribution       | npm binary + 4 Rust crates     | Single tarball, JS-only                 |
 
 See [ADR-001](/reference/adrs/001), [ADR-002](/reference/adrs/002), [ADR-003](/reference/adrs/003) for rationale.
 
@@ -35,15 +35,15 @@ The plugin entry point `register(api)` conforms to the OpenClaw Plugin ABI:
 
 Key modules:
 
-| Module                    | Responsibility                                                        |
-| ------------------------- | --------------------------------------------------------------------- |
-| `omm-register.ts`         | Plugin entry point; wires tools and hooks to the OpenClaw API         |
-| `omm-state-validation.ts` | Mode-aware state validation for ralph/autopilot/team                  |
-| `omm-config.ts`           | Resolves state root directory; defaults to `~/.openclaw/omm`          |
-| `omm-state.ts`            | Smoke record writer for session lifecycle events                      |
-| `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence                   |
-| `omm-tools/omm-ping.ts`   | Health-check tool                                                     |
-| `omm-tools/omm-cancel.ts` | Session cancellation tool                                             |
+| Module                    | Responsibility                                                |
+| ------------------------- | ------------------------------------------------------------- |
+| `omm-register.ts`         | Plugin entry point; wires tools and hooks to the OpenClaw API |
+| `omm-state-validation.ts` | Mode-aware state validation for ralph/autopilot/team          |
+| `omm-config.ts`           | Resolves state root directory; defaults to `~/.openclaw/omm`  |
+| `omm-state.ts`            | Smoke record writer for session lifecycle events              |
+| `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence           |
+| `omm-tools/omm-ping.ts`   | Health-check tool                                             |
+| `omm-tools/omm-cancel.ts` | Session cancellation tool                                     |
 
 ### omm-mcp
 
@@ -57,13 +57,13 @@ See [ADR-003](/reference/adrs/003) and [MCP Protocol Contract](/reference/contra
 
 Five SKILL.md files define workflow behaviors:
 
-| Skill           | Type                  | State Machine                                                                           |
-| --------------- | --------------------- | --------------------------------------------------------------------------------------- |
-| `omm-ping`      | Tool dispatch         | Direct `omm_ping` call                                                                  |
-| `omm-cancel`    | Tool dispatch         | Direct `omm_cancel` call                                                                |
-| `omm-ralph`     | Model-driven          | INIT → PLANNING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED                     |
-| `omm-autopilot` | Model-driven          | ANALYZING → PLANNING → STEP_N → VERIFYING ↔ RETRY → COMPLETE/BLOCKED/FAILED            |
-| `omm-team`      | Model-driven          | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED |
+| Skill           | Type          | State Machine                                                                          |
+| --------------- | ------------- | -------------------------------------------------------------------------------------- |
+| `omm-ping`      | Tool dispatch | Direct `omm_ping` call                                                                 |
+| `omm-cancel`    | Tool dispatch | Direct `omm_cancel` call                                                               |
+| `omm-ralph`     | Model-driven  | INIT → PLANNING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED                     |
+| `omm-autopilot` | Model-driven  | ANALYZING → PLANNING → STEP_N → VERIFYING ↔ RETRY → COMPLETE/BLOCKED/FAILED            |
+| `omm-team`      | Model-driven  | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED |
 
 See [ADR-004](/reference/adrs/004) and [Workflow State Contract](/reference/contracts/workflow-state).
 
@@ -119,8 +119,8 @@ The primary consumer (MatrixAssistant) integrates omm via:
 
 ## Extension Points
 
-| Extension            | How                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------- |
+| Extension            | How                                                                                      |
+| -------------------- | ---------------------------------------------------------------------------------------- |
 | Add a new tool       | Create handler in `omm-tools/`, register in `omm-register.ts`, add to consumer whitelist |
 | Add a new skill      | Create `omm-skills/<name>/SKILL.md`, bundle includes it automatically                    |
 | Add a new state mode | Add validator function in `omm-state-validation.ts`, add to `VALIDATORS` map             |
