@@ -20,3 +20,16 @@ export declare function loadAgentPrompt(name: string, promptsDir?: string): Prom
  * extensions are ignored.
  */
 export declare function listAgentPrompts(promptsDir?: string): Promise<string[]>;
+/**
+ * Resolve the prompts directory and verify a sentinel prompt is loadable.
+ * Used at plugin startup to make host-layout drift visible — without this,
+ * `listAgentPrompts` swallows ENOENT and returns an empty array, hiding
+ * misconfiguration until a user-visible failure.
+ *
+ * Logs the resolved path and a warning if the sentinel is missing. The
+ * sentinel is the bundled `architect.md` (one of 5 ships-by-default prompts).
+ */
+export declare function verifyAgentPromptsAvailable(promptsDir?: string, sentinel?: string): Promise<{
+    resolvedDir: string;
+    sentinelFound: boolean;
+}>;

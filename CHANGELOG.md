@@ -32,7 +32,6 @@ integration verification (MatrixAssistant `omm-bundle` + `omm-plugin-smoke`
 
 ## [0.3.0-beta.1] — 2026-04-28
 
-
 ### Added
 
 - **agent-prompts (plugin tool)**: New plugin tools `omm_agent_prompt_get`

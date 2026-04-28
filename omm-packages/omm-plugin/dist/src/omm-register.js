@@ -1,5 +1,6 @@
 import { handleModeChange, handlePostToolUse, handlePreToolUse, handleSessionEnd, handleSessionStart, } from "./omm-hooks.js";
 import { runOmmAgentPromptGet, runOmmAgentPromptList, } from "./omm-tools/omm-agent-prompt.js";
+import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 import { runOmmStateList, runOmmStateRead, runOmmStateWrite, } from "./omm-tools/omm-state.js";
@@ -128,6 +129,11 @@ export function register(api) {
             promptsDir: api.config?.promptsDir,
         }),
     }, { optional: true, name: "omm_agent_prompt_list" });
+    // Verify agent-prompts directory is reachable at startup. Without this,
+    // host-layout drift (the loader walks `..` to find `omm-skills/agent-prompts`)
+    // silently degrades agent-prompt tools to empty results. See ADR rationale
+    // in docs/adr/ — the sentinel check makes drift loud.
+    void verifyAgentPromptsAvailable(api.config?.promptsDir);
     if (typeof api.on === "function") {
         const stateRoot = api.config?.stateRoot;
         api.on("session_start", (args) => handleSessionStart(args, { stateRoot }));

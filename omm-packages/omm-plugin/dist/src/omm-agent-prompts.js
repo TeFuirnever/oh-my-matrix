@@ -93,4 +93,25 @@ export async function listAgentPrompts(promptsDir = defaultPromptsDir()) {
         .filter((name) => NAME_PATTERN.test(name))
         .sort();
 }
+/**
+ * Resolve the prompts directory and verify a sentinel prompt is loadable.
+ * Used at plugin startup to make host-layout drift visible — without this,
+ * `listAgentPrompts` swallows ENOENT and returns an empty array, hiding
+ * misconfiguration until a user-visible failure.
+ *
+ * Logs the resolved path and a warning if the sentinel is missing. The
+ * sentinel is the bundled `architect.md` (one of 5 ships-by-default prompts).
+ */
+export async function verifyAgentPromptsAvailable(promptsDir = defaultPromptsDir(), sentinel = "architect") {
+    const names = await listAgentPrompts(promptsDir);
+    const sentinelFound = names.includes(sentinel);
+    if (!sentinelFound) {
+        console.warn(`[omm-plugin] agent-prompts sentinel '${sentinel}' not found at resolved promptsDir: ${promptsDir}. ` +
+            "Host bundle layout may be wrong; omm_agent_prompt_get/list will return empty.");
+    }
+    else {
+        console.log(`[omm-plugin] agent-prompts ready (resolved promptsDir: ${promptsDir}, ${names.length} prompts found)`);
+    }
+    return { resolvedDir: promptsDir, sentinelFound };
+}
 //# sourceMappingURL=omm-agent-prompts.js.map

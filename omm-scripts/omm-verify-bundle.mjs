@@ -5,9 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { buildManifestEntries, sha256File } from "./omm-shared.mjs";
 
-const bundle = resolve(
-  process.argv[2] ?? "omm-dist/omm-suite-0.3.0.tgz",
-);
+const bundle = resolve(process.argv[2] ?? "omm-dist/omm-suite-0.3.0.tgz");
 const bundleDir = dirname(bundle);
 const bundleName = basename(bundle);
 const temp = await mkdtemp(join(tmpdir(), "omm-bundle-"));
