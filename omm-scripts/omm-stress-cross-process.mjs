@@ -9,7 +9,7 @@
  * payload. The driver collects per-write latency (hrtime) and reports
  * P50 + P99. Exit code 0 only if no lock errors occurred AND P99 < 200 ms.
  *
- * Why 200 ms (raised from 100 ms in 0.3.0-alpha.2): On Windows, racing
+ * Why 200 ms (raised from 100 ms in 0.3.0): On Windows, racing
  * O_EXCL opens emit EPERM (not EEXIST) because the previous holder
  * still has the FD briefly open after writeFile/close — the retry loop
  * accepts both codes (see omm-fs-queue.ts) and waits ~50 ms ± 20 ms

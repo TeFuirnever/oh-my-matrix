@@ -2,7 +2,36 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.3.0] — 2026-04-28
+
+First commercial GA release. Promotes 0.3.0-beta.1 to stable after host
+integration verification (MatrixAssistant `omm-bundle` + `omm-plugin-smoke`
+14/14 green; agent-prompts bundling gap closed in MA host).
+
+### Highlights since 0.2.x
+
+- 7 plugin tools (`omm_ping`, `omm_cancel`, `omm_state_{write,read,list}`,
+  `omm_agent_prompt_{get,list}`).
+- 3 MCP servers (`omm-state`, `omm-memory`, `omm-trace`) with structured
+  observability metrics and rotating logs.
+- Cross-process file locking (`withCrossProcessLock`, ADR-005) — plugin
+  and MCP servers no longer last-write-wins on the same `stateRoot`.
+- Hook dispatcher (`omm-hook-loader.ts`) and lifecycle wiring complete.
+  Auto-emit of lifecycle events depends on OpenClaw runtime support;
+  upstream PR drafted at `MatrixAssistant/docs/proposals/openclaw-lifecycle-events.md`.
+- Structured error codes (`OMM_E_*`) and `apiVersion: "0.3"` capability
+  contract.
+- 5 bundled agent prompts (analyst / architect / critic / executor / verifier).
+
+### Known limitations
+
+- Auto-hook event source: dispatcher present, OpenClaw runtime does not
+  yet emit lifecycle events. LLM workflows (ralph / autopilot / team) call
+  `omm_state_write` / `omm_trace_record` explicitly; full auto-emit lands
+  once the upstream proposal merges.
+
 ## [0.3.0-beta.1] — 2026-04-28
+
 
 ### Added
 

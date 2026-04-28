@@ -17,7 +17,7 @@ import { runOmmStateList, runOmmStateRead, runOmmStateWrite, } from "./omm-tools
 export const OMM_API_VERSION = "0.3";
 export const id = "omm";
 export const name = "omm";
-export const version = "0.3.0-beta.1";
+export const version = "0.3.0";
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api) {
     if (typeof api.registerTool !== "function") {

@@ -289,7 +289,7 @@ export async function processRequest(req) {
         return makeResponse(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {} },
-            serverInfo: { name: "omm-memory", version: "0.3.0-alpha.2" },
+            serverInfo: { name: "omm-memory", version: "0.3.0" },
         });
     }
     if (req.method === "notifications/initialized") {

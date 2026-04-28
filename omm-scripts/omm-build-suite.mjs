@@ -7,7 +7,7 @@ import { buildManifestEntries, sha256File } from "./omm-shared.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = dirname(scriptDir);
-const version = "0.3.0-alpha.2";
+const version = "0.3.0";
 const dist = join(root, "omm-dist");
 const staging = join(dist, "omm-suite");
 const outputName = `omm-suite-${version}.tgz`;
