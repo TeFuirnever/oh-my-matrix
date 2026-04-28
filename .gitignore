@@ -3,3 +3,4 @@ omm-dist/
 *.tsbuildinfo
 coverage/
 .omc/
+website/.vitepress/dist/
