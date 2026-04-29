@@ -1,13 +1,19 @@
 # omm (oh-my-matrix)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
+[![pnpm 10+](https://img.shields.io/badge/pnpm-10%2B-orange.svg)](https://pnpm.io/)
+
 OpenClaw-native orchestration extension suite.
 
 ## What's included
 
-- **omm-plugin** — OpenClaw plugin providing `omm_ping` and `omm_cancel` tools, plus session lifecycle hooks
-- **omm-mcp** — MCP state server exposing omm state read/write over stdio JSON-RPC
-- **omm-skills** — Skill definitions (`omm-ping`, `omm-cancel`, `omm-ralph`, `omm-autopilot`, `omm-team`)
-- **omm-scripts** — Build, verification, and compliance toolchain
+| Package            | Description                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| **omm-plugin**     | OpenClaw plugin — `omm_ping`, `omm_cancel`, state tools, agent-prompt tools, session lifecycle hooks |
+| **omm-mcp**        | MCP state server — stdio JSON-RPC exposing state read/write/list                                     |
+| **omm-mcp-memory** | MCP memory server — key-value store over `stateRoot/memory/`                                         |
+| **omm-mcp-trace**  | MCP trace server — append-only JSONL execution event log with metrics                                |
 
 ## Quick start
 
@@ -38,3 +44,15 @@ entries into `openclaw.json` so OpenClaw discovers the plugin and skills.
 ## License
 
 See [LICENSE](LICENSE).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, and code style.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+## Code of Conduct
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
