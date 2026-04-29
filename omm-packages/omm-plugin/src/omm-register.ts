@@ -1,3 +1,4 @@
+import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
 import {
   handleModeChange,
   handlePostToolUse,
@@ -9,7 +10,6 @@ import {
   runOmmAgentPromptGet,
   runOmmAgentPromptList,
 } from "./omm-tools/omm-agent-prompt.js";
-import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 import {
@@ -213,7 +213,9 @@ export function register(api: OmmPluginApi): void {
   // host-layout drift (the loader walks `..` to find `omm-skills/agent-prompts`)
   // silently degrades agent-prompt tools to empty results. See ADR rationale
   // in docs/adr/ — the sentinel check makes drift loud.
-  void verifyAgentPromptsAvailable(api.config?.promptsDir as string | undefined);
+  void verifyAgentPromptsAvailable(
+    api.config?.promptsDir as string | undefined,
+  );
 
   if (typeof api.on === "function") {
     const stateRoot = api.config?.stateRoot as string | undefined;

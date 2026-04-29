@@ -19,6 +19,7 @@ const ignoredPathParts = new Set([
   "node_modules",
   "omm-dist",
   "docs",
+  "website",
 ]);
 const legalFiles = new Set([
   "LICENSE",
@@ -26,6 +27,7 @@ const legalFiles = new Set([
   "THIRD_PARTY_NOTICES.md",
   "omm-provenance.json",
   "biome.json",
+  "AGENTS.md",
 ]);
 const textExtensions = new Set([
   ".json",
