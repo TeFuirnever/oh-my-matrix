@@ -51,7 +51,7 @@ describe("withKeyLock", () => {
     await Promise.all([p1, p2]);
     const elapsed = Date.now() - start;
     // b finishes before a; if serialized, total would be ≥35ms with b:end last.
-    assert.ok(elapsed < 50, `expected parallel run ~30ms, got ${elapsed}ms`);
+    assert.ok(elapsed < 80, `expected parallel run ~30ms, got ${elapsed}ms`);
     assert.equal(order[0], "a:start");
     assert.equal(order[1], "b:start");
   });

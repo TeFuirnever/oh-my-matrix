@@ -18,7 +18,7 @@ import { runOmmStateList, runOmmStateRead, runOmmStateWrite, } from "./omm-tools
 export const OMM_API_VERSION = "0.3";
 export const id = "omm";
 export const name = "omm";
-export const version = "0.3.0";
+export const version = "0.4.0";
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api) {
     if (typeof api.registerTool !== "function") {
@@ -136,24 +136,22 @@ export function register(api) {
     void verifyAgentPromptsAvailable(api.config?.promptsDir);
     if (typeof api.on === "function") {
         const stateRoot = api.config?.stateRoot;
-        // Lifecycle hooks
-        api.on("session_start", (args) => handleSessionStart(args, { stateRoot }));
-        api.on("session_end", (args) => handleSessionEnd(args, { stateRoot }));
-        // Tool call hooks (auto-trace)
-        api.on("before_tool_call", (args) => handleBeforeToolCall(args, { stateRoot }));
-        api.on("after_tool_call", (args) => handleAfterToolCall(args, { stateRoot }));
-        // Model I/O hooks
-        api.on("llm_input", (args) => handleLlmInput(args, { stateRoot }));
-        api.on("llm_output", (args) => handleLlmOutput(args, { stateRoot }));
-        // Agent lifecycle hooks
-        api.on("agent_end", (args) => handleAgentEnd(args, { stateRoot }));
-        // Subagent hooks
-        api.on("subagent_spawning", (args) => handleSubagentSpawning(args, { stateRoot }));
-        api.on("subagent_spawned", (args) => handleSubagentSpawned(args, { stateRoot }));
-        api.on("subagent_ended", (args) => handleSubagentEnded(args, { stateRoot }));
-        // Gateway hooks
-        api.on("gateway_start", (args) => handleGatewayStart(args, { stateRoot }));
-        api.on("gateway_stop", (args) => handleGatewayStop(args, { stateRoot }));
+        // OpenClaw invokes hooks as handler(event, ctx). ctx carries sessionId,
+        // runId, sessionKey etc that the event payload alone may omit. Merging
+        // both into a flat args object so handlers see all fields.
+        const merge = (event, ctx) => ({ ...event, ...ctx });
+        api.on("session_start", (ev, ctx) => handleSessionStart(merge(ev, ctx), { stateRoot }));
+        api.on("session_end", (ev, ctx) => handleSessionEnd(merge(ev, ctx), { stateRoot }));
+        api.on("before_tool_call", (ev, ctx) => handleBeforeToolCall(merge(ev, ctx), { stateRoot }));
+        api.on("after_tool_call", (ev, ctx) => handleAfterToolCall(merge(ev, ctx), { stateRoot }));
+        api.on("llm_input", (ev, ctx) => handleLlmInput(merge(ev, ctx), { stateRoot }));
+        api.on("llm_output", (ev, ctx) => handleLlmOutput(merge(ev, ctx), { stateRoot }));
+        api.on("agent_end", (ev, ctx) => handleAgentEnd(merge(ev, ctx), { stateRoot }));
+        api.on("subagent_spawning", (ev, ctx) => handleSubagentSpawning(merge(ev, ctx), { stateRoot }));
+        api.on("subagent_spawned", (ev, ctx) => handleSubagentSpawned(merge(ev, ctx), { stateRoot }));
+        api.on("subagent_ended", (ev, ctx) => handleSubagentEnded(merge(ev, ctx), { stateRoot }));
+        api.on("gateway_start", (ev, ctx) => handleGatewayStart(merge(ev, ctx), { stateRoot }));
+        api.on("gateway_stop", (ev, ctx) => handleGatewayStop(merge(ev, ctx), { stateRoot }));
     }
     else {
         // F3: silent host = invisible debugging. One-time stderr line tells the

@@ -65,7 +65,7 @@ interface OmmPluginApi {
 
 export const id = "omm";
 export const name = "omm";
-export const version = "0.3.0";
+export const version = "0.4.0";
 
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api: OmmPluginApi): void {
@@ -226,47 +226,47 @@ export function register(api: OmmPluginApi): void {
 
   if (typeof api.on === "function") {
     const stateRoot = api.config?.stateRoot as string | undefined;
-    // Lifecycle hooks
-    api.on("session_start", (args) =>
-      handleSessionStart(args as Record<string, unknown>, { stateRoot }),
+    // OpenClaw invokes hooks as handler(event, ctx). ctx carries sessionId,
+    // runId, sessionKey etc that the event payload alone may omit. Merging
+    // both into a flat args object so handlers see all fields.
+    const merge = (event: unknown, ctx: unknown) =>
+      ({ ...(event as Record<string, unknown>), ...(ctx as Record<string, unknown>) }) as Record<string, unknown>;
+
+    api.on("session_start", (ev, ctx) =>
+      handleSessionStart(merge(ev, ctx), { stateRoot }),
     );
-    api.on("session_end", (args) =>
-      handleSessionEnd(args as Record<string, unknown>, { stateRoot }),
+    api.on("session_end", (ev, ctx) =>
+      handleSessionEnd(merge(ev, ctx), { stateRoot }),
     );
-    // Tool call hooks (auto-trace)
-    api.on("before_tool_call", (args) =>
-      handleBeforeToolCall(args as Record<string, unknown>, { stateRoot }),
+    api.on("before_tool_call", (ev, ctx) =>
+      handleBeforeToolCall(merge(ev, ctx), { stateRoot }),
     );
-    api.on("after_tool_call", (args) =>
-      handleAfterToolCall(args as Record<string, unknown>, { stateRoot }),
+    api.on("after_tool_call", (ev, ctx) =>
+      handleAfterToolCall(merge(ev, ctx), { stateRoot }),
     );
-    // Model I/O hooks
-    api.on("llm_input", (args) =>
-      handleLlmInput(args as Record<string, unknown>, { stateRoot }),
+    api.on("llm_input", (ev, ctx) =>
+      handleLlmInput(merge(ev, ctx), { stateRoot }),
     );
-    api.on("llm_output", (args) =>
-      handleLlmOutput(args as Record<string, unknown>, { stateRoot }),
+    api.on("llm_output", (ev, ctx) =>
+      handleLlmOutput(merge(ev, ctx), { stateRoot }),
     );
-    // Agent lifecycle hooks
-    api.on("agent_end", (args) =>
-      handleAgentEnd(args as Record<string, unknown>, { stateRoot }),
+    api.on("agent_end", (ev, ctx) =>
+      handleAgentEnd(merge(ev, ctx), { stateRoot }),
     );
-    // Subagent hooks
-    api.on("subagent_spawning", (args) =>
-      handleSubagentSpawning(args as Record<string, unknown>, { stateRoot }),
+    api.on("subagent_spawning", (ev, ctx) =>
+      handleSubagentSpawning(merge(ev, ctx), { stateRoot }),
     );
-    api.on("subagent_spawned", (args) =>
-      handleSubagentSpawned(args as Record<string, unknown>, { stateRoot }),
+    api.on("subagent_spawned", (ev, ctx) =>
+      handleSubagentSpawned(merge(ev, ctx), { stateRoot }),
     );
-    api.on("subagent_ended", (args) =>
-      handleSubagentEnded(args as Record<string, unknown>, { stateRoot }),
+    api.on("subagent_ended", (ev, ctx) =>
+      handleSubagentEnded(merge(ev, ctx), { stateRoot }),
     );
-    // Gateway hooks
-    api.on("gateway_start", (args) =>
-      handleGatewayStart(args as Record<string, unknown>, { stateRoot }),
+    api.on("gateway_start", (ev, ctx) =>
+      handleGatewayStart(merge(ev, ctx), { stateRoot }),
     );
-    api.on("gateway_stop", (args) =>
-      handleGatewayStop(args as Record<string, unknown>, { stateRoot }),
+    api.on("gateway_stop", (ev, ctx) =>
+      handleGatewayStop(merge(ev, ctx), { stateRoot }),
     );
   } else {
     // F3: silent host = invisible debugging. One-time stderr line tells the
