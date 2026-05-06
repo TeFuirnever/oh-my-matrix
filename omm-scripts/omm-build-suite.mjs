@@ -65,6 +65,73 @@ async function copyRequiredFiles() {
       join(staging, "omm-skills", "agent-prompts"),
       { recursive: true },
     ),
+    // Phase 4 skills
+    cp(
+      pkg("omm-skills", "omm-deep-interview"),
+      join(staging, "omm-skills", "omm-deep-interview"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ralplan"),
+      join(staging, "omm-skills", "omm-ralplan"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ultrawork"),
+      join(staging, "omm-skills", "omm-ultrawork"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ultraqa"),
+      join(staging, "omm-skills", "omm-ultraqa"),
+      { recursive: true },
+    ),
+    // Skills accessible under plugin rootDir for OpenClaw discovery
+    cp(
+      pkg("omm-skills", "omm-ping"),
+      join(staging, "omm-plugin", "skills", "omm-ping"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-cancel"),
+      join(staging, "omm-plugin", "skills", "omm-cancel"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ralph"),
+      join(staging, "omm-plugin", "skills", "omm-ralph"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-team"),
+      join(staging, "omm-plugin", "skills", "omm-team"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-autopilot"),
+      join(staging, "omm-plugin", "skills", "omm-autopilot"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-deep-interview"),
+      join(staging, "omm-plugin", "skills", "omm-deep-interview"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ralplan"),
+      join(staging, "omm-plugin", "skills", "omm-ralplan"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ultrawork"),
+      join(staging, "omm-plugin", "skills", "omm-ultrawork"),
+      { recursive: true },
+    ),
+    cp(
+      pkg("omm-skills", "omm-ultraqa"),
+      join(staging, "omm-plugin", "skills", "omm-ultraqa"),
+      { recursive: true },
+    ),
     cp(
       pkg("omm-mcp", "package.json"),
       join(staging, "omm-mcp", "package.json"),

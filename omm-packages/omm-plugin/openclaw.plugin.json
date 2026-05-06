@@ -1,9 +1,9 @@
 {
   "id": "omm",
   "name": "omm",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "apiVersion": "0.3",
-  "description": "Minimal omm plugin for OpenClaw compatibility smoke testing.",
+  "description": "OpenClaw-native orchestration extension: state, hooks, agent prompts, skills, and MCP servers.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
