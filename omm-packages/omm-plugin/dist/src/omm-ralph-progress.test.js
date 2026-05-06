@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { appendProgressEntry, loadProgress, PROGRESS_FILENAME, validateProgressEntry, } from "./omm-ralph-progress.js";
+import { appendProgressEntry, loadProgress, PROGRESS_FILENAME, validateProgressEntry, } from "./omm-ralph-store.js";
 async function withTmpRoot(fn) {
     const root = await mkdtemp(join(tmpdir(), "omm-ralph-progress-test-"));
     try {

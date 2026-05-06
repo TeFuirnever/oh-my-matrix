@@ -18,8 +18,7 @@ import { advanceStage, incrementRetry, validatePlan, } from "./omm-autopilot-pip
 import { resolveOmmStateRoot } from "./omm-config.js";
 import { dispatchHooks, loadHooks } from "./omm-hook-loader.js";
 import { cancelMode, getModeState, startMode, updateModeState, } from "./omm-mode-lifecycle.js";
-import { loadPrd, markStoryPasses, validatePrd } from "./omm-ralph-prd.js";
-import { validateProgressEntry } from "./omm-ralph-progress.js";
+import { loadPrd, markStoryPasses, validatePrd, validateProgressEntry, } from "./omm-ralph-store.js";
 import { deriveOutcomeFromState } from "./omm-run-outcome.js";
 import { validateStateWrite } from "./omm-state-validation.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";

@@ -139,7 +139,10 @@ export function register(api) {
         // OpenClaw invokes hooks as handler(event, ctx). ctx carries sessionId,
         // runId, sessionKey etc that the event payload alone may omit. Merging
         // both into a flat args object so handlers see all fields.
-        const merge = (event, ctx) => ({ ...event, ...ctx });
+        const merge = (event, ctx) => ({
+            ...event,
+            ...ctx,
+        });
         api.on("session_start", (ev, ctx) => handleSessionStart(merge(ev, ctx), { stateRoot }));
         api.on("session_end", (ev, ctx) => handleSessionEnd(merge(ev, ctx), { stateRoot }));
         api.on("before_tool_call", (ev, ctx) => handleBeforeToolCall(merge(ev, ctx), { stateRoot }));

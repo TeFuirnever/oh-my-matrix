@@ -70,3 +70,17 @@ Instructions for AI agents working. All content in English.
 
 - Use subagents when they materially improve correctness, speed, or parallelism on bounded work.
 - Update `tasks/lessons.md` only when the work exposes a reusable policy, recurring failure mode, or repeatable workflow correction.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues (`TeFuirnever/oh-my-matrix`). Use `gh` CLI for all operations. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles using default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo. `CONTEXT.md` at root (if it exists) + `docs/adr/` for architectural decisions. See `docs/agents/domain.md`.

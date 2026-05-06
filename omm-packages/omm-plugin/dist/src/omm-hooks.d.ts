@@ -17,20 +17,22 @@ export interface OmmHookDispatchResult {
     outcomes: HookDispatchOutcome[];
     issues: HookLoadIssue[];
 }
-/**
- * Load and dispatch user-installed hooks for `event`.
- *
- * Hook modules live in `{stateRoot}/hooks/{event}/*.mjs`. Each module
- * must export `{ event, handler }` where `event` matches the directory name
- * and `handler(args)` is the callback. See docs/contracts/hooks.md.
- *
- * Errors during load or dispatch are surfaced via the returned outcome but
- * never thrown — host event emission must not crash because a user hook is
- * broken.
- */
 export declare function dispatchOmmHooks(event: OmmHookEvent, args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<OmmHookDispatchResult | null>;
+type HookHandler = (args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}) => Promise<void>;
+export declare const handleBeforeToolCall: HookHandler;
+export declare const handleAfterToolCall: HookHandler;
+export declare const handleLlmInput: HookHandler;
+export declare const handleLlmOutput: HookHandler;
+export declare const handleAgentEnd: HookHandler;
+export declare const handleSubagentSpawning: HookHandler;
+export declare const handleSubagentSpawned: HookHandler;
+export declare const handleSubagentEnded: HookHandler;
+export declare const handleGatewayStart: HookHandler;
+export declare const handleGatewayStop: HookHandler;
 /** Write session_start record + dispatch user hooks. */
 export declare function handleSessionStart(args: Record<string, unknown>, config?: {
     stateRoot?: string;
@@ -39,43 +41,4 @@ export declare function handleSessionStart(args: Record<string, unknown>, config
 export declare function handleSessionEnd(args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<void>;
-/** Dispatch user-installed hooks + record before_tool_call trace. */
-export declare function handleBeforeToolCall(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed hooks + record after_tool_call trace. */
-export declare function handleAfterToolCall(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed llm_input hooks + record trace. */
-export declare function handleLlmInput(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed llm_output hooks + record trace. */
-export declare function handleLlmOutput(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed agent_end hooks + record trace. */
-export declare function handleAgentEnd(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed subagent_spawning hooks. */
-export declare function handleSubagentSpawning(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed subagent_spawned hooks. */
-export declare function handleSubagentSpawned(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed subagent_ended hooks. */
-export declare function handleSubagentEnded(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed gateway_start hooks. */
-export declare function handleGatewayStart(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
-/** Dispatch user-installed gateway_stop hooks. */
-export declare function handleGatewayStop(args: Record<string, unknown>, config?: {
-    stateRoot?: string;
-}): Promise<void>;
+export {};

@@ -8,7 +8,7 @@ import {
   loadProgress,
   PROGRESS_FILENAME,
   validateProgressEntry,
-} from "./omm-ralph-progress.js";
+} from "./omm-ralph-store.js";
 
 async function withTmpRoot(fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "omm-ralph-progress-test-"));

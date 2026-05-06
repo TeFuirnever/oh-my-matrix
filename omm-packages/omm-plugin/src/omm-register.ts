@@ -230,7 +230,10 @@ export function register(api: OmmPluginApi): void {
     // runId, sessionKey etc that the event payload alone may omit. Merging
     // both into a flat args object so handlers see all fields.
     const merge = (event: unknown, ctx: unknown) =>
-      ({ ...(event as Record<string, unknown>), ...(ctx as Record<string, unknown>) }) as Record<string, unknown>;
+      ({
+        ...(event as Record<string, unknown>),
+        ...(ctx as Record<string, unknown>),
+      }) as Record<string, unknown>;
 
     api.on("session_start", (ev, ctx) =>
       handleSessionStart(merge(ev, ctx), { stateRoot }),

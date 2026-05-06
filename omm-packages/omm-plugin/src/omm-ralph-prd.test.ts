@@ -11,7 +11,7 @@ import {
   type RalphPrd,
   savePrd,
   validatePrd,
-} from "./omm-ralph-prd.js";
+} from "./omm-ralph-store.js";
 
 async function withTmpRoot(fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "omm-ralph-prd-test-"));
