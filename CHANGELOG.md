@@ -2,6 +2,60 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.4.0] — 2026-05-06
+
+Phase 4: OpenClaw hook alignment + 4 core skills for the 3-stage pipeline
+(deep-interview → ralplan → autopilot).
+
+### Highlights
+
+- **Hook upgrade**: `omm-hooks.ts` now handles 12 OpenClaw lifecycle events
+  (up from 5). Replaced non-existent `pre_tool_use`/`post_tool_use`/`mode_change`
+  with OpenClaw's actual `before_tool_call`/`after_tool_call` and 7 new
+  events (`llm_input`, `llm_output`, `agent_end`, `subagent_spawning`,
+  `subagent_spawned`, `subagent_ended`, `gateway_start`, `gateway_stop`).
+- **Auto-trace**: Hook handlers for tool calls, LLM I/O, and agent_end
+  automatically append trace events to `{stateRoot}/trace/{sessionId}.jsonl`
+  when `sessionId` is present — no manual `omm_trace_record` calls needed.
+- **4 core skills** (AgentSkills-compatible SKILL.md):
+  - `deep-interview`: Socratic requirement clarification with mathematical
+    ambiguity scoring (Goal 40% / Constraints 30% / Criteria 30%), challenge
+    agents at rounds 4/6/8, ontology tracking. Output: `.omm/specs/deep-interview-{slug}.md`.
+  - `ralplan`: 3-role consensus planning (Planner → Architect → Critic) with
+    max 5 rounds. Deep-interview spec auto-detection. Output: `.omm/plans/ralplan-{slug}.md`.
+  - `ultrawork`: Parallel execution with dependency-aware task graphs, 5 phases
+    from intent grounding to verification. Minimal state component.
+  - `ultraqa`: Autonomous QA cycling (test → verify → diagnose → fix → repeat),
+    max 5 cycles, same-error-3-times stuck detection.
+- **3-stage pipeline wired**: `deep-interview → ralplan → autopilot` end-to-end
+  path from vague idea to working code.
+
+### Changed
+
+- `omm-hooks.ts`: `OmmHookEvent` union type expanded to 12 events.
+  `handlePreToolUse`/`handlePostToolUse`/`handleModeChange` replaced by
+  `handleBeforeToolCall`/`handleAfterToolCall` plus 7 new handlers.
+- `omm-register.ts`: Plugin `api.on()` registrations updated from 5 to 12 hooks.
+- `docs/contracts/hooks.md`: Updated event table and directory layout.
+
+### Added
+
+- `omm-skills/omm-deep-interview/SKILL.md`
+- `omm-skills/omm-ralplan/SKILL.md`
+- `omm-skills/omm-ultrawork/SKILL.md`
+- `omm-skills/omm-ultraqa/SKILL.md`
+
+### Test count
+
+373 passing (was 342; +31 new tests for trace recording, handler dispatch,
+and expanded hook coverage).
+
+### Known limitations
+
+- Auto-trace requires the host (OpenClaw runtime) to emit lifecycle events
+  with `sessionId` in the args. Without `sessionId`, trace recording is
+  skipped silently. Hook dispatch still fires regardless.
+
 ## [0.3.0] — 2026-04-28
 
 First commercial GA release. Promotes 0.3.0-beta.1 to stable after host

@@ -94,7 +94,7 @@ describe("omm-trace MCP server", () => {
                 assert.equal(result.protocolVersion, "2024-11-05");
                 const serverInfo = result.serverInfo;
                 assert.equal(serverInfo.name, "omm-trace");
-                assert.equal(serverInfo.version, "0.3.0");
+                assert.equal(serverInfo.version, "0.4.0");
             });
         });
     });

@@ -1,5 +1,5 @@
 import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
-import { handleModeChange, handlePostToolUse, handlePreToolUse, handleSessionEnd, handleSessionStart, } from "./omm-hooks.js";
+import { handleAfterToolCall, handleAgentEnd, handleBeforeToolCall, handleGatewayStart, handleGatewayStop, handleLlmInput, handleLlmOutput, handleSessionEnd, handleSessionStart, handleSubagentEnded, handleSubagentSpawned, handleSubagentSpawning, } from "./omm-hooks.js";
 import { runOmmAgentPromptGet, runOmmAgentPromptList, } from "./omm-tools/omm-agent-prompt.js";
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
@@ -136,11 +136,24 @@ export function register(api) {
     void verifyAgentPromptsAvailable(api.config?.promptsDir);
     if (typeof api.on === "function") {
         const stateRoot = api.config?.stateRoot;
+        // Lifecycle hooks
         api.on("session_start", (args) => handleSessionStart(args, { stateRoot }));
         api.on("session_end", (args) => handleSessionEnd(args, { stateRoot }));
-        api.on("pre_tool_use", (args) => handlePreToolUse(args, { stateRoot }));
-        api.on("post_tool_use", (args) => handlePostToolUse(args, { stateRoot }));
-        api.on("mode_change", (args) => handleModeChange(args, { stateRoot }));
+        // Tool call hooks (auto-trace)
+        api.on("before_tool_call", (args) => handleBeforeToolCall(args, { stateRoot }));
+        api.on("after_tool_call", (args) => handleAfterToolCall(args, { stateRoot }));
+        // Model I/O hooks
+        api.on("llm_input", (args) => handleLlmInput(args, { stateRoot }));
+        api.on("llm_output", (args) => handleLlmOutput(args, { stateRoot }));
+        // Agent lifecycle hooks
+        api.on("agent_end", (args) => handleAgentEnd(args, { stateRoot }));
+        // Subagent hooks
+        api.on("subagent_spawning", (args) => handleSubagentSpawning(args, { stateRoot }));
+        api.on("subagent_spawned", (args) => handleSubagentSpawned(args, { stateRoot }));
+        api.on("subagent_ended", (args) => handleSubagentEnded(args, { stateRoot }));
+        // Gateway hooks
+        api.on("gateway_start", (args) => handleGatewayStart(args, { stateRoot }));
+        api.on("gateway_stop", (args) => handleGatewayStop(args, { stateRoot }));
     }
     else {
         // F3: silent host = invisible debugging. One-time stderr line tells the

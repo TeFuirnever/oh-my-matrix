@@ -1,13 +1,13 @@
 import { type HookDispatchOutcome, type HookLoadIssue } from "./omm-hook-loader.js";
 /**
- * omm event names emitted to plugin hooks. Hosts (OpenClaw, MatrixAssistant)
- * inject these by calling `api.on(event, handler)`; omm-register.ts wires the
- * handlers below so user-supplied hook modules in `{stateRoot}/hooks/{event}/`
- * are loaded and dispatched on every event.
+ * omm event names matching OpenClaw Plugin Hook API (hook-types.ts).
+ * These are the subset of OpenClaw's 26 hook types that omm handles.
+ * User-supplied hook modules in `{stateRoot}/hooks/{event}/` are loaded
+ * and dispatched on every event.
  *
  * @since 0.3.0
  */
-export type OmmHookEvent = "session_start" | "session_end" | "pre_tool_use" | "post_tool_use" | "mode_change";
+export type OmmHookEvent = "session_start" | "session_end" | "before_tool_call" | "after_tool_call" | "llm_input" | "llm_output" | "agent_end" | "subagent_spawning" | "subagent_spawned" | "subagent_ended" | "gateway_start" | "gateway_stop";
 export interface OmmSessionRecord {
     event: "session_start" | "session_end";
     timestamp: string;
@@ -39,15 +39,43 @@ export declare function handleSessionStart(args: Record<string, unknown>, config
 export declare function handleSessionEnd(args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<void>;
-/** Dispatch user-installed pre_tool_use hooks. */
-export declare function handlePreToolUse(args: Record<string, unknown>, config?: {
+/** Dispatch user-installed hooks + record before_tool_call trace. */
+export declare function handleBeforeToolCall(args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<void>;
-/** Dispatch user-installed post_tool_use hooks. */
-export declare function handlePostToolUse(args: Record<string, unknown>, config?: {
+/** Dispatch user-installed hooks + record after_tool_call trace. */
+export declare function handleAfterToolCall(args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<void>;
-/** Dispatch user-installed mode_change hooks. */
-export declare function handleModeChange(args: Record<string, unknown>, config?: {
+/** Dispatch user-installed llm_input hooks + record trace. */
+export declare function handleLlmInput(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed llm_output hooks + record trace. */
+export declare function handleLlmOutput(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed agent_end hooks + record trace. */
+export declare function handleAgentEnd(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed subagent_spawning hooks. */
+export declare function handleSubagentSpawning(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed subagent_spawned hooks. */
+export declare function handleSubagentSpawned(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed subagent_ended hooks. */
+export declare function handleSubagentEnded(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed gateway_start hooks. */
+export declare function handleGatewayStart(args: Record<string, unknown>, config?: {
+    stateRoot?: string;
+}): Promise<void>;
+/** Dispatch user-installed gateway_stop hooks. */
+export declare function handleGatewayStop(args: Record<string, unknown>, config?: {
     stateRoot?: string;
 }): Promise<void>;

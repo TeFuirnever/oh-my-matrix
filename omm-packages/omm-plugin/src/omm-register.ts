@@ -1,10 +1,17 @@
 import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
 import {
-  handleModeChange,
-  handlePostToolUse,
-  handlePreToolUse,
+  handleAfterToolCall,
+  handleAgentEnd,
+  handleBeforeToolCall,
+  handleGatewayStart,
+  handleGatewayStop,
+  handleLlmInput,
+  handleLlmOutput,
   handleSessionEnd,
   handleSessionStart,
+  handleSubagentEnded,
+  handleSubagentSpawned,
+  handleSubagentSpawning,
 } from "./omm-hooks.js";
 import {
   runOmmAgentPromptGet,
@@ -219,20 +226,47 @@ export function register(api: OmmPluginApi): void {
 
   if (typeof api.on === "function") {
     const stateRoot = api.config?.stateRoot as string | undefined;
+    // Lifecycle hooks
     api.on("session_start", (args) =>
       handleSessionStart(args as Record<string, unknown>, { stateRoot }),
     );
     api.on("session_end", (args) =>
       handleSessionEnd(args as Record<string, unknown>, { stateRoot }),
     );
-    api.on("pre_tool_use", (args) =>
-      handlePreToolUse(args as Record<string, unknown>, { stateRoot }),
+    // Tool call hooks (auto-trace)
+    api.on("before_tool_call", (args) =>
+      handleBeforeToolCall(args as Record<string, unknown>, { stateRoot }),
     );
-    api.on("post_tool_use", (args) =>
-      handlePostToolUse(args as Record<string, unknown>, { stateRoot }),
+    api.on("after_tool_call", (args) =>
+      handleAfterToolCall(args as Record<string, unknown>, { stateRoot }),
     );
-    api.on("mode_change", (args) =>
-      handleModeChange(args as Record<string, unknown>, { stateRoot }),
+    // Model I/O hooks
+    api.on("llm_input", (args) =>
+      handleLlmInput(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("llm_output", (args) =>
+      handleLlmOutput(args as Record<string, unknown>, { stateRoot }),
+    );
+    // Agent lifecycle hooks
+    api.on("agent_end", (args) =>
+      handleAgentEnd(args as Record<string, unknown>, { stateRoot }),
+    );
+    // Subagent hooks
+    api.on("subagent_spawning", (args) =>
+      handleSubagentSpawning(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("subagent_spawned", (args) =>
+      handleSubagentSpawned(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("subagent_ended", (args) =>
+      handleSubagentEnded(args as Record<string, unknown>, { stateRoot }),
+    );
+    // Gateway hooks
+    api.on("gateway_start", (args) =>
+      handleGatewayStart(args as Record<string, unknown>, { stateRoot }),
+    );
+    api.on("gateway_stop", (args) =>
+      handleGatewayStop(args as Record<string, unknown>, { stateRoot }),
     );
   } else {
     // F3: silent host = invisible debugging. One-time stderr line tells the

@@ -23,12 +23,18 @@ event args.
       ping-uptime.mjs
     session_end/
       flush-metrics.mjs
-    pre_tool_use/
+    before_tool_call/
       audit.mjs
-    post_tool_use/
+    after_tool_call/
       mirror-to-s3.mjs
-    mode_change/
-      notify-slack.mjs
+    llm_input/
+    llm_output/
+    agent_end/
+    subagent_spawning/
+    subagent_spawned/
+    subagent_ended/
+    gateway_start/
+    gateway_stop/
 ```
 
 The default `stateRoot` resolves via `resolveOmmStateRoot()`. Override per
@@ -59,13 +65,20 @@ still run.
 
 ## Supported Events
 
-| Event           | When Emitted                                               | Typical args                                   |
-| --------------- | ---------------------------------------------------------- | ---------------------------------------------- |
-| `session_start` | Host begins an omm-aware session                           | `{ sessionId, timestamp }`                     |
-| `session_end`   | Host ends an omm-aware session                             | `{ sessionId, timestamp, reason? }`            |
-| `pre_tool_use`  | Before any omm plugin tool executes                        | `{ toolName, params, toolCallId }`             |
-| `post_tool_use` | After omm plugin tool returns                              | `{ toolName, result, durationMs, toolCallId }` |
-| `mode_change`   | Workflow mode transition (ralph/autopilot/team start/stop) | `{ mode, fromState, toState }`                 |
+| Event                | When Emitted                                               | Typical args                                          |
+| -------------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
+| `session_start`      | Host begins an omm-aware session                           | `{ sessionId, timestamp }`                            |
+| `session_end`        | Host ends an omm-aware session                             | `{ sessionId, timestamp, reason? }`                   |
+| `before_tool_call`   | Before any tool executes (auto-trace recorded)             | `{ toolName, params, toolCallId, runId }`             |
+| `after_tool_call`    | After tool returns (auto-trace recorded)                   | `{ toolName, result, durationMs, toolCallId, error }` |
+| `llm_input`          | Before model call (auto-trace recorded)                    | `{ provider, model, runId, sessionId }`               |
+| `llm_output`         | After model response (auto-trace recorded)                 | `{ provider, model, usage, runId, sessionId }`        |
+| `agent_end`          | Agent run completes (auto-trace recorded)                  | `{ success, durationMs, sessionId }`                  |
+| `subagent_spawning`  | Subagent is about to spawn                                 | `{ childSessionKey, agentId, mode }`                  |
+| `subagent_spawned`   | Subagent has started running                               | `{ childSessionKey, agentId, runId }`                 |
+| `subagent_ended`     | Subagent has finished                                      | `{ targetSessionKey, reason, outcome }`               |
+| `gateway_start`      | OpenClaw gateway starts                                    | `{ port }`                                            |
+| `gateway_stop`       | OpenClaw gateway stops                                     | `{ reason? }`                                         |
 
 The exact payload depends on the host's emitter. omm passes the args
 through verbatim to user hook handlers.
@@ -93,7 +106,7 @@ want to wire their own dispatchers:
 ```ts
 import { dispatchOmmHooks } from "omm-plugin/dist/src/omm-hooks.js";
 
-await dispatchOmmHooks("post_tool_use", {
+await dispatchOmmHooks("after_tool_call", {
   toolName: "omm_state_write",
   durationMs: 12,
   toolCallId: "toolu_abc",
@@ -120,5 +133,9 @@ For OpenClaw / MatrixAssistant / other hosts wiring lifecycle events:
    inspecting omm trace MCP for `hook.invoke` events (if observability
    metrics are enabled — see roadmap.md P2).
 
-omm's `omm-register.ts` already calls `api.on(event, …)` for all 5 events
+omm's `omm-register.ts` already calls `api.on(event, …)` for all 12 events
 defensively; hosts only need to implement `api.on()` itself.
+
+Events `before_tool_call`, `after_tool_call`, `llm_input`, `llm_output`, and
+`agent_end` automatically record trace events to `{stateRoot}/trace/{sessionId}.jsonl`
+when a `sessionId` is present in the event args.
