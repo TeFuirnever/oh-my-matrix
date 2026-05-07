@@ -64,3 +64,13 @@ A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured 
 - **ADR-003**: MCP servers have zero runtime dependencies (`"dependencies": {}`)
 - **ADR-004**: Single validation dispatcher routes to mode-specific validators
 - **ADR-005**: Cross-process locking via `omm-fs-queue.ts` for concurrent state access
+
+## Known Trade-offs
+
+| Trade-off | Impact | Mitigation |
+|-----------|--------|------------|
+| ADR-003 → MCP 代码重复 | ~200 行跨 2 个 MCP server（锁、JSON-RPC、OmmError） | 锁逻辑稳定；验证规则漂移风险通过 SKILL.md 引导 agent 使用 mode lifecycle API 缓解 |
+| MCP 验证是 plugin 验证的子集 | MCP `state_write` 不注入计数器默认值、不校验时间戳格式 | mode lifecycle API 是主路径；MCP 为低级工具 |
+| TRACE_SPECS 使用 `Partial` + `!` | 新增 trace event 时可能遗漏 spec | 可改为 `satisfies` 完整性检查 |
+| omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
+| manifest `apiVersion` 作用不确定 | 未来 OpenClaw 版本可能读取此字段 | 监控 OpenClaw changelog |

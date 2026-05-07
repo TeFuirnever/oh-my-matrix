@@ -114,12 +114,19 @@ function extractString(
 
 // ── Trace spec: describes how to build a trace record from hook args ──
 
+type TraceEvent =
+  | "before_tool_call"
+  | "after_tool_call"
+  | "llm_input"
+  | "llm_output"
+  | "agent_end";
+
 type TraceSpec = {
   type: string;
   build: (args: Record<string, unknown>) => Record<string, unknown>;
 };
 
-const TRACE_SPECS: Partial<Record<OmmHookEvent, TraceSpec>> = {
+const TRACE_SPECS: Record<TraceEvent, TraceSpec> = {
   before_tool_call: {
     type: "before_tool_call",
     build: (a) => ({
@@ -175,7 +182,7 @@ type HookHandler = (
   config?: { stateRoot?: string },
 ) => Promise<void>;
 
-function makeTraceHandler(event: OmmHookEvent, spec: TraceSpec): HookHandler {
+function makeTraceHandler(event: TraceEvent, spec: TraceSpec): HookHandler {
   return async (args, config) => {
     const sessionId = extractString(args, "sessionId");
     if (sessionId) {
@@ -203,23 +210,23 @@ function makeDispatchOnlyHandler(event: OmmHookEvent): HookHandler {
 
 export const handleBeforeToolCall = makeTraceHandler(
   "before_tool_call",
-  TRACE_SPECS.before_tool_call!,
+  TRACE_SPECS.before_tool_call,
 );
 export const handleAfterToolCall = makeTraceHandler(
   "after_tool_call",
-  TRACE_SPECS.after_tool_call!,
+  TRACE_SPECS.after_tool_call,
 );
 export const handleLlmInput = makeTraceHandler(
   "llm_input",
-  TRACE_SPECS.llm_input!,
+  TRACE_SPECS.llm_input,
 );
 export const handleLlmOutput = makeTraceHandler(
   "llm_output",
-  TRACE_SPECS.llm_output!,
+  TRACE_SPECS.llm_output,
 );
 export const handleAgentEnd = makeTraceHandler(
   "agent_end",
-  TRACE_SPECS.agent_end!,
+  TRACE_SPECS.agent_end,
 );
 export const handleSubagentSpawning =
   makeDispatchOnlyHandler("subagent_spawning");

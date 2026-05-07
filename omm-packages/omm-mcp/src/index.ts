@@ -177,7 +177,14 @@ async function withCrossProcessLock<T>(
   });
 }
 
-/* ── Inline validation (mirrors omm-plugin/src/omm-state-validation.ts) ── */
+/* ── Inline validation (mirrors omm-plugin/src/omm-state-validation.ts)
+ *
+ * This is a SUBSET of the plugin validation: it checks phase values and
+ * terminal-phase/active consistency, but does NOT inject counter defaults
+ * (iteration, max_iterations, etc.) or validate ISO timestamps. Callers
+ * needing full validation should use the mode lifecycle API via the plugin,
+ * not the raw MCP state_write tool. See CONTEXT.md "Known Trade-offs".
+ * ── */
 
 const RALPH_PHASES = new Set([
   "init",
