@@ -78,12 +78,15 @@ const TRACE_SPECS = {
             provider: a.provider,
             model: a.model,
             runId: a.runId ?? a.run_id,
+            resolvedRef: a.resolvedRef ?? a.resolved_ref,
+            harnessId: a.harnessId ?? a.harness_id,
             usage: a.usage,
         }),
     },
     agent_end: {
         type: "agent_end",
         build: (a) => ({
+            runId: a.runId ?? a.run_id,
             success: a.success,
             durationMs: a.durationMs ?? a.duration_ms,
         }),
