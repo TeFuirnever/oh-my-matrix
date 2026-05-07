@@ -14,7 +14,13 @@ import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 
-/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
+/* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin)
+ *
+ * The cross-process lock, OmmError, JSON-RPC, and stdin reader code in this
+ * file is duplicated across all 3 MCP servers (omm-mcp, omm-mcp-trace,
+ * omm-mcp-memory). Any bug fix must be applied to all copies. See CONTEXT.md
+ * "Known Trade-offs" for the rationale.
+ * ── */
 
 const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
 const OMM_E_VALUE_INVALID = "OMM_E_VALUE_INVALID";
