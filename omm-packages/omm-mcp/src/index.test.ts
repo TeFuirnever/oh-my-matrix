@@ -323,4 +323,133 @@ describe("omm-mcp server", () => {
       });
     });
   });
+
+  describe("initialize advertises Resources + Prompts capabilities", () => {
+    it("returns capabilities including resources and prompts", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("initialize", {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "test", version: "0.0.0" },
+        });
+        const caps = (r.result as { capabilities: Record<string, unknown> })
+          .capabilities;
+        assert.deepEqual(caps, { tools: {}, resources: {}, prompts: {} });
+      });
+    });
+  });
+
+  describe("Resources (omm://state/<key>)", () => {
+    it("resources/list returns written state files as omm://state/<key>", async () => {
+      await withClient(async (client) => {
+        await callTool(client, "omm_state_write", {
+          key: "ralph",
+          value: { mode: "ralph", active: false },
+        });
+        const r = await client.send("resources/list");
+        const resources = (r.result as { resources: Array<{ uri: string }> })
+          .resources;
+        const uris = resources.map((x) => x.uri);
+        assert.ok(
+          uris.includes("omm://state/ralph"),
+          `expected omm://state/ralph in ${JSON.stringify(uris)}`,
+        );
+      });
+    });
+
+    it("resources/read returns JSON content for valid URI", async () => {
+      await withClient(async (client) => {
+        await callTool(client, "omm_state_write", {
+          key: "ralph",
+          value: { mode: "ralph", active: false, note: "unit-test" },
+        });
+        const r = await client.send("resources/read", {
+          uri: "omm://state/ralph",
+        });
+        const contents = (
+          r.result as {
+            contents: Array<{ uri: string; mimeType: string; text: string }>;
+          }
+        ).contents;
+        assert.equal(contents[0].uri, "omm://state/ralph");
+        assert.equal(contents[0].mimeType, "application/json");
+        assert.match(contents[0].text, /"note": "unit-test"/);
+      });
+    });
+
+    it("resources/read rejects malformed URI with OMM_E_KEY_INVALID", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("resources/read", {
+          uri: "omm://bad/xyz",
+        });
+        assert.ok(r.error, "expected error response");
+        const data = (
+          r.error as unknown as {
+            data?: { code?: string };
+          }
+        ).data;
+        assert.equal(data?.code, "OMM_E_KEY_INVALID");
+      });
+    });
+
+    it("resources/read requires uri param", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("resources/read", {});
+        assert.equal(r.error?.code, -32602);
+      });
+    });
+  });
+
+  describe("Prompts (agent-prompts/<name>.md)", () => {
+    it("prompts/list includes the sentinel prompts (analyst + planner)", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("prompts/list");
+        const prompts = (
+          r.result as { prompts: Array<{ name: string }> }
+        ).prompts.map((p) => p.name);
+        assert.ok(
+          prompts.includes("analyst"),
+          `expected 'analyst' in ${JSON.stringify(prompts)}`,
+        );
+        assert.ok(
+          prompts.includes("planner"),
+          `expected 'planner' in ${JSON.stringify(prompts)}`,
+        );
+      });
+    });
+
+    it("prompts/get returns the prompt body as a system message", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("prompts/get", { name: "analyst" });
+        const result = r.result as {
+          description: string;
+          messages: Array<{
+            role: string;
+            content: { type: string; text: string };
+          }>;
+        };
+        assert.match(result.description, /analyst/);
+        assert.equal(result.messages.length, 1);
+        assert.equal(result.messages[0].role, "system");
+        assert.equal(result.messages[0].content.type, "text");
+        assert.ok(
+          result.messages[0].content.text.length > 100,
+          "prompt body too short",
+        );
+      });
+    });
+
+    it("prompts/get rejects invalid name with OMM_E_KEY_INVALID", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("prompts/get", { name: "1bad" });
+        assert.ok(r.error, "expected error response");
+        const data = (
+          r.error as unknown as {
+            data?: { code?: string };
+          }
+        ).data;
+        assert.equal(data?.code, "OMM_E_KEY_INVALID");
+      });
+    });
+  });
 });
