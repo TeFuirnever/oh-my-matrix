@@ -51,8 +51,36 @@ ralplan-omm-next-best-practices (2026-05-08).
 
 - P2 agents (git-master, scientist, code-simplifier) — will be ported
   when omm-git / omm-research / omm-refactor skills are scheduled
-- MCP R1 implementation (~140 LOC across 2 MCP servers) — separate plan
+- ~~MCP R1 implementation~~ — **Done** (see "MCP R1" subsection below)
 - `notifications/progress` capability verification — separate research task
+
+### Added (MCP R1)
+
+- `omm-mcp` advertises MCP Resources via `omm://state/<key>` (one URI per
+  state JSON file) with `application/json` MIME type. New methods:
+  `resources/list`, `resources/read`. Capability advertised in `initialize`.
+- `omm-mcp` advertises MCP Prompts via `omm://prompts/<name>` for the 16
+  bundled agent prompts. New methods: `prompts/list`, `prompts/get`.
+  Returns prompt body as `system` message per MCP spec. Capability advertised
+  in `initialize`.
+- `omm-mcp-trace` advertises MCP Resources via `omm://trace/<sessionId>`
+  (one URI per trace JSONL file) with `application/x-jsonlines` MIME type.
+  New methods: `resources/list`, `resources/read`.
+- `docs/contracts/mcp.md` — new contract document covering URI scheme,
+  capability matrix, and Prompts placement rationale.
+
+### Changed (MCP R1)
+
+- `omm-mcp` `initialize` capabilities: `{ tools: {} }` →
+  `{ tools: {}, resources: {}, prompts: {} }`.
+- `omm-mcp-trace` `initialize` capabilities: `{ tools: {} }` →
+  `{ tools: {}, resources: {} }`.
+- `omm-mcp-memory` unchanged (advertises tools only; out of R1 scope).
+
+### Test Metrics (post-R1)
+
+- Tests: 376 → 389 (13 new across both servers' Resources + Prompts surfaces)
+- All tests pass; lint clean; no new runtime dependencies (zero-dep ADR-003 preserved)
 
 ## [0.4.0] — 2026-05-06
 

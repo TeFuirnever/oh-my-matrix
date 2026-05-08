@@ -93,8 +93,8 @@ See [Architecture Overview](architecture.md) for module details.
 | Agent prompt expansion (P0+P1)       | Port 11 oh-my-claudecode agents covering planning, tracing, review, debugging, exploration   | `oh-my-claudecode/agents/`                           | ✓ Done (2026-05-08) — 16 total agents (5 starter + 11 ported) |
 | 7-token strip-check in CI            | Prevent Claude-only semantic tokens from leaking into ported prompts                         | `omm-agent-prompts.test.ts`                          | ✓ Done (2026-05-08) — 376/376 tests pass                     |
 | MCP capability survey                | Determine which MCP capabilities (Resources/Prompts/Progress) the OpenClaw + MA stack supports | `docs/research/mcp-capability-survey.md`             | ✓ Done (2026-05-08) — R1 recommended                         |
-| MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/research/mcp-capability-survey.md` §4 R1 sketch | Pending — separate plan                                      |
-| MCP Prompts advertisement            | Expose agent prompts via `prompts/list` + `prompts/get`                                      | MCP spec 2025-06-18                                  | Pending — separate plan                                      |
+| MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/research/mcp-capability-survey.md` §4 R1 sketch | ✓ Done (2026-05-08) — `omm://state/<key>` + `omm://trace/<sessionId>` |
+| MCP Prompts advertisement            | Expose agent prompts via `prompts/list` + `prompts/get`                                      | MCP spec 2025-06-18                                  | ✓ Done (2026-05-08) — `omm://prompts/<name>`                          |
 | Progress notifications verification  | Confirm whether MA client routes `notifications/progress`                                    | follow-up research                                   | Pending — separate research task                             |
 | P2 agent porting                     | Port git-master, scientist, code-simplifier when target skills scheduled                     | `oh-my-claudecode/agents/`                           | Pending — gated on omm-git / omm-research / omm-refactor    |
 
@@ -103,8 +103,8 @@ See [Architecture Overview](architecture.md) for module details.
 - [x] Agent inventory ≥ 15 with REAL or PLACEHOLDER skill anchors documented
 - [x] CI strip-check enforces no Claude-only token regressions
 - [x] Research artifact recommends a path for MCP UI integration with evidence
-- [ ] MCP Resources advertised by ≥ 1 omm MCP server
-- [ ] MCP Prompts advertised by omm-mcp
+- [x] MCP Resources advertised by ≥ 1 omm MCP server
+- [x] MCP Prompts advertised by omm-mcp
 - [ ] MA UI confirmed to consume omm Resources end-to-end
 
 **Estimated scope (remaining):** ~140 LOC across 2 MCP servers + tests; 1 follow-up research task

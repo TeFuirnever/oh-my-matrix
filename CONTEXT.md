@@ -100,6 +100,7 @@ A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured 
 - **ADR-003**: MCP servers have zero runtime dependencies (`"dependencies": {}`)
 - **ADR-004**: Single validation dispatcher routes to mode-specific validators
 - **ADR-005**: Cross-process locking via `omm-fs-queue.ts` for concurrent state access
+- **MCP capability matrix (post-R1)**: omm-mcp advertises `tools` + `resources` (state) + `prompts` (agent prompts); omm-mcp-trace advertises `tools` + `resources` (trace events); omm-mcp-memory advertises `tools` only. Resources are read-only; mutations go through tools. Full URI scheme + contract documented in `docs/contracts/mcp.md`.
 
 ## Known Trade-offs
 
