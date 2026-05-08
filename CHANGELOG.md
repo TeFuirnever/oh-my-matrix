@@ -2,6 +2,58 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [Unreleased]
+
+Agent prompt expansion + MCP capability research per plan
+ralplan-omm-next-best-practices (2026-05-08).
+
+### Highlights
+
+- **Agent inventory: 5 → 16 prompts** (5 starter + 11 ported from
+  oh-my-claudecode). Ports cover the core development lifecycle:
+  planner, tracer, code-reviewer, security-reviewer, test-engineer,
+  debugger, qa-tester, explore, document-specialist, designer, writer.
+- **7-token strip-check in CI** prevents Claude-only semantic tokens
+  (`Task(subagent_type=`, `AskUserQuestion`, `Agent(`, `lsp_diagnostics`,
+  `ast_grep_search`, `<External_Consultation>`, `mcp__plugin_oh-my-claudecode`)
+  from leaking into ported prompts.
+- **MCP capability research**: `docs/research/mcp-capability-survey.md`
+  documents that the OpenClaw + MatrixAssistant client stack already
+  supports `resources/list` and `prompts/list` via `@modelcontextprotocol/sdk`.
+  Recommends R1 (upgrade omm MCP servers to advertise Resources + Prompts,
+  ~140 LOC, additive, ADR-003 compliant) for a follow-up plan.
+
+### Added
+
+- 11 ported agent prompts at `omm-packages/omm-skills/agent-prompts/`:
+  planner, tracer, code-reviewer, security-reviewer, test-engineer,
+  debugger, qa-tester, explore, document-specialist, designer, writer
+- `docs/research/mcp-capability-survey.md` — Phase 2 deliverable
+- `omm-agent-prompts.test.ts`: new `describe("expanded agent inventory")` block
+  with 3 tests (count ≥ 16, 7-token strip-check across 11 prompts,
+  OpenClaw tool-reference regex check)
+
+### Changed
+
+- `omm-packages/omm-skills/omm-ralplan/SKILL.md`: Step 1 now loads `planner`
+  agent prompt (was loading `analyst`, which was a known label-vs-load mismatch).
+- `CONTEXT.md`: Agent Prompt section extended with bundled count (16),
+  Prompt Style Coexistence Policy (lean vs XML-structured), Agent Inventory
+  table (REAL/PLACEHOLDER distinction), and 2 new Known Trade-offs entries
+  (ported prompt drift risk, placeholder agents).
+
+### Test Metrics
+
+- Tests: 373 → 376 (3 new expanded-inventory tests)
+- All tests pass; lint clean (0 issues across 67 files)
+
+### Deferred (follow-up plans)
+
+- P2 agents (git-master, scientist, code-simplifier) — will be ported
+  when omm-git / omm-research / omm-refactor skills are scheduled
+- MCP R1 implementation (~140 LOC across 2 MCP servers) — separate plan
+- `notifications/progress` capability verification — separate research task
+
 ## [0.4.0] — 2026-05-06
 
 Phase 4: OpenClaw hook alignment + 4 core skills for the 3-stage pipeline
