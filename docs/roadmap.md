@@ -96,6 +96,7 @@ See [Architecture Overview](architecture.md) for module details.
 | MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/research/mcp-capability-survey.md` §4 R1 sketch | ✓ Done (2026-05-08) — `omm://state/<key>` + `omm://trace/<sessionId>` |
 | MCP Prompts advertisement            | Expose agent prompts via `prompts/list` + `prompts/get`                                      | MCP spec 2025-06-18                                  | ✓ Done (2026-05-08) — `omm://prompts/<name>`                          |
 | Progress notifications verification  | Confirm whether MA client routes `notifications/progress`                                    | follow-up research                                   | ✓ Done (2026-05-08) — DEFER (MA self-audit P6 marks unsupported; see `docs/research/mcp-progress-notification-survey.md`) |
+| omm-docs skill                       | Documentation generation pipeline (research → draft → verify); activates writer + document-specialist | omm-skills new entry                          | ✓ Done (2026-05-08) — `omm-packages/omm-skills/omm-docs/SKILL.md`        |
 | P2 agent porting                     | Port git-master, scientist, code-simplifier when target skills scheduled                     | `oh-my-claudecode/agents/`                           | Pending — gated on omm-git / omm-research / omm-refactor    |
 
 **Exit criteria:**

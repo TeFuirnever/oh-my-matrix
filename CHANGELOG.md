@@ -2,6 +2,25 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [Unreleased]
+
+### Added
+
+- **omm-docs skill** at `omm-packages/omm-skills/omm-docs/SKILL.md` —
+  documentation generation pipeline orchestrating document-specialist
+  (research) and writer (draft), followed by a verification phase
+  (code-block execution + link checks + slop scan). Three-phase
+  separation enforces "writer never invents facts".
+- Skill count: 9 → 10.
+
+### Changed
+
+- Agent inventory in `CONTEXT.md`: `document-specialist` and `writer`
+  flipped from PLACEHOLDER to REAL anchored to `omm-docs`.
+- Placeholder agent count drops from 3 to 1 (only `designer` remains,
+  awaiting `omm-ui`).
+- REAL agents count rises from 13 to 15.
+
 ## [0.4.1] — 2026-05-08
 
 Agent prompt expansion + MCP capability research per plan

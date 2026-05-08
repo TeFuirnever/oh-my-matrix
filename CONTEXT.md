@@ -82,11 +82,11 @@ Both styles parse identically through `parseAgentPrompt` (body is opaque text). 
 | debugger | sonnet | omm-autopilot | REAL | ported from omc (XML) |
 | qa-tester | sonnet | omm-ultraqa | REAL | ported from omc (XML) |
 | explore | haiku | omm-deep-interview | REAL | ported from omc (XML) |
-| document-specialist | sonnet | omm-docs (future, P1) | PLACEHOLDER | ported from omc (XML) |
+| document-specialist | sonnet | omm-docs | REAL | ported from omc (XML) |
 | designer | sonnet | omm-ui (future, P1) | PLACEHOLDER | ported from omc (XML) |
-| writer | haiku | omm-docs (future, P1) | PLACEHOLDER | ported from omc (XML) |
+| writer | haiku | omm-docs | REAL | ported from omc (XML) |
 
-**Placeholder agents** (3): document-specialist, designer, writer — anchors are named future skills (omm-docs, omm-ui), not speculative. Will be activated when target skills are scheduled.
+**Placeholder agents** (1): designer — anchor is the named future skill omm-ui, not speculative. Will be activated when omm-ui skill is scheduled.
 
 **Deferred agents** (3, NOT in this plan): git-master, scientist, code-simplifier — to be ported in a follow-up plan when omm-git, omm-research, omm-refactor skills are scheduled.
 
@@ -112,4 +112,4 @@ A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured 
 | omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
 | manifest `apiVersion` 作用不确定 | 未来 OpenClaw 版本可能读取此字段 | 监控 OpenClaw changelog |
 | 11 ported agent prompts 是 point-in-time snapshots | 与 oh-my-claudecode 上游 agent prompts 可能漂移 | resync policy 是 owner-driven，不是自动化；7-token strip-check 在 CI 中防止 Claude-only token 回流 |
-| 3 PLACEHOLDER agents 无当前 skill 消费者 | document-specialist, designer, writer 等待 omm-docs / omm-ui 被调度 | inventory 表显式标注 PLACEHOLDER，待 target skill 落地后转为 REAL |
+| 1 PLACEHOLDER agent 无当前 skill 消费者 | designer 等待 omm-ui 被调度 | inventory 表显式标注 PLACEHOLDER，待 target skill 落地后转为 REAL |
