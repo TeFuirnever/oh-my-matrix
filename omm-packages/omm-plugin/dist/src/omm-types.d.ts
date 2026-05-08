@@ -58,3 +58,14 @@ export interface TeamState {
     task?: string;
 }
 export type WorkflowState = RalphState | AutopilotState | TeamState;
+/**
+ * Map a `WorkflowMode` literal to its corresponding state shape.
+ *
+ * Used by `omm-mode-lifecycle.ts` to give callers compile-time narrowing:
+ *
+ *   const ralph = await getModeState("ralph");  // typed as RalphState | null
+ *   const team  = await getModeState("team");   // typed as TeamState | null
+ *
+ * Without this mapping callers had to cast from Record<string, unknown>.
+ */
+export type WorkflowStateOf<M extends "ralph" | "autopilot" | "team"> = M extends "ralph" ? RalphState : M extends "autopilot" ? AutopilotState : M extends "team" ? TeamState : never;

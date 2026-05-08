@@ -25,6 +25,7 @@ import {
 } from "./omm-run-outcome.js";
 import { validateStateWrite } from "./omm-state-validation.js";
 import { sanitizeStateKey } from "./omm-tools/omm-state.js";
+import type { WorkflowStateOf } from "./omm-types.js";
 import { assertWorkflowExclusivity } from "./omm-workflow-guard.js";
 
 export type WorkflowMode = "ralph" | "autopilot" | "team";
@@ -42,9 +43,9 @@ export interface ModeLifecycleConfig {
   stateRoot?: string;
 }
 
-export interface ModeOperationResult {
+export interface ModeOperationResult<M extends WorkflowMode = WorkflowMode> {
   ok: boolean;
-  state?: Record<string, unknown>;
+  state?: WorkflowStateOf<M>;
   error?: string;
 }
 
@@ -64,11 +65,17 @@ async function readState(
   }
 }
 
+interface InternalWriteResult {
+  ok: boolean;
+  state?: Record<string, unknown>;
+  error?: string;
+}
+
 async function writeState(
   stateRoot: string,
   key: string,
   value: Record<string, unknown>,
-): Promise<ModeOperationResult> {
+): Promise<InternalWriteResult> {
   const sanitized = sanitizeStateKey(key);
   if (!sanitized.ok) return { ok: false, error: sanitized.error };
   const safeKey = sanitized.key as string;
@@ -103,17 +110,19 @@ async function writeState(
  * exclusivity guard passes. Default counters and status are injected by
  * the existing validator.
  */
-export async function startMode(
-  mode: WorkflowMode,
+export async function startMode<M extends WorkflowMode>(
+  mode: M,
   initialFields: Record<string, unknown> = {},
   config: ModeLifecycleConfig = {},
-): Promise<ModeOperationResult> {
+): Promise<ModeOperationResult<M>> {
   const value: Record<string, unknown> = {
     ...initialFields,
     mode,
     active: true,
   };
-  return writeState(config.stateRoot ?? "", mode, value);
+  return writeState(config.stateRoot ?? "", mode, value) as Promise<
+    ModeOperationResult<M>
+  >;
 }
 
 /**
@@ -122,11 +131,11 @@ export async function startMode(
  * prevent accidental writes that would resurrect a terminated run; callers
  * who need that behavior should use `startMode` instead.
  */
-export async function updateModeState(
-  mode: WorkflowMode,
+export async function updateModeState<M extends WorkflowMode>(
+  mode: M,
   patch: Record<string, unknown>,
   config: ModeLifecycleConfig = {},
-): Promise<ModeOperationResult> {
+): Promise<ModeOperationResult<M>> {
   const stateRoot = config.stateRoot ?? "";
   const existing = await readState(stateRoot, mode);
   if (!existing) {
@@ -146,7 +155,7 @@ export async function updateModeState(
     ...patch,
     mode,
   };
-  return writeState(stateRoot, mode, merged);
+  return writeState(stateRoot, mode, merged) as Promise<ModeOperationResult<M>>;
 }
 
 /**
@@ -155,11 +164,11 @@ export async function updateModeState(
  * the `outcome` field. Idempotent: terminating an already-terminal record
  * is a no-op that returns the existing state.
  */
-export async function cancelMode(
-  mode: WorkflowMode,
+export async function cancelMode<M extends WorkflowMode>(
+  mode: M,
   reason: string | undefined,
   config: ModeLifecycleConfig & { kind?: RunOutcomeKind } = {},
-): Promise<ModeOperationResult> {
+): Promise<ModeOperationResult<M>> {
   const stateRoot = config.stateRoot ?? "";
   const kind = config.kind ?? "cancelled";
   const existing = await readState(stateRoot, mode);
@@ -167,7 +176,7 @@ export async function cancelMode(
     return { ok: false, error: `${mode} state not found` };
   }
   if (existing.active !== true) {
-    return { ok: true, state: existing };
+    return { ok: true, state: existing as WorkflowStateOf<M> };
   }
 
   const phase = outcomeKindToPhase(kind);
@@ -182,16 +191,18 @@ export async function cancelMode(
   if (VALIDATOR_TERMINAL_PHASES.has(phase)) {
     merged[phaseField] = phase;
   }
-  return writeState(stateRoot, mode, merged);
+  return writeState(stateRoot, mode, merged) as Promise<ModeOperationResult<M>>;
 }
 
 /**
  * Read the current state of a mode. Returns null if no state file exists,
- * the parsed record otherwise.
+ * the parsed record otherwise. Return type is narrowed to the specific
+ * state shape via `WorkflowStateOf<M>`.
  */
-export async function getModeState(
-  mode: WorkflowMode,
+export async function getModeState<M extends WorkflowMode>(
+  mode: M,
   config: ModeLifecycleConfig = {},
-): Promise<Record<string, unknown> | null> {
-  return readState(config.stateRoot ?? "", mode);
+): Promise<WorkflowStateOf<M> | null> {
+  const raw = await readState(config.stateRoot ?? "", mode);
+  return raw as WorkflowStateOf<M> | null;
 }

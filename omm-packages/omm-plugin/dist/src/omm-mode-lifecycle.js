@@ -133,9 +133,11 @@ export async function cancelMode(mode, reason, config = {}) {
 }
 /**
  * Read the current state of a mode. Returns null if no state file exists,
- * the parsed record otherwise.
+ * the parsed record otherwise. Return type is narrowed to the specific
+ * state shape via `WorkflowStateOf<M>`.
  */
 export async function getModeState(mode, config = {}) {
-    return readState(config.stateRoot ?? "", mode);
+    const raw = await readState(config.stateRoot ?? "", mode);
+    return raw;
 }
 //# sourceMappingURL=omm-mode-lifecycle.js.map

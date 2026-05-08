@@ -6,35 +6,28 @@ All notable changes to oh-my-matrix (omm).
 
 ### Added
 
-- `docs/contracts/skill-lifecycle.md` — canonical lifecycle contract for
-  omm skills. Defines: §1 Lifecycle Conventions (state init, agent
-  loading, terminal markers — applies to ALL skills); §2 3-Phase Pipeline
-  Pattern (discover → generate → verify — used by single-artifact skills);
-  §3 alternative phase shapes for non-3-phase skills (interview loops,
-  QA cycles); §4 versioning policy.
+- `WorkflowStateOf<M>` mapped type in `omm-types.ts` — maps a `WorkflowMode`
+  literal (`"ralph"` | `"autopilot"` | `"team"`) to its corresponding
+  state shape (`RalphState` | `AutopilotState` | `TeamState`). Lets the
+  lifecycle API give callers compile-time narrowing without manual casts.
 
 ### Changed
 
-- `omm-skills/omm-docs/SKILL.md` and `omm-skills/omm-ui/SKILL.md`:
-  removed verbatim lifecycle boilerplate (~80 lines each); now reference
-  the contract for §1+§2 conventions, retain only skill-specific
-  overrides (which agent each phase loads, what findings to capture,
-  what verification checks apply).
-- `omm-skills/omm-deep-interview/SKILL.md` and
-  `omm-skills/omm-ultraqa/SKILL.md`: added one-line cross-reference to
-  the contract §1+§3 (these skills use custom phase shapes).
-- `CONTEXT.md` Skill definition: extended with cross-reference to the
-  lifecycle contract; introduces the terms "Lifecycle Conventions" and
-  "3-Phase Pipeline Pattern" into the domain language.
-
-### Architecture
-
-This change addresses the "skill lifecycle boilerplate" deepening
-opportunity: 4 SKILL.md files were copy-pasting the same lifecycle
-protocol. The new contract concentrates the protocol in one place
-and lets each SKILL.md focus on what makes it distinct. Locality
-improvement: changing the lifecycle protocol (e.g., new terminal
-status) is now a one-file edit. No code changes; markdown only.
+- `omm-mode-lifecycle.ts` lifecycle API (`startMode`, `updateModeState`,
+  `cancelMode`, `getModeState`) now generic over `M extends WorkflowMode`.
+  Return types use `WorkflowStateOf<M>` instead of
+  `Record<string, unknown>`. Callers get narrowed state shapes:
+  `getModeState("ralph")` returns `RalphState | null` directly.
+- Internal `writeState` helper kept untyped (`InternalWriteResult`) since
+  it operates on validated-but-untyped JSON; the public API casts at the
+  boundary. This concentrates the `as` cast in one location instead of
+  spreading it across every caller.
+- `docs/contracts/skill-lifecycle.md` — canonical lifecycle contract
+  (added in earlier Unreleased entry).
+- `omm-skills/{omm-docs,omm-ui,omm-deep-interview,omm-ultraqa}/SKILL.md` —
+  reference contract instead of restating lifecycle protocol verbatim.
+- `CONTEXT.md` — Skill definition introduces "Lifecycle Conventions" and
+  "3-Phase Pipeline Pattern" as domain terms.
 
 ## [0.4.2] — 2026-05-08
 
