@@ -54,7 +54,7 @@ Each round follows this strict sequence:
 Load the planner role prompt:
 
 ```
-omm_agent_prompt_get({ name: "analyst" })
+omm_agent_prompt_get({ name: "planner" })
 ```
 
 Create or revise the implementation plan. Include:
