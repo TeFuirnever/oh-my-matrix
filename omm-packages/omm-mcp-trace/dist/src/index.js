@@ -179,6 +179,37 @@ function traceDir() {
 function tracePath(sessionId) {
     return join(traceDir(), `${sessionId.trim()}.jsonl`);
 }
+const TRACE_URI_PATTERN = /^omm:\/\/trace\/([a-z0-9_-]+)$/i;
+const TRACE_MIME = "application/x-jsonlines";
+async function listTraceResources() {
+    try {
+        const files = await readdir(traceDir());
+        return files
+            .filter((f) => f.endsWith(".jsonl") && !f.startsWith("."))
+            .map((f) => f.slice(0, -6))
+            .filter((sessionId) => KEY_PATTERN.test(sessionId))
+            .sort()
+            .map((sessionId) => ({
+            uri: `omm://trace/${sessionId}`,
+            name: `omm trace: ${sessionId}`,
+            description: `Trace events for session ${sessionId}`,
+            mimeType: TRACE_MIME,
+        }));
+    }
+    catch {
+        return [];
+    }
+}
+async function readTraceResource(uri) {
+    const match = TRACE_URI_PATTERN.exec(uri);
+    if (!match) {
+        throw new OmmError(OMM_E_KEY_INVALID, `unsupported resource URI: ${uri}`, "URI must match omm://trace/<sessionId>");
+    }
+    const sessionId = match[1];
+    assertSafeKey(sessionId);
+    const text = await readFile(tracePath(sessionId), "utf8");
+    return { uri, mimeType: TRACE_MIME, text };
+}
 function validateEvent(value) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return "event must be a JSON object";
@@ -473,7 +504,7 @@ export async function processRequest(req) {
     if (req.method === "initialize") {
         return makeResponse(id, {
             protocolVersion: "2024-11-05",
-            capabilities: { tools: {} },
+            capabilities: { tools: {}, resources: {} },
             serverInfo: { name: "omm-trace", version: "0.4.0" },
         });
     }
@@ -482,6 +513,29 @@ export async function processRequest(req) {
     }
     if (req.method === "tools/list") {
         return makeResponse(id, { tools: TOOLS });
+    }
+    if (req.method === "resources/list") {
+        const resources = await listTraceResources();
+        return makeResponse(id, { resources });
+    }
+    if (req.method === "resources/read") {
+        const params = req.params;
+        if (typeof params?.uri !== "string") {
+            return makeErrorResponse(id, -32602, "resources/read: uri required");
+        }
+        try {
+            const contents = await readTraceResource(params.uri);
+            return makeResponse(id, { contents: [contents] });
+        }
+        catch (err) {
+            if (err instanceof OmmError) {
+                const data = { code: err.ommCode };
+                if (err.hint !== undefined)
+                    data.hint = err.hint;
+                return makeErrorResponse(id, err.rpcCode, err.message, data);
+            }
+            return makeErrorResponse(id, -32000, err.message);
+        }
     }
     if (req.method === "tools/call") {
         const params = req.params;
