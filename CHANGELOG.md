@@ -2,7 +2,7 @@
 
 All notable changes to oh-my-matrix (omm).
 
-## [Unreleased]
+## [0.4.2] — 2026-05-08
 
 ### Added
 

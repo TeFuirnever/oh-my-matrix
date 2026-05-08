@@ -443,7 +443,7 @@ export async function processRequest(req) {
         return makeResponse(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {}, resources: {}, prompts: {} },
-            serverInfo: { name: "omm-state", version: "0.4.1" },
+            serverInfo: { name: "omm-state", version: "0.4.2" },
         });
     }
     if (req.method === "notifications/initialized") {

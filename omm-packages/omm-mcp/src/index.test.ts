@@ -140,7 +140,7 @@ describe("omm-mcp server", () => {
         assert.equal(result.protocolVersion, "2024-11-05");
         const serverInfo = result.serverInfo as Record<string, string>;
         assert.equal(serverInfo.name, "omm-state");
-        assert.equal(serverInfo.version, "0.4.1");
+        assert.equal(serverInfo.version, "0.4.2");
       });
     });
   });

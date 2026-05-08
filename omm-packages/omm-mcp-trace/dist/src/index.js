@@ -505,7 +505,7 @@ export async function processRequest(req) {
         return makeResponse(id, {
             protocolVersion: "2024-11-05",
             capabilities: { tools: {}, resources: {} },
-            serverInfo: { name: "omm-trace", version: "0.4.1" },
+            serverInfo: { name: "omm-trace", version: "0.4.2" },
         });
     }
     if (req.method === "notifications/initialized") {
