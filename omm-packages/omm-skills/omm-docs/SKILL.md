@@ -46,114 +46,60 @@ By convention:
 
 ## Lifecycle
 
+Follows the standard 3-phase pipeline (see `docs/contracts/skill-lifecycle.md` §2). State key: `docs`. Skill-specific overrides below.
+
 ### Initialize
 
-Write state via `omm_state_write` with key `docs`:
+Standard 3-phase init (per contract §2.3) with `target_kind ∈ {file, topic, readme, migration}`:
 
 ```json
 {
   "mode": "docs",
   "active": true,
   "target": "<input target>",
+  "target_kind": "<kind>",
   "output_path": null,
-  "current_phase": "research",
-  "research_findings": null,
-  "draft_path": null,
+  "current_phase": "discover",
+  "discover_findings": null,
+  "artifact": null,
   "verification": null,
   "status": "running",
   "startedAt": "<ISO8601>"
 }
 ```
 
-### Phase 1: Research
+### Phase 1: Discover (overrides)
 
-Load the document-specialist persona:
+Agent: `document-specialist`. Captures:
 
-```
-omm_agent_prompt_get({ name: "document-specialist" })
-```
+- **What it is** (one-sentence summary)
+- **How it works** (entry points, data flow, key invariants)
+- **Inputs/outputs** (signatures, schemas, error modes)
+- **Source citations** with file paths + line ranges (e.g., `omm-state-validation.ts:42-68`)
+- **Open questions** (uncertainties to resolve before drafting)
 
-Document-specialist tasks:
+Classify the target first: project-specific (read local repo) vs external API/framework (curated docs first, web second).
 
-1. **Classify the target**: project-specific (read local repo) vs external API/framework (curated docs first, web second).
-2. **Gather sources**: Read for local files, Glob/Grep for related code, Bash for git history when version context matters.
-3. **Capture findings** as a structured brief:
-   - **What it is** (one-sentence summary)
-   - **How it works** (entry points, data flow, key invariants)
-   - **Inputs/outputs** (signatures, schemas, error modes)
-   - **Source citations** with file paths + line ranges (e.g., `omm-state-validation.ts:42-68`)
-   - **Open questions** (uncertainties to resolve before drafting)
+### Phase 2: Generate (overrides)
 
-4. Persist findings to state:
+Agent: `writer`. Tasks:
 
-```
-omm_state_write({
-  key: "docs",
-  value: { ...prevState, research_findings: { ... }, current_phase: "draft" }
-})
-```
+1. Read `discover_findings` from state.
+2. Match existing style: scan 1-2 sibling docs in the target directory before drafting.
+3. Write the doc to `output_path` with project-style headers, fenced code blocks, tables, active voice.
+4. **Refuse to invent**: if findings lack a fact the doc needs, append it to `open_questions` and proceed without it.
 
-### Phase 2: Draft
+### Phase 3: Verify (overrides)
 
-Load the writer persona:
-
-```
-omm_agent_prompt_get({ name: "writer" })
-```
-
-Writer tasks:
-
-1. **Read the research findings** from state.
-2. **Match existing style**: scan 1-2 sibling docs in the target directory before drafting (use Read).
-3. **Write the doc** to the output path with:
-   - Headers matching the project's existing scheme
-   - Code blocks with language tags
-   - Tables for structured data
-   - Active voice, direct language, no filler
-4. **Refuse to invent**: if findings lack a fact the doc needs, do NOT make it up. Append it to `open_questions` and proceed without it.
-5. Persist draft path to state:
-
-```
-omm_state_write({
-  key: "docs",
-  value: { ...prevState, draft_path: "<output_path>", current_phase: "verify" }
-})
-```
-
-### Phase 3: Verify
-
-Verification tasks (model-driven, no agent persona needed):
+Programmatic checks:
 
 1. **Code blocks**: extract every fenced code block. Run executable ones via Bash; flag any that fail.
 2. **Commands**: extract every `$ ...` or sentence-form command. Run them; flag failures.
 3. **File path references**: confirm every `path/to/file.ts:Line` reference resolves (use Read).
 4. **Cross-doc links**: extract every `[...](./...)` link to a relative file; confirm target exists.
-5. **Style sanity check**: scan for AI slop (purple prose, generic filler, "delve into", "leverage", etc.).
+5. **Slop scan**: flag purple prose, generic filler, "delve into", "leverage" used in filler sense.
 
-Capture verification results:
-
-```json
-{
-  "verification": {
-    "code_blocks_run": <count>,
-    "code_blocks_failed": <count>,
-    "commands_run": <count>,
-    "commands_failed": <count>,
-    "broken_paths": ["<file:line>", ...],
-    "broken_links": ["<href>", ...],
-    "slop_flags": ["<line>: <pattern>", ...]
-  }
-}
-```
-
-If any failures, return to Phase 2 with the failed items for re-drafting. If clean, mark the run complete:
-
-```
-omm_state_write({
-  key: "docs",
-  value: { ...prevState, status: "complete", active: false, completedAt: "<ISO8601>" }
-})
-```
+If any failures, return to Phase 2 with the failed items for re-drafting (max 2 redraft cycles before `status: "blocked"`).
 
 ## Output
 

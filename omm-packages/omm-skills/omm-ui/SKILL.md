@@ -47,9 +47,11 @@ By convention:
 
 ## Lifecycle
 
+Follows the standard 3-phase pipeline (see `docs/contracts/skill-lifecycle.md` §2). State key: `ui`. Skill-specific overrides below.
+
 ### Initialize
 
-Write state via `omm_state_write` with key `ui`:
+Standard 3-phase init (per contract §2.3) with `target_kind ∈ {component, spec, theme}` and additional fields:
 
 ```json
 {
@@ -61,6 +63,7 @@ Write state via `omm_state_write` with key `ui`:
   "current_phase": "discover",
   "framework": null,
   "aesthetic_direction": null,
+  "discover_findings": null,
   "artifact": null,
   "verification": null,
   "status": "running",
@@ -68,15 +71,9 @@ Write state via `omm_state_write` with key `ui`:
 }
 ```
 
-### Phase 1: Discover
+### Phase 1: Discover (overrides)
 
-Load the designer persona:
-
-```
-omm_agent_prompt_get({ name: "designer" })
-```
-
-Designer tasks:
+Agent: `designer`. Tasks:
 
 1. **Detect framework**: Read `package.json` to identify React / Next / Vue / Angular / Svelte / Solid. Set `state.framework`.
 2. **Study existing UI patterns**: Glob the target directory and 1-2 sibling component files. Read them. Note: component structure, styling approach (CSS modules, Tailwind, styled-components), animation library (Framer Motion, Motion One, native), file naming convention.
@@ -84,80 +81,32 @@ Designer tasks:
    - **Editorial-fit**: editorial / hospitality / portfolio / brand → editorial defaults (cream backgrounds, serif display, terracotta accents) acceptable.
    - **Operational**: dashboard / dev tools / fintech / healthcare / enterprise / data-viz → MUST override editorial defaults with concrete alternative palette (hex codes) and typeface stack.
    - **Ambiguous**: propose 3-4 distinct visual directions (each: bg hex / accent hex / typeface — one-line rationale), select best-fit default for the brief, and proceed. Do not pause for user clarification unless runtime explicitly supports interactive input.
-4. **Commit aesthetic direction**: Write to state:
+4. **Commit aesthetic direction** in state with `palette`, `typography`, `motion`, `rationale` fields.
 
-```json
-{
-  "framework": "react+tailwind",
-  "aesthetic_direction": {
-    "domain": "operational",
-    "palette": { "bg": "#0F172A", "accent": "#3B82F6", "text": "#E2E8F0" },
-    "typography": { "display": "Geist Sans", "body": "Inter Tight", "mono": "JetBrains Mono" },
-    "motion": "minimal — focus + transition only, no gratuitous animation",
-    "rationale": "operational dashboard demands legibility over editorial flourish; Geist+Inter Tight pair gives technical-but-warm density"
-  }
-}
-```
+### Phase 2: Generate (overrides)
 
-5. Persist state and transition:
+Agent: `designer` (same persona, new phase).
 
-```
-omm_state_write({ key: "ui", value: { ...prev, current_phase: "generate" } })
-```
+1. Read `framework` + `aesthetic_direction` from state.
+2. Generate the artifact based on `target_kind`:
+   - **component**: production-grade component file with typed props interface, accessibility (ARIA, keyboard), responsive breakpoints, idiomatic framework primitives, no `console.log`, no commented-out code.
+   - **spec**: markdown design spec with sections — Aesthetic Direction, Component Inventory, Interaction Map, Token Reference, Implementation Notes, Open Questions.
+   - **theme**: CSS custom properties file AND/OR Tailwind config fragment exporting palette, typography, spacing.
+3. **Refuse to invent unrequested features**: stay within scope. Append unresolved facts to `open_questions`.
 
-### Phase 2: Generate
+### Phase 3: Verify (overrides)
 
-Designer continues (same persona, new phase):
+Programmatic checks:
 
-1. **Read state** for framework + aesthetic direction.
-2. **Generate the artifact** based on `target_kind`:
-   - **component**: Write a complete, production-grade component file. Include: typed props interface, accessibility (ARIA, keyboard), responsive breakpoints, idiomatic framework primitives, no console.log, no commented-out code.
-   - **spec**: Write a markdown design spec with sections — Aesthetic Direction, Component Inventory, Interaction Map, Token Reference, Implementation Notes, Open Questions.
-   - **theme**: Write design tokens — CSS custom properties file AND/OR Tailwind config fragment that exports the palette, typography stack, and spacing scale.
-3. **Refuse to invent unrequested features**: stay within scope. If the artifact requires a fact not yet captured (e.g., specific brand color), append it to `open_questions` and ship without it.
-4. Persist artifact path to state:
-
-```
-omm_state_write({
-  key: "ui",
-  value: { ...prev, output_path: "<path>", artifact: "<short summary>", current_phase: "verify" }
-})
-```
-
-### Phase 3: Verify
-
-Verification tasks (model-driven, no agent persona needed):
-
-1. **Compile / typecheck**: For component artifacts, run repo-native diagnostics via Bash (e.g., `pnpm typecheck`, `tsc --noEmit`). For Vue/Svelte projects, use the project's typecheck command. Skip for pure spec/theme markdown.
-2. **Lint**: Run repo-native lint (e.g., `pnpm lint`, `biome check`). Capture warnings vs errors separately — only errors block.
-3. **Render check (optional)**: If a dev server is wired in package.json (e.g., `pnpm dev`), launch in background, hit the relevant route via curl or fetch, capture HTTP status. Skip if no dev server is configured.
-4. **Style sanity check (slop scan)**:
-   - Grep for editorial-default leakage on operational briefs: `#F4F1EA`, `#FAF5EE`, `Fraunces`, `Playfair`, `Georgia.*serif` — flag if domain check classified the brief as operational.
-   - Grep for AI slop: purple-to-pink gradients (`from-purple.*to-pink`, `linear-gradient.*purple.*pink`), generic font stacks (`font-family: Inter, Roboto, system-ui`), filler comments (`// TODO: implement`, `// magic happens here`).
+1. **Compile / typecheck**: For component artifacts, run repo-native diagnostics via Bash (e.g., `pnpm typecheck`, `tsc --noEmit`). Skip for pure spec/theme markdown.
+2. **Lint**: Run repo-native lint (e.g., `pnpm lint`, `biome check`). Errors block; warnings don't.
+3. **Render check (optional)**: If a dev server is wired in package.json, launch in background, hit the relevant route, capture HTTP status. Skip if no dev server is configured.
+4. **Slop scan**:
+   - Editorial-default leakage on operational briefs: grep for `#F4F1EA`, `#FAF5EE`, `Fraunces`, `Playfair`, `Georgia.*serif` — flag if domain check classified as operational.
+   - AI slop: purple-to-pink gradients (`from-purple.*to-pink`, `linear-gradient.*purple.*pink`), generic font stacks (`font-family: Inter, Roboto, system-ui`), filler comments (`// TODO: implement`, `// magic happens here`).
 5. **A11y minimum** (component artifacts only): grep for missing `alt=""` on `<img>`, missing `aria-label` on icon-only buttons, missing `role` on custom interactive elements.
 
-Capture verification results:
-
-```json
-{
-  "verification": {
-    "typecheck": { "ok": true, "errors": 0 },
-    "lint": { "errors": 0, "warnings": 2 },
-    "render_check": { "skipped": true, "reason": "no dev server configured" },
-    "slop_flags": [],
-    "a11y_flags": []
-  }
-}
-```
-
-If any blocking failures, return to Phase 2 with the failed items for re-generation. If clean, mark the run complete:
-
-```
-omm_state_write({
-  key: "ui",
-  value: { ...prev, status: "complete", active: false, completedAt: "<ISO8601>" }
-})
-```
+If any blocking failures, return to Phase 2 (max 2 regeneration cycles before `status: "blocked"`).
 
 ## Output
 

@@ -8,6 +8,8 @@ version: 0.1.0
 
 Start an autonomous QA cycling session.
 
+> Lifecycle conventions (state init, agent loading, terminal markers) follow `docs/contracts/skill-lifecycle.md` §1. This skill uses a custom 5-step cycle phase shape (not the standard 3-phase pipeline) — see §3 of the contract for context.
+
 ## Usage
 
 ```

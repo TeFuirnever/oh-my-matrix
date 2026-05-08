@@ -8,6 +8,8 @@ version: 0.1.0
 
 Start a Socratic deep interview to crystallize vague ideas into clear specifications.
 
+> Lifecycle conventions (state init, agent loading, terminal markers) follow `docs/contracts/skill-lifecycle.md` §1. This skill uses a custom interview-loop phase shape (not the standard 3-phase pipeline) — see §3 of the contract for context.
+
 ## Usage
 
 ```

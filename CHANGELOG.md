@@ -2,6 +2,40 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [Unreleased]
+
+### Added
+
+- `docs/contracts/skill-lifecycle.md` — canonical lifecycle contract for
+  omm skills. Defines: §1 Lifecycle Conventions (state init, agent
+  loading, terminal markers — applies to ALL skills); §2 3-Phase Pipeline
+  Pattern (discover → generate → verify — used by single-artifact skills);
+  §3 alternative phase shapes for non-3-phase skills (interview loops,
+  QA cycles); §4 versioning policy.
+
+### Changed
+
+- `omm-skills/omm-docs/SKILL.md` and `omm-skills/omm-ui/SKILL.md`:
+  removed verbatim lifecycle boilerplate (~80 lines each); now reference
+  the contract for §1+§2 conventions, retain only skill-specific
+  overrides (which agent each phase loads, what findings to capture,
+  what verification checks apply).
+- `omm-skills/omm-deep-interview/SKILL.md` and
+  `omm-skills/omm-ultraqa/SKILL.md`: added one-line cross-reference to
+  the contract §1+§3 (these skills use custom phase shapes).
+- `CONTEXT.md` Skill definition: extended with cross-reference to the
+  lifecycle contract; introduces the terms "Lifecycle Conventions" and
+  "3-Phase Pipeline Pattern" into the domain language.
+
+### Architecture
+
+This change addresses the "skill lifecycle boilerplate" deepening
+opportunity: 4 SKILL.md files were copy-pasting the same lifecycle
+protocol. The new contract concentrates the protocol in one place
+and lets each SKILL.md focus on what makes it distinct. Locality
+improvement: changing the lifecycle protocol (e.g., new terminal
+status) is now a one-file edit. No code changes; markdown only.
+
 ## [0.4.2] — 2026-05-08
 
 ### Added

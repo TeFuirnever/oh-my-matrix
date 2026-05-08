@@ -94,6 +94,8 @@ Both styles parse identically through `parseAgentPrompt` (body is opaque text). 
 
 A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured workflow (deep-interview, ralplan, ultrawork, ultraqa, etc.) that orchestrates agent prompts and state tools.
 
+All skills follow the **Lifecycle Conventions** (state init, agent loading, terminal markers) defined in `docs/contracts/skill-lifecycle.md` §1. Skills that produce a single artifact (omm-docs, omm-ui, future omm-research / omm-refactor) follow the **3-Phase Pipeline Pattern** (discover → generate → verify) defined in §2 of the same contract.
+
 ## Architecture Invariants
 
 - **ADR-001**: Pure plugin, no CLI — omm is consumed via OpenClaw plugin API or MCP
