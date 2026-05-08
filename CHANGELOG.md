@@ -52,7 +52,8 @@ ralplan-omm-next-best-practices (2026-05-08).
 - P2 agents (git-master, scientist, code-simplifier) — will be ported
   when omm-git / omm-research / omm-refactor skills are scheduled
 - ~~MCP R1 implementation~~ — **Done** (see "MCP R1" subsection below)
-- `notifications/progress` capability verification — separate research task
+- ~~`notifications/progress` capability verification~~ — **Done** (DEFER per
+  MA self-audit P6 evidence; see `docs/research/mcp-progress-notification-survey.md`)
 
 ### Added (MCP R1)
 
