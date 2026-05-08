@@ -54,6 +54,42 @@ Terminal record stamped on a state when a mode ends. Discriminated by `kind`: `c
 
 A markdown file (`agent-prompts/{name}.md`) providing a specialized persona (analyst, architect, critic, executor, verifier). Loaded by `omm_agent_prompt_get` for SKILL.md orchestration.
 
+As of plan ralplan-omm-next-best-practices (2026-05-08), the bundled set is **16 prompts** (5 starter + 11 ported from oh-my-claudecode). Ported prompts retain their omc XML structure but are stripped of Claude-only tool references (7-token strip-check enforced in CI).
+
+**Prompt Style Coexistence Policy:**
+
+Two styles coexist in `agent-prompts/`:
+
+- **Lean style** (5 starter prompts): concise, ~20 lines, prose-only, OpenClaw-native design. Example: `analyst.md`.
+- **XML-structured style** (11 ported prompts): ~100-200 lines with `<Role>`, `<Success_Criteria>`, `<Constraints>`, etc. blocks, retained from oh-my-claudecode for battle-tested fidelity and traceability.
+
+Both styles parse identically through `parseAgentPrompt` (body is opaque text). Starter prompts MAY be refactored to XML structure over time if clarity benefits warrant, but ported prompts MUST NOT be rewritten to lean style without explicit approval (violates "borrow proven personas, do not rewrite them" principle).
+
+**Agent Inventory (post-Phase-1):**
+
+| Name | Model tier | Skill anchor | Anchor reality | Source |
+|------|------------|--------------|----------------|--------|
+| analyst | opus | omm-deep-interview, omm-ralplan | REAL | bundled (lean) |
+| architect | opus | omm-ralplan, omm-ultraqa | REAL | bundled (lean) |
+| critic | opus | omm-ralplan | REAL | bundled (lean) |
+| executor | sonnet | omm-autopilot | REAL | bundled (lean) |
+| verifier | sonnet | omm-autopilot, omm-ralph | REAL | bundled (lean) |
+| planner | opus | omm-ralplan (Phase 1 step 1) | REAL | ported from omc (XML) |
+| tracer | sonnet | omm-deep-interview | REAL | ported from omc (XML) |
+| code-reviewer | opus | omm-ultraqa | REAL | ported from omc (XML) |
+| security-reviewer | opus | omm-ultraqa | REAL | ported from omc (XML) |
+| test-engineer | sonnet | omm-ultraqa | REAL | ported from omc (XML) |
+| debugger | sonnet | omm-autopilot | REAL | ported from omc (XML) |
+| qa-tester | sonnet | omm-ultraqa | REAL | ported from omc (XML) |
+| explore | haiku | omm-deep-interview | REAL | ported from omc (XML) |
+| document-specialist | sonnet | omm-docs (future, P1) | PLACEHOLDER | ported from omc (XML) |
+| designer | sonnet | omm-ui (future, P1) | PLACEHOLDER | ported from omc (XML) |
+| writer | haiku | omm-docs (future, P1) | PLACEHOLDER | ported from omc (XML) |
+
+**Placeholder agents** (3): document-specialist, designer, writer — anchors are named future skills (omm-docs, omm-ui), not speculative. Will be activated when target skills are scheduled.
+
+**Deferred agents** (3, NOT in this plan): git-master, scientist, code-simplifier — to be ported in a follow-up plan when omm-git, omm-research, omm-refactor skills are scheduled.
+
 ### Skill
 
 A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured workflow (deep-interview, ralplan, ultrawork, ultraqa, etc.) that orchestrates agent prompts and state tools.
@@ -74,3 +110,5 @@ A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured 
 | TRACE_SPECS 使用 `Partial` + `!` | 新增 trace event 时可能遗漏 spec | 可改为 `satisfies` 完整性检查 |
 | omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
 | manifest `apiVersion` 作用不确定 | 未来 OpenClaw 版本可能读取此字段 | 监控 OpenClaw changelog |
+| 11 ported agent prompts 是 point-in-time snapshots | 与 oh-my-claudecode 上游 agent prompts 可能漂移 | resync policy 是 owner-driven，不是自动化；7-token strip-check 在 CI 中防止 Claude-only token 回流 |
+| 3 PLACEHOLDER agents 无当前 skill 消费者 | document-specialist, designer, writer 等待 omm-docs / omm-ui 被调度 | inventory 表显式标注 PLACEHOLDER，待 target skill 落地后转为 REAL |
