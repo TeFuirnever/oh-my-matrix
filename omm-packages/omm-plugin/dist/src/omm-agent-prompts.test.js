@@ -138,4 +138,48 @@ describe("bundled agent prompts", () => {
         }
     });
 });
+describe("expanded agent inventory (Phase 1 ported prompts)", () => {
+    const PORTED_PROMPTS = [
+        "planner",
+        "tracer",
+        "code-reviewer",
+        "security-reviewer",
+        "test-engineer",
+        "debugger",
+        "qa-tester",
+        "explore",
+        "document-specialist",
+        "designer",
+        "writer",
+    ];
+    const BANNED_TOKENS = [
+        "Task(subagent_type=",
+        "AskUserQuestion",
+        "Agent(",
+        "lsp_diagnostics",
+        "ast_grep_search",
+        "<External_Consultation>",
+        "mcp__plugin_oh-my-claudecode",
+    ];
+    it("ships >= 16 agent prompts (5 starter + 11 ported)", async () => {
+        const names = await listAgentPrompts(BUNDLED_PROMPTS_DIR);
+        assert.ok(names.length >= 16, `expected >= 16 prompts, got ${names.length}`);
+    });
+    it("each ported prompt parses and has no Claude-only semantic tokens", async () => {
+        const prompts = await Promise.all(PORTED_PROMPTS.map((name) => loadAgentPrompt(name, BUNDLED_PROMPTS_DIR)));
+        for (const p of prompts) {
+            assert.ok(p.body.length > 100, `${p.name} body too short`);
+            for (const token of BANNED_TOKENS) {
+                assert.ok(!p.body.includes(token), `${p.name} contains banned token "${token}"`);
+            }
+        }
+    });
+    it("each ported prompt has at least one OpenClaw-compatible tool reference", async () => {
+        const allowedTools = /\b(Read|Write|Edit|Bash|Grep|Glob|omm_state_|omm_agent_prompt_|omm_memory_|omm_trace_)\b/;
+        const prompts = await Promise.all(PORTED_PROMPTS.map((name) => loadAgentPrompt(name, BUNDLED_PROMPTS_DIR)));
+        for (const p of prompts) {
+            assert.ok(allowedTools.test(p.body), `${p.name} body has no OpenClaw-compatible tool reference`);
+        }
+    });
+});
 //# sourceMappingURL=omm-agent-prompts.test.js.map
