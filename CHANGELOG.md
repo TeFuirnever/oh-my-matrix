@@ -11,15 +11,24 @@ All notable changes to oh-my-matrix (omm).
   (research) and writer (draft), followed by a verification phase
   (code-block execution + link checks + slop scan). Three-phase
   separation enforces "writer never invents facts".
-- Skill count: 9 → 10.
+- **omm-ui skill** at `omm-packages/omm-skills/omm-ui/SKILL.md` —
+  UI artifact generation pipeline (component / spec / theme outputs)
+  orchestrating the designer agent across discover → generate →
+  verify phases. Mandates a domain check that overrides the model's
+  editorial-leaning defaults for operational briefs (dashboards,
+  fintech, healthcare, dev tools). Produces deliverable files for
+  the host (e.g., MatrixAssistant) — does not render UI itself
+  (ADR-001).
+- Skill count: 9 → 11.
 
 ### Changed
 
-- Agent inventory in `CONTEXT.md`: `document-specialist` and `writer`
-  flipped from PLACEHOLDER to REAL anchored to `omm-docs`.
-- Placeholder agent count drops from 3 to 1 (only `designer` remains,
-  awaiting `omm-ui`).
-- REAL agents count rises from 13 to 15.
+- Agent inventory in `CONTEXT.md`: `document-specialist`, `writer`,
+  and `designer` all flipped from PLACEHOLDER to REAL — anchored to
+  `omm-docs` (writer + document-specialist) and `omm-ui` (designer).
+- Placeholder agent count drops from 3 to **0**. Every P0/P1 agent
+  in the inventory now has a real skill consumer.
+- REAL agents count rises from 13 to 16.
 
 ## [0.4.1] — 2026-05-08
 
