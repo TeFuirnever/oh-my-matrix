@@ -2,8 +2,9 @@
 /** omm-state MCP server — exposes omm state read/write over stdio JSON-RPC. */
 import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile, } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 /* ── Inline error codes (ADR-003 zero-dep: do NOT import from omm-plugin) ── */
 const OMM_E_KEY_MISSING = "OMM_E_KEY_MISSING";
 const OMM_E_KEY_INVALID = "OMM_E_KEY_INVALID";
@@ -232,6 +233,74 @@ function stateRoot() {
 function stateDir() {
     return join(stateRoot(), "state");
 }
+const STATE_URI_PATTERN = /^omm:\/\/state\/([a-z0-9_-]+)$/i;
+async function listStateResources() {
+    try {
+        const files = await readdir(stateDir());
+        return files
+            .filter((f) => f.endsWith(".json") && !f.startsWith("."))
+            .map((f) => f.slice(0, -5))
+            .filter((key) => KEY_PATTERN.test(key))
+            .sort()
+            .map((key) => ({
+            uri: `omm://state/${key}`,
+            name: `omm state: ${key}`,
+            description: `Persisted ${key} state JSON`,
+            mimeType: "application/json",
+        }));
+    }
+    catch {
+        return [];
+    }
+}
+async function readStateResource(uri) {
+    const match = STATE_URI_PATTERN.exec(uri);
+    if (!match) {
+        throw new OmmError(OMM_E_KEY_INVALID, `unsupported resource URI: ${uri}`, "URI must match omm://state/<key>");
+    }
+    const key = match[1];
+    assertSafeKey(key);
+    const filePath = join(stateDir(), `${key}.json`);
+    const text = await readFile(filePath, "utf8");
+    return { uri, mimeType: "application/json", text };
+}
+/* ── MCP Prompts (agent-prompts/<name>.md exposed read-only) ──
+ *
+ * Path resolution mirrors omm-plugin/src/omm-agent-prompts.ts:26-31. From
+ * the compiled dist/src/index.js, traverse up to the package root and over
+ * to omm-skills/agent-prompts/. Returns [] if the directory is missing so
+ * a deployment gap surfaces as empty prompts/list rather than a hard fail.
+ * ── */
+const PROMPT_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+function agentPromptsDir() {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return join(here, "..", "..", "..", "omm-skills", "agent-prompts");
+}
+async function listAgentPromptsForMcp() {
+    try {
+        const files = await readdir(agentPromptsDir());
+        return files
+            .filter((f) => f.endsWith(".md") && !f.startsWith("."))
+            .map((f) => f.slice(0, -3))
+            .filter((name) => PROMPT_NAME_PATTERN.test(name))
+            .sort()
+            .map((name) => ({ name, description: `omm agent prompt: ${name}` }));
+    }
+    catch {
+        return [];
+    }
+}
+async function getAgentPromptForMcp(name) {
+    if (typeof name !== "string" || !PROMPT_NAME_PATTERN.test(name)) {
+        throw new OmmError(OMM_E_KEY_INVALID, `invalid prompt name: ${typeof name === "string" ? name : "(missing)"}`, "Name must match /^[a-z][a-z0-9-]*$/");
+    }
+    const filePath = join(agentPromptsDir(), `${name}.md`);
+    const text = await readFile(filePath, "utf8");
+    return {
+        description: `omm agent prompt: ${name}`,
+        messages: [{ role: "system", content: { type: "text", text } }],
+    };
+}
 const TOOLS = [
     {
         name: "omm_state_read",
@@ -373,7 +442,7 @@ export async function processRequest(req) {
     if (req.method === "initialize") {
         return makeResponse(id, {
             protocolVersion: "2024-11-05",
-            capabilities: { tools: {} },
+            capabilities: { tools: {}, resources: {}, prompts: {} },
             serverInfo: { name: "omm-state", version: "0.4.0" },
         });
     }
@@ -382,6 +451,49 @@ export async function processRequest(req) {
     }
     if (req.method === "tools/list") {
         return makeResponse(id, { tools: TOOLS });
+    }
+    if (req.method === "resources/list") {
+        const resources = await listStateResources();
+        return makeResponse(id, { resources });
+    }
+    if (req.method === "resources/read") {
+        const params = req.params;
+        if (typeof params?.uri !== "string") {
+            return makeErrorResponse(id, -32602, "resources/read: uri required");
+        }
+        try {
+            const contents = await readStateResource(params.uri);
+            return makeResponse(id, { contents: [contents] });
+        }
+        catch (err) {
+            if (err instanceof OmmError) {
+                const data = { code: err.ommCode };
+                if (err.hint !== undefined)
+                    data.hint = err.hint;
+                return makeErrorResponse(id, err.rpcCode, err.message, data);
+            }
+            return makeErrorResponse(id, -32000, err.message);
+        }
+    }
+    if (req.method === "prompts/list") {
+        const prompts = await listAgentPromptsForMcp();
+        return makeResponse(id, { prompts });
+    }
+    if (req.method === "prompts/get") {
+        const params = req.params;
+        try {
+            const result = await getAgentPromptForMcp(params?.name);
+            return makeResponse(id, result);
+        }
+        catch (err) {
+            if (err instanceof OmmError) {
+                const data = { code: err.ommCode };
+                if (err.hint !== undefined)
+                    data.hint = err.hint;
+                return makeErrorResponse(id, err.rpcCode, err.message, data);
+            }
+            return makeErrorResponse(id, -32000, err.message);
+        }
     }
     if (req.method === "tools/call") {
         const params = req.params;
