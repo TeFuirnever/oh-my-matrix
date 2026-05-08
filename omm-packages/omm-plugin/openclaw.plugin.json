@@ -1,7 +1,7 @@
 {
   "id": "omm",
   "name": "omm",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "apiVersion": "0.3",
   "description": "OpenClaw-native orchestration extension: state, hooks, agent prompts, skills, and MCP servers.",
   "configSchema": {

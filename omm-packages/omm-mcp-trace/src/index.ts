@@ -645,7 +645,7 @@ export async function processRequest(
     return makeResponse(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {}, resources: {} },
-      serverInfo: { name: "omm-trace", version: "0.4.0" },
+      serverInfo: { name: "omm-trace", version: "0.4.1" },
     });
   }
 

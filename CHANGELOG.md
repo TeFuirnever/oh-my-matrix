@@ -2,7 +2,7 @@
 
 All notable changes to oh-my-matrix (omm).
 
-## [Unreleased]
+## [0.4.1] — 2026-05-08
 
 Agent prompt expansion + MCP capability research per plan
 ralplan-omm-next-best-practices (2026-05-08).
