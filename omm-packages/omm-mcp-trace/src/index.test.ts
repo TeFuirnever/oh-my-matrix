@@ -628,4 +628,88 @@ describe("omm-trace MCP server", () => {
       });
     });
   });
+
+  describe("initialize advertises Resources capability", () => {
+    it("returns capabilities including resources", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("initialize", {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "test", version: "0.0.0" },
+        });
+        const caps = (r.result as { capabilities: Record<string, unknown> })
+          .capabilities;
+        assert.deepEqual(caps, { tools: {}, resources: {} });
+      });
+    });
+  });
+
+  describe("Resources (omm://trace/<sessionId>)", () => {
+    it("resources/list returns trace files as omm://trace/<sessionId>", async () => {
+      await withClient(async (client, stateRoot) => {
+        const traceDir = join(stateRoot, "trace");
+        await mkdir(traceDir, { recursive: true });
+        await writeFile(
+          join(traceDir, "session-alpha.jsonl"),
+          '{"t":1}\n',
+          "utf8",
+        );
+        const r = await client.send("resources/list");
+        const resources = (
+          r.result as { resources: Array<{ uri: string; mimeType?: string }> }
+        ).resources;
+        const uris = resources.map((x) => x.uri);
+        assert.ok(
+          uris.includes("omm://trace/session-alpha"),
+          `expected omm://trace/session-alpha in ${JSON.stringify(uris)}`,
+        );
+        assert.equal(resources[0].mimeType, "application/x-jsonlines");
+      });
+    });
+
+    it("resources/read returns JSONL content for valid URI", async () => {
+      await withClient(async (client, stateRoot) => {
+        const traceDir = join(stateRoot, "trace");
+        await mkdir(traceDir, { recursive: true });
+        await writeFile(
+          join(traceDir, "session-beta.jsonl"),
+          '{"event":"a"}\n{"event":"b"}\n',
+          "utf8",
+        );
+        const r = await client.send("resources/read", {
+          uri: "omm://trace/session-beta",
+        });
+        const contents = (
+          r.result as {
+            contents: Array<{ uri: string; mimeType: string; text: string }>;
+          }
+        ).contents;
+        assert.equal(contents[0].uri, "omm://trace/session-beta");
+        assert.equal(contents[0].mimeType, "application/x-jsonlines");
+        assert.match(contents[0].text, /"event":"a"/);
+      });
+    });
+
+    it("resources/read rejects malformed URI with OMM_E_KEY_INVALID", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("resources/read", {
+          uri: "omm://wrong/xyz",
+        });
+        assert.ok(r.error, "expected error response");
+        const data = (
+          r.error as unknown as {
+            data?: { code?: string };
+          }
+        ).data;
+        assert.equal(data?.code, "OMM_E_KEY_INVALID");
+      });
+    });
+
+    it("resources/read requires uri param", async () => {
+      await withClient(async (client) => {
+        const r = await client.send("resources/read", {});
+        assert.equal(r.error?.code, -32602);
+      });
+    });
+  });
 });
