@@ -112,10 +112,11 @@ See [State Contract](contracts/state-contract.md).
 
 The primary consumer (MatrixAssistant) integrates omm via:
 
-1. `omm-build-suite.mjs` produces `omm-suite-<version>.tgz` with SHA-256 manifest
-2. `scripts/omm-bundle.mjs` unpacks and verifies the tarball into `resources/`
-3. `electron/utils/omm-openclaw-seed.ts` injects omm config into `openclaw.json` at startup
+1. `omm-scripts/omm-build-suite.mjs` produces `omm-suite-<version>.tgz` with SHA-256 manifest
+2. `omm-scripts/omm-verify-bundle.mjs` verifies tarball integrity against the manifest
+3. `electron/utils/omm-openclaw-seed.ts` (MA-side) injects omm config into `openclaw.json` at startup
 4. OpenClaw Gateway discovers the plugin and skills automatically
+5. For MA's MCP registry registration (separate from OpenClaw seeding), see [`contracts/ma-integration-snippets.md`](contracts/ma-integration-snippets.md)
 
 ## Extension Points（扩展点）
 

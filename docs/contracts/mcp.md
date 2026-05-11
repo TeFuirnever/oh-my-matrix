@@ -69,6 +69,12 @@ A consumer initializing the omm MCP servers should:
 
 ---
 
+## Consumer Integration
+
+For drop-in JSON snippets that register these servers into MatrixAssistant's MCP registry (user / project / local scopes), see [`ma-integration-snippets.md`](./ma-integration-snippets.md).
+
+---
+
 ## References
 
 - MCP spec 2025-06-18: https://modelcontextprotocol.io/specification
