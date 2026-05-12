@@ -109,6 +109,7 @@ All skills follow the **Lifecycle Conventions** (state init, agent loading, term
 | Trade-off | Impact | Mitigation |
 |-----------|--------|------------|
 | ADR-003 → MCP 代码重复 | ~200 行跨 2 个 MCP server（锁、JSON-RPC、OmmError） | 锁逻辑稳定；验证规则漂移风险通过 SKILL.md 引导 agent 使用 mode lifecycle API 缓解 |
+| ADR-006 → MCP 内联构建时代码生成 | 构建时从 omm-plugin/src/ 读取规范源文件并注入到 MCP 服务器 | 单一源真理；零运行时依赖（代码在构建时打包） |
 | MCP 验证是 plugin 验证的子集 | MCP `state_write` 不注入计数器默认值、不校验时间戳格式 | mode lifecycle API 是主路径；MCP 为低级工具 |
 | TRACE_SPECS 使用 `Partial` + `!` | 新增 trace event 时可能遗漏 spec | 可改为 `satisfies` 完整性检查 |
 | omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |

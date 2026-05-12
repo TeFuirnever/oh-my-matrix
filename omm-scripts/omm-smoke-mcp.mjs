@@ -127,47 +127,61 @@ function assertOk(rsp, label) {
 //   omm-state:  tools + resources + prompts
 //   omm-trace:  tools + resources
 //   omm-memory: tools only (no resources/prompts) — skipped here
+
+async function verifyResource(call, serverName, targetUri, expectedMimeType) {
+  const list = await call("resources/list", {});
+  assertOk(list, `${serverName} resources/list`);
+  const uris = list.result.resources?.map((r) => r.uri) ?? [];
+  const target = uris.find((u) => u === targetUri);
+  if (!target) {
+    throw new Error(
+      `resources/list missing ${targetUri} (got: ${uris.join(", ") || "none"})`,
+    );
+  }
+  const read = await call("resources/read", { uri: target });
+  assertOk(read, `${serverName} resources/read`);
+  const contents = read.result.contents ?? [];
+  if (contents.length === 0) {
+    throw new Error(`${targetUri} read returned empty contents`);
+  }
+  const first = contents[0];
+  if (first.uri !== target) {
+    throw new Error(
+      `resources/read uri mismatch: expected ${target}, got ${first.uri}`,
+    );
+  }
+  if (first.mimeType !== expectedMimeType) {
+    throw new Error(
+      `resources/read mimeType expected ${expectedMimeType}, got ${first.mimeType}`,
+    );
+  }
+  return { uris, target, first };
+}
+
+async function verifyPrompts(call, serverName) {
+  const promptsList = await call("prompts/list", {});
+  assertOk(promptsList, `${serverName} prompts/list`);
+  const prompts = promptsList.result.prompts ?? [];
+  if (prompts.length === 0) {
+    throw new Error(
+      "prompts/list returned empty — expected at least one omm://prompts/<name>",
+    );
+  }
+  return prompts;
+}
+
 const MA_CONSUMER_PROBES = {
   "omm-state": {
     expectResources: true,
     expectPrompts: true,
     seedThenProbe: async (call) => {
-      // The tools roundtrip already wrote {key:"smoke"}; resources
-      // surface should advertise omm://state/smoke.
-      const list = await call("resources/list", {});
-      assertOk(list, "omm-state resources/list");
-      const uris = list.result.resources?.map((r) => r.uri) ?? [];
-      const target = uris.find((u) => u === "omm://state/smoke");
-      if (!target) {
-        throw new Error(
-          `resources/list missing omm://state/smoke (got: ${uris.join(", ") || "none"})`,
-        );
-      }
-      const read = await call("resources/read", { uri: target });
-      assertOk(read, "omm-state resources/read");
-      const contents = read.result.contents ?? [];
-      if (contents.length === 0) {
-        throw new Error("omm://state/smoke read returned empty contents");
-      }
-      const first = contents[0];
-      if (first.uri !== target) {
-        throw new Error(
-          `resources/read uri mismatch: expected ${target}, got ${first.uri}`,
-        );
-      }
-      if (first.mimeType !== "application/json") {
-        throw new Error(
-          `resources/read mimeType expected application/json, got ${first.mimeType}`,
-        );
-      }
-      const promptsList = await call("prompts/list", {});
-      assertOk(promptsList, "omm-state prompts/list");
-      const prompts = promptsList.result.prompts ?? [];
-      if (prompts.length === 0) {
-        throw new Error(
-          "prompts/list returned empty — expected at least one omm://prompts/<name>",
-        );
-      }
+      const { uris, target, first } = await verifyResource(
+        call,
+        "omm-state",
+        "omm://state/smoke",
+        "application/json",
+      );
+      const prompts = await verifyPrompts(call, "omm-state");
       return {
         resources_count: uris.length,
         sample_resource_uri: target,
@@ -181,34 +195,12 @@ const MA_CONSUMER_PROBES = {
     expectResources: true,
     expectPrompts: false,
     seedThenProbe: async (call) => {
-      // tools roundtrip already recorded a smoke event; resources
-      // surface should advertise omm://trace/smoke.
-      const list = await call("resources/list", {});
-      assertOk(list, "omm-trace resources/list");
-      const uris = list.result.resources?.map((r) => r.uri) ?? [];
-      const target = uris.find((u) => u === "omm://trace/smoke");
-      if (!target) {
-        throw new Error(
-          `resources/list missing omm://trace/smoke (got: ${uris.join(", ") || "none"})`,
-        );
-      }
-      const read = await call("resources/read", { uri: target });
-      assertOk(read, "omm-trace resources/read");
-      const contents = read.result.contents ?? [];
-      if (contents.length === 0) {
-        throw new Error("omm://trace/smoke read returned empty contents");
-      }
-      const first = contents[0];
-      if (first.uri !== target) {
-        throw new Error(
-          `resources/read uri mismatch: expected ${target}, got ${first.uri}`,
-        );
-      }
-      if (first.mimeType !== "application/x-jsonlines") {
-        throw new Error(
-          `resources/read mimeType expected application/x-jsonlines, got ${first.mimeType}`,
-        );
-      }
+      const { uris, target, first } = await verifyResource(
+        call,
+        "omm-trace",
+        "omm://trace/smoke",
+        "application/x-jsonlines",
+      );
       return {
         resources_count: uris.length,
         sample_resource_uri: target,
@@ -216,26 +208,19 @@ const MA_CONSUMER_PROBES = {
       };
     },
   },
-  // omm-memory: no resources, no prompts — verified by capability matrix only
   "omm-memory": {
     expectResources: false,
     expectPrompts: false,
     seedThenProbe: async (call) => {
-      // Confirm the server honestly does NOT advertise resources/list
-      // (or returns empty). Either is acceptable per capability matrix.
       try {
         const list = await call("resources/list", {});
-        if (
-          list.result?.resources?.length &&
-          list.result.resources.length > 0
-        ) {
+        if (list.result?.resources?.length > 0) {
           throw new Error(
             "omm-memory unexpectedly advertised resources — capability matrix says none",
           );
         }
         return { resources_advertised: false };
       } catch (err) {
-        // -32601 method not found is also acceptable
         if (err.message?.includes("-32601")) {
           return { resources_advertised: false, method_not_found: true };
         }
