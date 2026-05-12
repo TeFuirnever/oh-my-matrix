@@ -29,22 +29,25 @@ const MCP_SERVERS = [
   {
     name: "omm-state",
     src: join(ROOT, "omm-packages", "omm-mcp", "src", "index.ts"),
+    output: join(ROOT, "omm-packages", "omm-mcp", "src", "index.ts"),
     needs: ["lock", "errors", "guard", "validation"],
   },
   {
     name: "omm-trace",
     src: join(ROOT, "omm-packages", "omm-mcp-trace", "src", "index.ts"),
+    output: join(ROOT, "omm-packages", "omm-mcp-trace", "src", "index.ts"),
     needs: ["lock", "errors"],
   },
   {
     name: "omm-memory",
     src: join(ROOT, "omm-packages", "omm-mcp-memory", "src", "index.ts"),
+    output: join(ROOT, "omm-packages", "omm-mcp-memory", "src", "index.ts"),
     needs: ["lock", "errors"],
   },
 ];
 
-const GEN_START = "/* ═════════════════════════════════════════════════════════ */";
-const GEN_END = "/* ═════════════════════════════════════════════════════════════ */";
+const GEN_START = "/* ═════════════════════════════════════════════════════════════ */";
+const GEN_END = "/* ═══════════════════════════════════════════════════════════════ */";
 
 /**
  * Extract canonical inline block from source files.
@@ -104,22 +107,6 @@ function extractFromLockSource(source) {
     }
   }
 
-  // Find withCrossProcessLock end
-  let lockFnEnd = lockFnStart + 1;
-  for (let i = lockFnStart + 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (
-      line.startsWith("export") ||
-      line.startsWith("function") ||
-      line.startsWith("const") ||
-      line.startsWith("class") ||
-      line === ""
-    ) {
-      lockFnEnd = i;
-      break;
-    }
-  }
-
   const keyLockBlock = lines.slice(keyLockFnStart, keyLockEnd).join("\n");
   const lockBlock = lines.slice(lockFnStart, lockFnEnd).join("\n");
 
@@ -159,7 +146,44 @@ function extractErrorBlock(source) {
     }
   }
 
-  return lines.slice(classStart, endIndex).join("\n");
+  const classBlock = lines.slice(classStart, endIndex).join("\n");
+
+  // Extract OMM_ERROR_CODES constant and isStructuredError function
+  let codesEnd = codesStart + 1;
+  for (let i = codesStart + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (
+      line.startsWith("export") ||
+      line.startsWith("function") ||
+      line.startsWith("type") ||
+      line.startsWith("interface") ||
+      line === ""
+    ) {
+      codesEnd = i;
+      break;
+    }
+  }
+
+  const codesBlock = lines.slice(codesStart, codesEnd).join("\n");
+
+  let fnEnd = fnStart + 1;
+  for (let i = fnStart + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (
+      line.startsWith("export") ||
+      line.startsWith("function") ||
+      line.startsWith("type") ||
+      line.startsWith("interface") ||
+      line === ""
+    ) {
+      fnEnd = i;
+      break;
+    }
+  }
+
+  const fnBlock = lines.slice(fnStart, fnEnd).join("\n");
+
+  return '${GEN_START}\n${GEN_WARNING}\n// OmmError and error codes (from omm-error-codes.ts)\n${classBlock}\n\n${codesBlock}\n\n${fnBlock}\n${GEN_END}\n';
 }
 
 /**
@@ -194,7 +218,45 @@ function extractGuardBlock(source) {
     }
   }
 
-  return lines.slice(firstFn, firstFnEnd).join("\n");
+  const detectBlock = lines.slice(firstFn, firstFnEnd).join("\n");
+
+  // Extract isLinkedPair
+  let linkedEnd = linkedStart + 1;
+  for (let i = linkedStart + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (
+      line.startsWith("export") ||
+      line.startsWith("function") ||
+      line.startsWith("type") ||
+      line.startsWith("interface") ||
+      line === ""
+    ) {
+      linkedEnd = i;
+      break;
+    }
+  }
+
+  const linkedBlock = lines.slice(linkedStart, linkedEnd).join("\n");
+
+  // Extract assertWorkflowExclusivity (full function)
+  let assertEnd = assertStart + 1;
+  for (let i = assertStart + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (
+      line.startsWith("export") ||
+      line.startsWith("function") ||
+      line.startsWith("type") ||
+      line.startsWith("interface") ||
+      line === ""
+    ) {
+      assertEnd = i;
+      break;
+    }
+  }
+
+  const assertBlock = lines.slice(assertStart, assertEnd).join("\n");
+
+  return '${GEN_START}\n${GEN_WARNING}\n// Workflow exclusivity guard (from omm-workflow-guard.ts)\n${detectBlock}\n\n${linkedBlock}\n\n${assertBlock}\n${GEN_END}\n';
 }
 
 /**
@@ -212,7 +274,7 @@ function extractValidationSubset(source) {
     return null;
   }
 
-  const normalizeEnd = normalizeStart + 1;
+  let normalizeEnd = normalizeStart + 1;
   for (let i = normalizeStart + 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (
@@ -227,7 +289,10 @@ function extractValidationSubset(source) {
     }
   }
 
-  const terminalFnEnd = terminalFnStart + 1;
+  const normalizeBlock = lines.slice(normalizeStart, normalizeEnd).join("\n");
+
+  // Extract validateTerminalRules
+  let terminalFnEnd = terminalFnStart + 1;
   for (let i = terminalFnStart + 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (
@@ -242,7 +307,9 @@ function extractValidationSubset(source) {
     }
   }
 
-  return lines.slice(normalizeStart, normalizeEnd).join("\n") + "\n" + lines.slice(terminalFnStart, terminalFnEnd).join("\n");
+  const terminalFnBlock = lines.slice(terminalFnStart, terminalFnEnd).join("\n");
+
+  return `${GEN_START}\n${GEN_WARNING}\n// Validation subset for MCP (from omm-state-validation.ts)\n${lines.slice(ralphStart, normalizeStart).join("\n")}\n\n${normalizeBlock}\n\n${terminalFnBlock}\n${GEN_END}\n';
 }
 
 /**
@@ -255,13 +322,13 @@ function extractGeneratedInlineBlock(source) {
   let collecting = false;
 
   for (const line of lines) {
-    if (line.includes("/* ═════════════════════════════════════════════════════════════ */")) {
+    if (line.includes("/* ═══════════════════════════════════════════════════════════════════════════════════════════ */")) {
       inInlineBlock = true;
       collecting = true;
       result.push(line);
       continue;
     }
-    if (inInlineBlock && line.includes("/* ═══════════════════════════════════════════════════════════════ */")) {
+    if (inInlineBlock && line.includes("/* ═════════════════════════════════════════════════════════════════════════════════════════════ */")) {
       inInlineBlock = false;
       collecting = false;
       result.push(line);
@@ -297,7 +364,6 @@ function checkDrift(canonical, generated, serverName, blockType) {
     return { ok: true };
   }
 
-  // Find first differing line for error reporting
   const canonLines = canonicalNormalized.split("\n");
   const genLines = generatedNormalized.split("\n");
 
@@ -316,7 +382,7 @@ function checkDrift(canonical, generated, serverName, blockType) {
 }
 
 async function main() {
-  console.log("Verifying MCP inline code blocks against canonical sources...\n");
+  console.log("Verifying MCP inline code blocks against canonical sources...");
 
   const canonical = await extractCanonicalBlocks();
   let hasDrift = false;
@@ -377,5 +443,3 @@ async function main() {
   console.log("\n✓ All MCP inline blocks are up-to-date");
   process.exit(0);
 }
-
-await main();
