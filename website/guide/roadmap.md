@@ -1,17 +1,17 @@
 # omm Development Roadmap
 
-> Current: v0.2.0 — core skeleton complete, workflow runtime pending
+> Current: v0.4.2 — Phase 1-4 automated release surface shipped; human MA confirmation pending
 
 ## Current State Summary
 
-omm covers ~15-20% of oh-my-codex's core functionality. The foundation is solid:
+omm now ships the local workflow/runtime foundation and consumer integration helpers:
 
 - **5 tools** registered via OpenClaw Plugin ABI
-- **5 skills** defined (2 tool-dispatch, 3 model-driven state machines)
-- **1 MCP server** for out-of-process state access
+- **14 packaged skills** copied to both suite and OpenClaw plugin roots
+- **3 MCP servers** for state, memory, and trace access
 - **State validation** for ralph/autopilot/team modes
-- **25 tests** passing, CI pipeline operational
-- **Compliance toolchain** (scan-names, verify-bundle, verify-provenance)
+- **411 tests** passing, CI pipeline operational
+- **Compliance and consumer-seed toolchain** (scan-names, generate/verify inlines, verify-bundle, verify-provenance, smoke-mcp, MA/OpenClaw seeders)
 
 See [Architecture Overview](/guide/architecture) for module details.
 
@@ -75,6 +75,36 @@ See [Architecture Overview](/guide/architecture) for module details.
 - [x] Custom hooks can be loaded and dispatched at session lifecycle points
 - [x] At least 5 agent prompts available for common workflow roles
 - [x] Test coverage ≥ 80% across all packages
+
+---
+
+## Phase 4: Agent Library Expansion + MCP Capability Surface
+
+**Goal:** Broaden agent persona coverage to match the core development lifecycle, and expose richer omm telemetry through standard MCP channels for downstream UI consumers.
+
+**Priority:** Medium — unlocks UI integration and lifecycle coverage
+
+| Deliverable                         | Description                                                        | Status                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Agent prompt expansion              | Port planning, tracing, review, debugging, and exploration prompts | Done (2026-05-08) — 16 total agents                                                          |
+| Claude-only token strip-check in CI | Prevent upstream-only semantic tokens from leaking into prompts    | Done (2026-05-08)                                                                            |
+| MCP Resources advertisement         | Expose state and trace resources                                   | Done (2026-05-08) — `omm://state/<key>` and `omm://trace/<sessionId>`                        |
+| MCP Prompts advertisement           | Expose agent prompts through MCP                                   | Done (2026-05-08)                                                                            |
+| Progress notifications verification | Confirm MA support for `notifications/progress`                    | Done (2026-05-08) — deferred because MA self-audit marks progress notifications unsupported  |
+| omm-docs skill                      | Documentation generation pipeline                                  | Done (2026-05-08) — bundled by suite builder                                                 |
+| omm-ui skill                        | UI artifact generation pipeline                                    | Done (2026-05-08) — bundled by suite builder                                                 |
+| P2 agent porting                    | Port git-master, scientist, code-simplifier                        | Done (2026-05-13) — 19 total agents; `omm-git`, `omm-research`, `omm-refactor`               |
+
+**Exit criteria:**
+
+- [x] Agent inventory ≥ 15 with skill anchors documented
+- [x] CI strip-check enforces no upstream-only token regressions
+- [x] MCP Resources advertised by at least one omm MCP server
+- [x] MCP Prompts advertised by omm-mcp
+- [x] Automated MA-consumer wire-contract roundtrip passes
+- [ ] Human-side confirmation: seeded servers appear with Resources/Prompts in MA's MCP catalog UI
+
+**Remaining external validation:** human-side MA confirmation that the seeded servers appear with Resources/Prompts in MA's MCP catalog UI.
 
 ---
 

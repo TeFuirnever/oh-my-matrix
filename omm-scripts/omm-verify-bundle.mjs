@@ -3,9 +3,15 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildManifestEntries, sha256File } from "./omm-shared.mjs";
 
-const bundle = resolve(process.argv[2] ?? "omm-dist/omm-suite-0.3.0.tgz");
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+const expectedVersion = pkg.version;
+const bundle = resolve(
+  process.argv[2] ?? `omm-dist/omm-suite-${expectedVersion}.tgz`,
+);
 const bundleDir = dirname(bundle);
 const bundleName = basename(bundle);
 const temp = await mkdtemp(join(tmpdir(), "omm-bundle-"));
@@ -21,18 +27,18 @@ try {
     );
   }
 
-  const root = join(temp, "omm-suite");
-  const manifestPath = join(root, "omm-manifest.json");
+  const suiteRoot = join(temp, "omm-suite");
+  const manifestPath = join(suiteRoot, "omm-manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (
     manifest.name !== "omm-suite" ||
-    manifest.version !== "0.3.0" ||
+    manifest.version !== expectedVersion ||
     !Array.isArray(manifest.entries)
   ) {
     throw new Error("invalid omm manifest");
   }
 
-  const actualEntries = await buildManifestEntries(root);
+  const actualEntries = await buildManifestEntries(suiteRoot);
   const actualByPath = new Map(
     actualEntries.map((entry) => [entry.path, entry]),
   );

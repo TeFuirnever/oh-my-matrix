@@ -4,8 +4,37 @@ All notable changes to oh-my-matrix (omm).
 
 ## [Unreleased]
 
+### Changed
+
+- `omm-ma-seed.mjs` updated to OpenClaw native MCP format: targets
+  `~/.openclaw/openclaw.json` with `mcp.servers` nested structure, uses
+  `{ command, args, env? }` entries without `type`/`enabled`/`tags`.
+- `docs/contracts/ma-integration-snippets.md` rewritten to match MA's current
+  OpenClaw-native config format and path.
+- `SHIPPED_SKILLS` in `omm-build-suite.mjs` narrowed to 5 core skills
+  (omm-ping, omm-cancel, omm-ralph, omm-team, omm-autopilot). The 9 extended
+  skills (omm-deep-interview, omm-ralplan, omm-ultrawork, omm-ultraqa,
+  omm-docs, omm-ui, omm-git, omm-research, omm-refactor) remain in
+  `omm-packages/omm-skills/` but are excluded from the suite tarball to focus
+  MA integration testing on the core workflow engine.
+
 ### Added
 
+- `omm-scripts/omm-ma-seed.mjs` — dry-run-first MatrixAssistant MCP registry
+  seeder for user/project/local scopes. It writes MA-readable stdio server
+  entries for `omm-state`, `omm-memory`, and `omm-trace` only when `--write`
+  is provided.
+- `omm-scripts/omm-openclaw-seed.mjs` — dry-run-first OpenClaw plugin registry
+  seeder for `~/.openclaw/openclaw.json`. It registers the bundled `omm`
+  plugin path, allowlist entry, and plugin config without clobbering custom
+  entries unless `--force` is provided.
+- P2 benchmark parity prompts: `git-master`, `scientist`, and
+  `code-simplifier`, ported from oh-my-claudecode and adapted to OpenClaw
+  tool semantics.
+- P2 skill anchors: `omm-git`, `omm-research`, and `omm-refactor`, connecting
+  the new prompts to user-invocable workflows.
+- Script-level regression tests for package entrypoints, seeders, and shipped
+  suite skills.
 - `WorkflowStateOf<M>` mapped type in `omm-types.ts` — maps a `WorkflowMode`
   literal (`"ralph"` | `"autopilot"` | `"team"`) to its corresponding
   state shape (`RalphState` | `AutopilotState` | `TeamState`). Lets the
@@ -13,6 +42,11 @@ All notable changes to oh-my-matrix (omm).
 
 ### Changed
 
+- `omm-build-suite.mjs` now uses one `SHIPPED_SKILLS` list and copies all 14
+  release skills to both `omm-skills/` and `omm-plugin/skills/`.
+- `docs/architecture.md`, `docs/roadmap.md`, and website guide copies now
+  describe the current release surface: 14 shipped skills, 19 agent prompts,
+  3 MCP servers, dry-run seeders, and 411 passing tests.
 - `omm-mode-lifecycle.ts` lifecycle API (`startMode`, `updateModeState`,
   `cancelMode`, `getModeState`) now generic over `M extends WorkflowMode`.
   Return types use `WorkflowStateOf<M>` instead of
@@ -28,6 +62,13 @@ All notable changes to oh-my-matrix (omm).
   reference contract instead of restating lifecycle protocol verbatim.
 - `CONTEXT.md` — Skill definition introduces "Lifecycle Conventions" and
   "3-Phase Pipeline Pattern" as domain terms.
+
+### Fixed
+
+- MCP inline generation and drift verification now share a hygiene guard that
+  removes failed generated fragments and rejects standalone `null` sentinels.
+- Bundle verification now derives the expected manifest version from
+  `package.json`, and `omm:verify-bundle` targets the current `0.4.2` tarball.
 
 ## [0.4.2] — 2026-05-08
 

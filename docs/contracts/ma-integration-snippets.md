@@ -1,8 +1,8 @@
-<!-- Generated: 2026-05-12 -->
+<!-- Updated: 2026-05-22 -->
 
 # MA Integration Snippets — omm MCP Servers
 
-> Drop-in JSON snippets for registering omm's 3 MCP servers into MatrixAssistant (MA), without modifying any MA source code. These snippets satisfy MA's `ScopeLoader` schema exactly as of `electron/main/services/mcp/registry/scope-loader.ts` and `electron/main/services/mcp/schemas.ts` at commit-time of this doc.
+> Drop-in JSON snippets for registering omm's 3 MCP servers into MatrixAssistant (MA) via OpenClaw's native MCP config format. MA reads `~/.openclaw/openclaw.json` and discovers servers under `mcp.servers`.
 >
 > Cross-references:
 > - [`mcp.md`](./mcp.md) — omm MCP URI scheme and capability matrix
@@ -13,153 +13,104 @@
 
 ## Audience
 
-You are a MatrixAssistant user (or omm-bundle script) who wants MA's built-in MCP client to discover and consume omm's three MCP servers — `omm-state`, `omm-memory`, `omm-trace` — so that MA's UI can list omm Resources (`omm://state/<key>`, `omm://trace/<sessionId>`, `omm://prompts/<name>`) end-to-end.
-
-This is the omm-side artifact that closes the Phase 4 exit "MA UI confirmed to consume omm Resources end-to-end" (see `docs/roadmap.md`).
+You are a MatrixAssistant user (or omm-bundle script) who wants MA's built-in MCP client to discover and consume omm's three MCP servers — `omm-state`, `omm-memory`, `omm-trace` — so that MA's UI can list omm Resources (`omm://state/<key>`, `omm://trace/<sessionId>`, `omm://prompts/<name>`) end-to-end. The automated installer is `node omm-scripts/omm-ma-seed.mjs`; it defaults to dry-run and writes only when `--write` is passed.
 
 ---
 
-## MA's 4 Config Scopes (read-only reference)
+## Config Format
 
-MA's `McpRegistry` reads 4 scopes in this precedence (later overrides earlier when names collide):
-
-| Scope | Path | Writable by omm tarball install? |
-|-------|------|----------------------------------|
-| `managed` | `<MA-install>/resources/mcp/mcporter-default-config.json` | **No** — app-bundled, MA-team-owned |
-| `user` | `~/.matrixassistant/mcporter/mcporter.json` | Yes (per-user) |
-| `project` | `<workspace>/.matrixassistant/mcp.json` | Yes (per-workspace) |
-| `local` | `<workspace>/.mcp.local.json` | Yes (per-workspace, gitignored) |
-
-omm targets **`user`**, **`project`**, or **`local`** — never `managed`. The `managed` scope uses a permissive `ManagedServerSpecSchema` that allows dangerous env vars (e.g. `ELECTRON_RUN_AS_NODE`) and `${PROCESS_EXEC_PATH}`/`${RESOURCES_DIR}` template variables. Those features are **not available** in the other three scopes; do not put template strings in user/project/local snippets — they pass through unresolved and break `child_process.spawn`.
-
----
-
-## Schema Constraints (derived from MA `schemas.ts`)
-
-Every entry MUST satisfy `McpServerSpecSchema`:
-
-- `transport` / `type` ∈ `{ "stdio", "http", "sse" }` — omm uses **`stdio`** only.
-- `command`:
-  - either an **absolute path** (Unix `/...` or Windows `C:\...`),
-  - or a **whitelisted bare executable** from MA's `SAFE_BARE_COMMANDS` list: `npx | node | bun | bunx | deno | python | python3 | uvx | uv | docker | podman | java | dotnet | go | cargo | cmd`.
-  - Must NOT contain `..` (path traversal).
-- `args[]`: no shell metacharacters (`;|&$\`><!(){}~*?\r\n\0#'"[]`).
-- `env`: keys MUST NOT be in MA's dangerous-env denylist — notably **never** set `PATH`, `NODE_OPTIONS`, `NODE_PATH`, `ELECTRON_RUN_AS_NODE`, `HOME`, `USERPROFILE`, `LD_PRELOAD`, proxy vars, or TLS-trust vars. Values capped at 4096 chars.
-- `enabled` defaults to `true` when omitted.
-- `manifestId` is optional; omm does not currently ship per-server manifests — leave it out.
-
----
-
-## Snippet 1 — Project Scope (`<workspace>/.matrixassistant/mcp.json`)
-
-Use this when omm is installed per-workspace (e.g., a team repo wants every developer's MA to see omm). The file is committed to the workspace.
-
-Replace `<OMM_ROOT>` with the absolute path where the omm tarball was unpacked (e.g., `/home/alice/.local/share/omm/0.5.0` or `C:\\Users\\alice\\AppData\\Local\\omm\\0.5.0`). On Windows, escape backslashes (`\\`) inside JSON strings.
+MA uses OpenClaw's native config at `~/.openclaw/openclaw.json`. Servers are nested under `mcp.servers`:
 
 ```json
 {
-  "mcpServers": {
-    "omm-state": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "<OMM_STATE_ROOT>" },
-      "enabled": true,
-      "tags": ["omm", "state"]
-    },
-    "omm-memory": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp-memory/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "<OMM_STATE_ROOT>" },
-      "enabled": true,
-      "tags": ["omm", "memory"]
-    },
-    "omm-trace": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp-trace/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "<OMM_STATE_ROOT>" },
-      "enabled": true,
-      "tags": ["omm", "trace"]
+  "mcp": {
+    "servers": {
+      "<server-name>": {
+        "command": "node",
+        "args": ["<entrypoint>"],
+        "env": { ... }
+      }
+    }
+  }
+}
+```
+
+Each server entry uses `{ command, args, env }` — stdio transport is auto-detected from `command` presence. No `type`, `enabled`, or `tags` fields are needed.
+
+---
+
+## Config Scopes
+
+| Scope | Path | Set via |
+|-------|------|--------|
+| `user` | `~/.openclaw/openclaw.json` | `--scope user` (default) |
+| `project` | `<workspace>/.matrixassistant/mcp.json` | `--scope project --workspace <path>` |
+| `local` | `<workspace>/.mcp.local.json` | `--scope local --workspace <path>` |
+
+omm targets any of these scopes. The `user` scope is recommended for per-user visibility across all workspaces.
+
+---
+
+## Snippet — User Scope (recommended)
+
+This is what `omm-ma-seed.mjs` writes to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "omm-state": {
+        "command": "node",
+        "args": ["<OMM_ROOT>/omm-mcp/dist/src/index.js"]
+      },
+      "omm-memory": {
+        "command": "node",
+        "args": ["<OMM_ROOT>/omm-mcp-memory/dist/src/index.js"]
+      },
+      "omm-trace": {
+        "command": "node",
+        "args": ["<OMM_ROOT>/omm-mcp-trace/dist/src/index.js"]
+      }
+    }
+  }
+}
+```
+
+Replace `<OMM_ROOT>` with the absolute path where the omm tarball was unpacked or the source checkout root. On Windows, use forward slashes in JSON strings (e.g., `D:/Matrix/Productivity/oh-my-matrix/...`).
+
+The user scope file may already contain other servers (e.g., `matrix-mcp-playwright`, `context7`); omm entries merge under the same `mcp.servers` map. Do not overwrite — see the merge rules below.
+
+---
+
+## Snippet — With Custom State Root
+
+To isolate omm state to a specific directory, add `env.OMM_STATE_ROOT`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "omm-state": {
+        "command": "node",
+        "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp/dist/src/index.js"],
+        "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
+      },
+      "omm-memory": {
+        "command": "node",
+        "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp-memory/dist/src/index.js"],
+        "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
+      },
+      "omm-trace": {
+        "command": "node",
+        "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp-trace/dist/src/index.js"],
+        "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
+      }
     }
   }
 }
 ```
 
 `OMM_STATE_ROOT` defaults to `~/.openclaw/omm` (see `omm-config.ts`); override only when isolating state per workspace.
-
-> **Note on `node` bare command.** MA's `SAFE_BARE_COMMANDS` allows `"command": "node"`. The actual `node` resolution happens via `child_process.spawn` against the OS `PATH` at spawn time. If your MA installation cannot resolve `node` (e.g., GUI launch on macOS without a login-shell `PATH`), substitute an absolute path: `/usr/local/bin/node`, `C:\\Program Files\\nodejs\\node.exe`, etc.
-
----
-
-## Snippet 2 — User Scope (`~/.matrixassistant/mcporter/mcporter.json`)
-
-Use this when omm should be visible across all MA workspaces for one user.
-
-```json
-{
-  "mcpServers": {
-    "omm-state": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp/dist/src/index.js"],
-      "enabled": true,
-      "tags": ["omm", "state"]
-    },
-    "omm-memory": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp-memory/dist/src/index.js"],
-      "enabled": true,
-      "tags": ["omm", "memory"]
-    },
-    "omm-trace": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["<OMM_ROOT>/omm-packages/omm-mcp-trace/dist/src/index.js"],
-      "enabled": true,
-      "tags": ["omm", "trace"]
-    }
-  }
-}
-```
-
-The user scope file may already contain other servers (e.g., `matrix-mcp-playwright`); omm entries merge under the same `mcpServers` map. Do not overwrite — see the merge rules below.
-
----
-
-## Snippet 3 — Local Scope (`<workspace>/.mcp.local.json`)
-
-Identical shape to project scope but the file is conventionally gitignored. Use this for developer-only overrides (e.g., a contributor running omm from a checkout instead of the tarball):
-
-```json
-{
-  "mcpServers": {
-    "omm-state": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["D:/Matrix/oh-my-matrix/omm-packages/omm-mcp/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" },
-      "enabled": true
-    },
-    "omm-memory": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["D:/Matrix/oh-my-matrix/omm-packages/omm-mcp-memory/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" },
-      "enabled": true
-    },
-    "omm-trace": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["D:/Matrix/oh-my-matrix/omm-packages/omm-mcp-trace/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" },
-      "enabled": true
-    }
-  }
-}
-```
 
 ---
 
@@ -171,22 +122,23 @@ Identical shape to project scope but the file is conventionally gitignored. Use 
 | `omm-memory` | `omm-memory` | `omm-packages/omm-mcp-memory/dist/src/index.js` |
 | `omm-trace` | `omm-trace` | `omm-packages/omm-mcp-trace/dist/src/index.js` |
 
-The snippet keys are the user-visible names MA shows in its catalog. The `serverInfo.name` is the protocol-level identity (verified by `omm-scripts/omm-smoke-mcp.mjs`). Keep them aligned to avoid catalog confusion. The legacy doc names "omm-mcp / omm-mcp-trace / omm-mcp-memory" in earlier ADRs refer to the **package directory names**, not the registered server names — use the `omm-*` names above in MA configs.
+The snippet keys are the user-visible names MA shows in its catalog. The `serverInfo.name` is the protocol-level identity (verified by `omm-scripts/omm-smoke-mcp.mjs`). Keep them aligned to avoid catalog confusion.
 
 ---
 
 ## Idempotent Merge Rules
 
-When an installer (`omm-scripts/omm-ma-seed.mjs`) writes one of these snippets:
+When an installer (`omm-scripts/omm-ma-seed.mjs`) writes these entries:
 
-1. **Read** the target file. If it doesn't exist, create it with `{ "mcpServers": { ... } }`.
+1. **Read** the target file. If it doesn't exist, create it with the full `mcp.servers` structure.
 2. **Parse** as JSON. If malformed, abort with a clear error — do not silently rewrite.
-3. **Merge** only the three omm entries (`omm-state`, `omm-memory`, `omm-trace`) into `mcpServers`. For each key:
+3. **Detect** the servers key: prefers `mcp.servers` (OpenClaw native), falls back to `servers` then `mcpServers`.
+4. **Merge** only the three omm entries (`omm-state`, `omm-memory`, `omm-trace`). For each key:
    - If absent → insert.
-   - If present **and** every field (`command`, `args`, `env`, `enabled`, `tags`) matches what we would write → no-op.
+   - If present **and** every field matches → no-op.
    - If present **and** different → **leave the user value alone** and log a warning. The user may have customized; never overwrite without explicit `--force`.
-4. **Preserve** every other key in `mcpServers` (e.g., `matrix-mcp-playwright`) and every top-level field (e.g., `policy`).
-5. **Write** atomically: `writeFile(path + ".tmp")` → `rename(path + ".tmp", path)`.
+5. **Preserve** every other key in the servers map and every top-level field.
+6. **Write** atomically: `writeFile(path + ".tmp")` → `rename(path + ".tmp", path)`.
 
 Rerunning the installer with the same arguments MUST produce zero diff after the first successful run.
 
@@ -194,34 +146,46 @@ Rerunning the installer with the same arguments MUST produce zero diff after the
 
 ## End-to-End Verification
 
-After applying a snippet:
+After running the seeder:
 
-1. Restart MA (the registry only re-scans on startup or via `mcp:refreshCatalog` IPC).
-2. Open MA's MCP catalog UI; the three `omm-*` servers should appear with `enabled: true`.
-3. From the SkillSelector or MCP console, browse Resources:
-   - `omm-state` should advertise `omm://state/<key>` resources for any keys present in `OMM_STATE_ROOT`.
+```bash
+# 1. Dry-run to preview
+node omm-scripts/omm-ma-seed.mjs --json
+
+# 2. Write to openclaw.json
+node omm-scripts/omm-ma-seed.mjs --write
+
+# 3. Verify entries exist
+node -e "const d=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.openclaw/openclaw.json','utf8')); console.log(Object.keys(d.mcp.servers).filter(k=>k.startsWith('omm-')).join(', '))"
+```
+
+Then in MA:
+
+1. Restart MA (the registry re-scans on startup).
+2. Open MA's MCP catalog UI; the three `omm-*` servers should appear.
+3. Browse Resources:
+   - `omm-state` should advertise `omm://state/<key>` resources.
    - `omm-trace` should advertise `omm://trace/<sessionId>` per recorded session.
-   - `omm-state` Prompts surface should list entries at `omm://prompts/<name>` for every file under `omm-skills/agent-prompts/`.
-4. `omm-memory` exposes tools only (no resources/prompts) per the capability matrix in [`mcp.md`](./mcp.md).
+   - `omm-state` Prompts should list entries at `omm://prompts/<name>`.
+4. `omm-memory` exposes tools only (no resources/prompts).
 
-The omm-side automated equivalent is `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer` (see `omm-scripts/omm-smoke-mcp.mjs`), which exercises the same `initialize → resources/list → resources/read` path that MA's `TransportBridge` performs at runtime and writes evidence to `.omc/state/ma-roundtrip-evidence.json`.
+The omm-side automated equivalent is `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer`.
 
 ---
 
-## Anti-Patterns (rejected by MA at load time)
+## Anti-Patterns
 
-- Using `${RESOURCES_DIR}` or `${PROCESS_EXEC_PATH}` in user/project/local scope — only the managed scope resolves these.
-- Setting `ELECTRON_RUN_AS_NODE: "1"` in user/project/local scope — flagged as dangerous env and the entry is dropped silently with a warning in MA's logger.
-- Relative paths in `args` — `..` is rejected by the command regex and relative paths fail at spawn time.
-- Shell features in args (`$VAR`, backticks, pipes, redirects) — all blocked by `SafeArgSchema`.
-- Setting `PATH` to extend the search path — blocked; rely on the OS `PATH` MA inherits.
+- Relative paths in `args` — fail at spawn time.
+- Shell features in args (`$VAR`, backticks, pipes, redirects) — blocked by the seeder's safety checks.
+- Adding `type: "stdio"` — unnecessary; stdio is auto-detected from `command`.
+- Adding `enabled: true` or `tags` — not part of the OpenClaw config schema.
 
 ---
 
 ## Drift Detection
 
 This document pins:
-- MA `schemas.ts` field set as observed 2026-05-12.
-- MA `scope-loader.ts:69` `parsed.servers ?? parsed.mcpServers` either-key acceptance.
+- OpenClaw native format: `mcp.servers` in `~/.openclaw/openclaw.json`.
+- Server entry shape: `{ command, args, env? }` — no type/enabled/tags.
 
-If MA's schema changes (e.g., a new required field, a removed scope), regenerate snippets and run the smoke harness `--as-ma-consumer` mode to confirm the wire envelope still matches. The roadmap exit citation in `docs/roadmap.md:110` is only valid against the MA commit hash recorded in the evidence file.
+If MA's config format changes, regenerate snippets and run the smoke harness `--as-ma-consumer` mode to confirm the wire envelope still matches.

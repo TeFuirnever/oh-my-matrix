@@ -209,7 +209,7 @@ describe("bundled agent prompts", () => {
   });
 });
 
-describe("expanded agent inventory (Phase 1 ported prompts)", () => {
+describe("expanded agent inventory (ported prompts)", () => {
   const PORTED_PROMPTS = [
     "planner",
     "tracer",
@@ -222,6 +222,9 @@ describe("expanded agent inventory (Phase 1 ported prompts)", () => {
     "document-specialist",
     "designer",
     "writer",
+    "git-master",
+    "scientist",
+    "code-simplifier",
   ];
 
   const BANNED_TOKENS = [
@@ -234,11 +237,11 @@ describe("expanded agent inventory (Phase 1 ported prompts)", () => {
     "mcp__plugin_oh-my-claudecode",
   ];
 
-  it("ships >= 16 agent prompts (5 starter + 11 ported)", async () => {
+  it("ships >= 19 agent prompts (5 starter + 14 ported)", async () => {
     const names = await listAgentPrompts(BUNDLED_PROMPTS_DIR);
     assert.ok(
-      names.length >= 16,
-      `expected >= 16 prompts, got ${names.length}`,
+      names.length >= 19,
+      `expected >= 19 prompts, got ${names.length}`,
     );
   });
 

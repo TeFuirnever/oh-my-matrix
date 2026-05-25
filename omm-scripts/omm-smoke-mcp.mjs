@@ -383,7 +383,7 @@ async function main() {
       wire_contract: "docs/contracts/mcp-protocol-contract.md",
       consumer_contract: "docs/contracts/ma-integration-snippets.md",
     };
-    await writeFile(evidencePath, JSON.stringify(payload, null, 2) + "\n");
+    await writeFile(evidencePath, `${JSON.stringify(payload, null, 2)}\n`);
     console.log(`evidence: ${evidencePath}`);
   }
   if (cleanup) await cleanup();

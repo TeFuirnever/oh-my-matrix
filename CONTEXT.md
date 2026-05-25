@@ -54,14 +54,14 @@ Terminal record stamped on a state when a mode ends. Discriminated by `kind`: `c
 
 A markdown file (`agent-prompts/{name}.md`) providing a specialized persona (analyst, architect, critic, executor, verifier). Loaded by `omm_agent_prompt_get` for SKILL.md orchestration.
 
-As of plan ralplan-omm-next-best-practices (2026-05-08), the bundled set is **16 prompts** (5 starter + 11 ported from oh-my-claudecode). Ported prompts retain their omc XML structure but are stripped of Claude-only tool references (7-token strip-check enforced in CI).
+As of the P2 prompt parity pass (2026-05-13), the bundled set is **19 prompts** (5 starter + 14 ported from oh-my-claudecode). Ported prompts retain their omc XML structure but are stripped of Claude-only tool references (7-token strip-check enforced in CI).
 
 **Prompt Style Coexistence Policy:**
 
 Two styles coexist in `agent-prompts/`:
 
 - **Lean style** (5 starter prompts): concise, ~20 lines, prose-only, OpenClaw-native design. Example: `analyst.md`.
-- **XML-structured style** (11 ported prompts): ~100-200 lines with `<Role>`, `<Success_Criteria>`, `<Constraints>`, etc. blocks, retained from oh-my-claudecode for battle-tested fidelity and traceability.
+- **XML-structured style** (14 ported prompts): ~100-200 lines with `<Role>`, `<Success_Criteria>`, `<Constraints>`, etc. blocks, retained from oh-my-claudecode for battle-tested fidelity and traceability.
 
 Both styles parse identically through `parseAgentPrompt` (body is opaque text). Starter prompts MAY be refactored to XML structure over time if clarity benefits warrant, but ported prompts MUST NOT be rewritten to lean style without explicit approval (violates "borrow proven personas, do not rewrite them" principle).
 
@@ -85,16 +85,17 @@ Both styles parse identically through `parseAgentPrompt` (body is opaque text). 
 | document-specialist | sonnet | omm-docs | REAL | ported from omc (XML) |
 | designer | sonnet | omm-ui | REAL | ported from omc (XML) |
 | writer | haiku | omm-docs | REAL | ported from omc (XML) |
+| git-master | sonnet | omm-git | REAL | ported from omc (XML) |
+| scientist | sonnet | omm-research | REAL | ported from omc (XML) |
+| code-simplifier | opus | omm-refactor | REAL | ported from omc (XML) |
 
-**Placeholder agents** (0): all P0/P1 agents now have real skill anchors. The omm v0.4.x agent inventory is fully consumed by current skills.
-
-**Deferred agents** (3, NOT in this plan): git-master, scientist, code-simplifier — to be ported in a follow-up plan when omm-git, omm-research, omm-refactor skills are scheduled.
+**Placeholder agents** (0): all P0/P1/P2 agents now have real skill anchors. The omm v0.4.x agent inventory is fully consumed by current skills.
 
 ### Skill
 
 A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured workflow (deep-interview, ralplan, ultrawork, ultraqa, etc.) that orchestrates agent prompts and state tools.
 
-All skills follow the **Lifecycle Conventions** (state init, agent loading, terminal markers) defined in `docs/contracts/skill-lifecycle.md` §1. Skills that produce a single artifact (omm-docs, omm-ui, future omm-research / omm-refactor) follow the **3-Phase Pipeline Pattern** (discover → generate → verify) defined in §2 of the same contract.
+All skills follow the **Lifecycle Conventions** (state init, agent loading, terminal markers) defined in `docs/contracts/skill-lifecycle.md` §1. Skills that produce a single artifact (omm-docs, omm-ui, omm-research, omm-refactor) follow the **3-Phase Pipeline Pattern** (discover → generate → verify) defined in §2 of the same contract.
 
 ## Architecture Invariants
 
@@ -114,5 +115,5 @@ All skills follow the **Lifecycle Conventions** (state init, agent loading, term
 | TRACE_SPECS 使用 `Partial` + `!` | 新增 trace event 时可能遗漏 spec | 可改为 `satisfies` 完整性检查 |
 | omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
 | manifest `apiVersion` 作用不确定 | 未来 OpenClaw 版本可能读取此字段 | 监控 OpenClaw changelog |
-| 11 ported agent prompts 是 point-in-time snapshots | 与 oh-my-claudecode 上游 agent prompts 可能漂移 | resync policy 是 owner-driven，不是自动化；7-token strip-check 在 CI 中防止 Claude-only token 回流 |
+| 14 ported agent prompts 是 point-in-time snapshots | 与 oh-my-claudecode 上游 agent prompts 可能漂移 | resync policy 是 owner-driven，不是自动化；7-token strip-check 在 CI 中防止 Claude-only token 回流 |
 | 0 PLACEHOLDER agents — all P0/P1 anchors resolved | n/a (cleared by omm-docs + omm-ui landings) | n/a |

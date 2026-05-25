@@ -13,11 +13,31 @@ const staging = join(dist, "omm-suite");
 const outputName = `omm-suite-${version}.tgz`;
 const output = join(dist, outputName);
 
+// Core skills shipped in suite. Extended skills (omm-deep-interview, omm-ralplan,
+// omm-ultrawork, omm-ultraqa, omm-docs, omm-ui, omm-git, omm-research,
+// omm-refactor) are parked in omm-packages/omm-skills/ for future restore.
+const SHIPPED_SKILLS = [
+  "omm-ping",
+  "omm-cancel",
+  "omm-ralph",
+  "omm-team",
+  "omm-autopilot",
+];
+
 async function copyRequiredFiles() {
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
 
   const pkg = (...p) => join(root, "omm-packages", ...p);
+  const copySkillToSuite = (skill) =>
+    cp(pkg("omm-skills", skill), join(staging, "omm-skills", skill), {
+      recursive: true,
+    });
+  const copySkillToPlugin = (skill) =>
+    cp(pkg("omm-skills", skill), join(staging, "omm-plugin", "skills", skill), {
+      recursive: true,
+    });
+
   await Promise.all([
     cp(join(root, "LICENSE"), join(staging, "LICENSE")),
     cp(join(root, "NOTICE"), join(staging, "NOTICE")),
@@ -26,6 +46,16 @@ async function copyRequiredFiles() {
       join(staging, "THIRD_PARTY_NOTICES.md"),
     ),
     cp(join(root, "omm-provenance.json"), join(staging, "omm-provenance.json")),
+    cp(
+      join(root, "omm-scripts", "omm-ma-seed.mjs"),
+      join(staging, "omm-scripts", "omm-ma-seed.mjs"),
+      { recursive: true },
+    ),
+    cp(
+      join(root, "omm-scripts", "omm-openclaw-seed.mjs"),
+      join(staging, "omm-scripts", "omm-openclaw-seed.mjs"),
+      { recursive: true },
+    ),
     cp(
       pkg("omm-plugin", "package.json"),
       join(staging, "omm-plugin", "package.json"),
@@ -39,99 +69,14 @@ async function copyRequiredFiles() {
     cp(pkg("omm-plugin", "dist"), join(staging, "omm-plugin", "dist"), {
       recursive: true,
     }),
-    cp(pkg("omm-skills", "omm-ping"), join(staging, "omm-skills", "omm-ping"), {
-      recursive: true,
-    }),
-    cp(
-      pkg("omm-skills", "omm-cancel"),
-      join(staging, "omm-skills", "omm-cancel"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ralph"),
-      join(staging, "omm-skills", "omm-ralph"),
-      { recursive: true },
-    ),
-    cp(pkg("omm-skills", "omm-team"), join(staging, "omm-skills", "omm-team"), {
-      recursive: true,
-    }),
-    cp(
-      pkg("omm-skills", "omm-autopilot"),
-      join(staging, "omm-skills", "omm-autopilot"),
-      { recursive: true },
-    ),
+    ...SHIPPED_SKILLS.map(copySkillToSuite),
     cp(
       pkg("omm-skills", "agent-prompts"),
       join(staging, "omm-skills", "agent-prompts"),
       { recursive: true },
     ),
-    // Phase 4 skills
-    cp(
-      pkg("omm-skills", "omm-deep-interview"),
-      join(staging, "omm-skills", "omm-deep-interview"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ralplan"),
-      join(staging, "omm-skills", "omm-ralplan"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ultrawork"),
-      join(staging, "omm-skills", "omm-ultrawork"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ultraqa"),
-      join(staging, "omm-skills", "omm-ultraqa"),
-      { recursive: true },
-    ),
     // Skills accessible under plugin rootDir for OpenClaw discovery
-    cp(
-      pkg("omm-skills", "omm-ping"),
-      join(staging, "omm-plugin", "skills", "omm-ping"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-cancel"),
-      join(staging, "omm-plugin", "skills", "omm-cancel"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ralph"),
-      join(staging, "omm-plugin", "skills", "omm-ralph"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-team"),
-      join(staging, "omm-plugin", "skills", "omm-team"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-autopilot"),
-      join(staging, "omm-plugin", "skills", "omm-autopilot"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-deep-interview"),
-      join(staging, "omm-plugin", "skills", "omm-deep-interview"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ralplan"),
-      join(staging, "omm-plugin", "skills", "omm-ralplan"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ultrawork"),
-      join(staging, "omm-plugin", "skills", "omm-ultrawork"),
-      { recursive: true },
-    ),
-    cp(
-      pkg("omm-skills", "omm-ultraqa"),
-      join(staging, "omm-plugin", "skills", "omm-ultraqa"),
-      { recursive: true },
-    ),
+    ...SHIPPED_SKILLS.map(copySkillToPlugin),
     cp(
       pkg("omm-mcp", "package.json"),
       join(staging, "omm-mcp", "package.json"),

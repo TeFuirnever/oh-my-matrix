@@ -3,7 +3,7 @@
 > Canonical lifecycle conventions and pipeline patterns for omm SKILL.md files.
 > Date: 2026-05-08
 
-This document defines the **shared lifecycle contract** that every omm skill follows, plus the **3-phase pipeline pattern** used by skills that produce a single artifact (omm-docs, omm-ui, and future siblings).
+This document defines the **shared lifecycle contract** that every omm skill follows, plus the **3-phase pipeline pattern** used by skills that produce a single artifact (omm-docs, omm-ui, omm-research, omm-refactor, and future siblings).
 
 Each SKILL.md should reference this contract instead of restating the lifecycle conventions verbatim.
 
@@ -22,6 +22,9 @@ Each skill owns a state key matching its short name (the part after `omm-`):
 | omm-docs | `docs` |
 | omm-ui | `ui` |
 | omm-ultraqa | `ultraqa` |
+| omm-git | `git` |
+| omm-research | `research` |
+| omm-refactor | `refactor` |
 | omm-deep-interview | `deep-interview` |
 | omm-ralph | `ralph` |
 | omm-autopilot | `autopilot` |
@@ -101,7 +104,7 @@ Each skill MUST report at completion:
 
 Used by skills that produce a single artifact via a discover → generate → verify shape.
 
-**Current users**: `omm-docs`, `omm-ui`. **Future candidates**: `omm-research` (discover sources → synthesize → verify citations), `omm-refactor` (analyze → transform → verify tests still pass).
+**Current users**: `omm-docs`, `omm-ui`, `omm-research`, `omm-refactor`. **Future candidates**: artifact workflows with discover → generate → verify semantics.
 
 ### 2.1 When to use this pattern
 

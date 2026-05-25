@@ -1,6 +1,6 @@
 # omm Architecture Overview
 
-> oh-my-matrix (omm) v0.2.0 — OpenClaw-native orchestration extension suite（OpenClaw 原生编排扩展套件）
+> oh-my-matrix (omm) v0.4.2 — OpenClaw-native orchestration extension suite（OpenClaw 原生编排扩展套件）
 
 ## Project Positioning
 
@@ -21,8 +21,10 @@ See [ADR-001](adr/001-pure-plugin-no-cli.md), [ADR-002](adr/002-team-delegation-
 ```
 omm-packages/
 ├── omm-plugin/     OpenClaw plugin — tools, hooks, state validation
-├── omm-mcp/        Stdio JSON-RPC MCP server for out-of-process state access
-└── omm-skills/     SKILL.md definitions for workflow modes
+├── omm-mcp/        Stdio JSON-RPC MCP server for workflow state + prompts
+├── omm-mcp-memory/ Stdio JSON-RPC MCP server for key-value memory
+├── omm-mcp-trace/  Stdio JSON-RPC MCP server for execution traces
+└── omm-skills/     SKILL.md definitions for workflow and artifact modes
 ```
 
 ### omm-plugin（插件核心）
@@ -45,25 +47,35 @@ Key modules:
 | `omm-tools/omm-ping.ts`   | Health-check tool                                                     |
 | `omm-tools/omm-cancel.ts` | Session cancellation tool                                             |
 
-### omm-mcp（MCP 服务器）
+### omm-mcp / omm-mcp-memory / omm-mcp-trace（MCP 服务器）
 
-A standalone stdio JSON-RPC server implementing MCP protocol 2024-11-05. Exposes the same three state tools (`read`, `write`, `list`) over stdio transport, enabling out-of-process access from any MCP client.
+Three standalone stdio JSON-RPC servers implement MCP protocol 2024-11-05:
 
-Inlines a simplified copy of the validation logic from `omm-state-validation.ts` to maintain zero cross-package dependencies.
+- `omm-mcp` exposes workflow state tools (`read`, `write`, `list`), Resources, and Prompts.
+- `omm-mcp-memory` exposes persistent key-value memory tools.
+- `omm-mcp-trace` exposes trace record/query/list/metrics tools and trace Resources.
+
+`omm-mcp` inlines a simplified copy of the validation logic from `omm-state-validation.ts` to maintain zero cross-package dependencies.
 
 See [ADR-003](adr/003-zero-dependency-mcp.md) and [MCP Protocol Contract](contracts/mcp-protocol-contract.md).
 
 ### omm-skills（技能定义）
 
-Five SKILL.md files define workflow behaviors:
+Five core skills are shipped in the suite tarball. Nine extended skills remain in `omm-packages/omm-skills/` but are excluded from packaging to focus MA integration testing on the core workflow engine.
 
-| Skill           | Type                     | State Machine                                                                          |
-| --------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `omm-ping`      | Tool dispatch（无模型）  | Direct `omm_ping` call                                                                 |
-| `omm-cancel`    | Tool dispatch（无模型）  | Direct `omm_cancel` call                                                               |
-| `omm-ralph`     | Model-driven（模型驱动） | INIT → PLANNING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED                     |
-| `omm-autopilot` | Model-driven             | ANALYZING → PLANNING → STEP_N → VERIFYING ↔ RETRY → COMPLETE/BLOCKED/FAILED            |
-| `omm-team`      | Model-driven             | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED |
+**Shipped（5 core）:**
+
+| Skill           | Type                    | Purpose                                                                                 |
+| --------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `omm-ping`      | Tool dispatch（无模型） | Direct `omm_ping` call                                                                  |
+| `omm-cancel`    | Tool dispatch（无模型） | Direct `omm_cancel` call                                                                |
+| `omm-ralph`     | Model-driven workflow   | INIT → PLANNING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED                      |
+| `omm-autopilot` | Model-driven workflow   | ANALYZING → PLANNING → STEP_N → VERIFYING ↔ RETRY → COMPLETE/BLOCKED/FAILED             |
+| `omm-team`      | Model-driven workflow   | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED  |
+
+**Parked（9 extended, not in suite tarball）:**
+
+`omm-deep-interview`, `omm-ralplan`, `omm-ultrawork`, `omm-ultraqa`, `omm-docs`, `omm-ui`, `omm-git`, `omm-research`, `omm-refactor`
 
 See [ADR-004](adr/004-three-mode-state-machine.md) and [Workflow State Contract](contracts/workflow-state-contract.md).
 
@@ -84,12 +96,12 @@ Tool call (omm_state_write)
 
 ### Dual-Access Model（双通道访问）
 
-The same state directory (`{stateRoot}/state/`) is accessible via two paths:
+The same workflow state directory (`{stateRoot}/state/`) is accessible via two paths:
 
 1. **In-process**: OpenClaw plugin tools — used during normal skill execution
 2. **Out-of-process**: MCP server over stdio — used by external MCP clients
 
-Both paths apply validation before writing. The MCP server inlines equivalent validation logic.
+Both paths apply validation before writing. The state MCP server inlines equivalent validation logic. Memory and trace data are exposed by dedicated MCP servers under the same configured OMM root.
 
 See [State Contract](contracts/state-contract.md).
 
@@ -114,16 +126,16 @@ The primary consumer (MatrixAssistant) integrates omm via:
 
 1. `omm-scripts/omm-build-suite.mjs` produces `omm-suite-<version>.tgz` with SHA-256 manifest
 2. `omm-scripts/omm-verify-bundle.mjs` verifies tarball integrity against the manifest
-3. `electron/utils/omm-openclaw-seed.ts` (MA-side) injects omm config into `openclaw.json` at startup
+3. `omm-scripts/omm-openclaw-seed.mjs` injects omm plugin config into `~/.openclaw/openclaw.json`
 4. OpenClaw Gateway discovers the plugin and skills automatically
-5. For MA's MCP registry registration (separate from OpenClaw seeding), see [`contracts/ma-integration-snippets.md`](contracts/ma-integration-snippets.md)
+5. `omm-scripts/omm-ma-seed.mjs` registers the three stdio MCP servers in MA's MCP registry; see [`contracts/ma-integration-snippets.md`](contracts/ma-integration-snippets.md)
 
 ## Extension Points（扩展点）
 
 | Extension            | How                                                                                      |
 | -------------------- | ---------------------------------------------------------------------------------------- |
 | Add a new tool       | Create handler in `omm-tools/`, register in `omm-register.ts`, add to consumer whitelist |
-| Add a new skill      | Create `omm-skills/<name>/SKILL.md`, bundle includes it automatically                    |
+| Add a new skill      | Create `omm-skills/<name>/SKILL.md`, add it to `SHIPPED_SKILLS` in `omm-build-suite.mjs` |
 | Add a new state mode | Add validator function in `omm-state-validation.ts`, add to `VALIDATORS` map             |
 | Add a lifecycle hook | Register via `api.on()` in `omm-register.ts`                                             |
 
@@ -135,12 +147,15 @@ The primary consumer (MatrixAssistant) integrates omm via:
 | `omm-scan-names.mjs`        | Hash-based forbidden name denylist scan         |
 | `omm-verify-bundle.mjs`     | Tarball integrity verification against manifest |
 | `omm-verify-provenance.mjs` | Provenance metadata validation                  |
+| `omm-smoke-mcp.mjs`         | MCP wire-contract smoke test                    |
+| `omm-ma-seed.mjs`           | MatrixAssistant MCP registry seeder             |
+| `omm-openclaw-seed.mjs`     | OpenClaw plugin registry seeder                 |
 
 CI pipeline (`.gitlab-ci.yml`): install → build → test → lint → scan-names → verify-provenance → verify-bundle
 
 ## Test Strategy
 
 - Framework: `node:test` (zero dependencies)
-- Co-located test files: `*.test.ts` alongside source
-- 25 test cases covering: state validation (17), state tools (8), ping, cancel
-- Tests run against compiled JS: `node --test omm-packages/omm-plugin/dist/src/**/*.test.js`
+- Script tests under `omm-scripts/*.test.mjs` plus compiled package tests
+- 411 tests covering plugin tools/state, workflow lifecycle, MCP state/memory/trace, Resources/Prompts, seeders, and bundle/package checks
+- Full suite: `pnpm test`
