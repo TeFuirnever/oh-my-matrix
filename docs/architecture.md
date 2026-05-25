@@ -31,7 +31,7 @@ omm-packages/
 
 The plugin entry point `register(api)` conforms to the OpenClaw Plugin ABI:
 
-- **5 tools** registered via `api.registerTool()`: `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`
+- **11 tools** registered via `api.registerTool()`: `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`, `omm_goal_write`, `omm_goal_update`, `omm_goal_read`, `omm_goal_list`, `omm_goal_delete`, `omm_goal_handoff`
 - **2 lifecycle hooks** registered via `api.on()`: `session_start`, `session_end`
 - All tools are `{ optional: true }` — the host functions without omm
 
@@ -46,6 +46,9 @@ Key modules:
 | `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence                   |
 | `omm-tools/omm-ping.ts`   | Health-check tool                                                     |
 | `omm-tools/omm-cancel.ts` | Session cancellation tool                                             |
+| `omm-goal-state.ts`       | Goal CRUD with safe write contract, gate validation, handoff generator|
+| `omm-goal-ledger.ts`      | Append-only JSONL audit ledger for goal transitions                   |
+| `omm-tools/omm-goal.ts`   | Goal mode tools (write/update/read/list/delete/handoff)               |
 
 ### omm-mcp / omm-mcp-memory / omm-mcp-trace（MCP 服务器）
 
@@ -137,6 +140,7 @@ The primary consumer (MatrixAssistant) integrates omm via:
 | Add a new tool       | Create handler in `omm-tools/`, register in `omm-register.ts`, add to consumer whitelist |
 | Add a new skill      | Create `omm-skills/<name>/SKILL.md`, add it to `SHIPPED_SKILLS` in `omm-build-suite.mjs` |
 | Add a new state mode | Add validator function in `omm-state-validation.ts`, add to `VALIDATORS` map             |
+| Add a new goal tool   | Add handler in `omm-goal-state.ts`, register in `omm-tools/omm-goal.ts`                  |
 | Add a lifecycle hook | Register via `api.on()` in `omm-register.ts`                                             |
 
 ## Build and Compliance（构建与合规）

@@ -192,3 +192,23 @@ Only one of `ralph`, `autopilot`, `team` may have `active=true` at any time. Enf
 **Race window:** the check is read-then-write without locking. For omm's single-user desktop deployment this is acceptable. Multi-session deployments would need a `state/.lock` file with `O_EXCL` semantics.
 
 See [ADR-004](../adr/004-three-mode-state-machine.md).
+
+---
+
+## Goal Mode（目标模式）
+
+Goal mode is a **separate multi-instance abstraction** defined in [Goal State Contract](goal-state-contract.md). It is not a workflow mode and is intentionally excluded from the sections above.
+
+**Key differences from workflow modes:**
+
+| Dimension | Workflow Modes | Goal Mode |
+|-----------|---------------|-----------|
+| Instance count | Singleton (one per mode) | Multi-instance (any number) |
+| Storage directory | `{stateRoot}/state/` | `{stateRoot}/goal/` |
+| Exclusivity guard | Enforced | Exempt |
+| Audit trail | None | `goal/{goalId}.ledger.jsonl` |
+| Completion model | RunOutcome stamp | Evidence-gated per subgoal |
+
+**Exclusivity exemption:** Goal mode does not participate in workflow exclusivity. A goal may be `active=true` simultaneously with any workflow mode. The exclusivity guard only checks `ralph`/`autopilot`/`team` — goal files in the separate `goal/` directory are never scanned.
+
+See [ADR-007](../adr/007-goal-mode.md) for the architectural decision.
