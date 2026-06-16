@@ -3,9 +3,11 @@
 **Status:** Stable from v0.3.0
 **Audience:** Host integrators (MatrixAssistant Electron, OpenClaw runtime, third-party plugin consumers)
 
+> **v0.5 update (2026-06-16):** the `omm-memory` and `omm-trace` MCP servers were removed as non-essential. The only MCP server now shipping is `omm-state` (`omm-mcp`). §1 (omm-memory Fails) and §2 (omm-trace Fails) below are retained as historical reference for the removed servers — their failure modes no longer apply since the servers and their tools (`omm_memory_*`, `omm_trace_*`) no longer exist. §3 (plugin state failure) and the cross-subsystem guidance remain current.
+
 ## Overview
 
-omm is composed of independent subsystems: the in-process plugin (state, skill execution), the omm-memory MCP server, and the omm-trace MCP server. Each subsystem may fail in isolation. This document specifies the observable behavior under each failure mode and the recovery procedures for each case.
+As of v0.5, omm's shipping surface is the in-process plugin (state, skill execution, employee bridge) plus the single `omm-state` MCP server. Historically (v0.3–v0.4) the suite also included `omm-memory` and `omm-trace` MCP servers; their failure modes are documented below for reference. Each subsystem may fail in isolation; this document specifies the observable behavior under each failure mode and the recovery procedures.
 
 ---
 

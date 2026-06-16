@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Seed OpenClaw/MatrixAssistant MCP config with omm's three stdio MCP servers.
+ * Seed OpenClaw/MatrixAssistant MCP config with omm's stdio MCP server (omm-state).
  *
  * Default mode is dry-run. Pass --write to modify the target file.
  * Targets ~/.openclaw/openclaw.json using the OpenClaw native mcp.servers format.

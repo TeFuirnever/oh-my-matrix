@@ -2,7 +2,9 @@
 
 > Internal contract between omm MCP servers and consumers (OpenClaw runtime, MatrixAssistant UI).
 
-This document records the URI scheme, capability advertisements, and naming conventions for omm's 3 MCP servers post-R1 (2026-05-08).
+> **Status update (2026-06-16, v0.5):** the `omm-mcp-memory` and `omm-mcp-trace` packages were removed as non-essential. Only `omm-mcp` (state + prompts) ships. The memory/trace URIs and capability rows below are retained as historical reference for the removed servers; the current surface is `omm-mcp` alone.
+
+This document records the URI scheme, capability advertisements, and naming conventions for omm's MCP servers. Originally 3 servers post-R1 (2026-05-08); converged to `omm-mcp` alone in v0.5.
 
 ---
 
@@ -24,11 +26,18 @@ omm uses the private `omm://` URI scheme for MCP Resources. The scheme is **not 
 
 ---
 
-## Capability Matrix (post-R1)
+## Capability Matrix
+
+Current (v0.5+):
 
 | Server | tools | resources | prompts |
 |--------|-------|-----------|---------|
-| `omm-mcp` (state) | ✅ | ✅ | ✅ |
+| `omm-mcp` (state + prompts) | ✅ | ✅ | ✅ |
+
+Removed in v0.5 (historical reference only):
+
+| Server | tools | resources | prompts |
+|--------|-------|-----------|---------|
 | `omm-mcp-trace` (trace) | ✅ | ✅ | — |
 | `omm-mcp-memory` (memory) | ✅ | — | — |
 

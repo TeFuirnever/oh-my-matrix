@@ -10,11 +10,9 @@ OpenClaw-native orchestration extension suite.
 
 | Package            | Description                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------- |
-| **omm-plugin**     | OpenClaw plugin — `omm_ping`, `omm_cancel`, state tools, agent-prompt tools, session lifecycle hooks |
-| **omm-skills**     | 5 core skills (ralph/autopilot/team/ping/cancel) shipped; 9 extended skills parked for future restore |
-| **omm-mcp**        | MCP state server — stdio JSON-RPC exposing state read/write/list                                     |
-| **omm-mcp-memory** | MCP memory server — key-value store over `stateRoot/memory/`                                         |
-| **omm-mcp-trace**  | MCP trace server — append-only JSONL execution event log with metrics                                |
+| **omm-plugin**     | OpenClaw plugin — state tools, MA employee-bridge tools (incl. `omm_employee_result_batch`), 14 lifecycle hooks, single-mode `team` validation |
+| **omm-skills**     | 1 shipped skill (`omm-team`) + 19 agent-prompts persona library                                      |
+| **omm-mcp**        | MCP server — stdio JSON-RPC exposing state tools, Resources (`omm://state/<key>`), and the agent-prompts catalog |
 
 ## Quick start
 

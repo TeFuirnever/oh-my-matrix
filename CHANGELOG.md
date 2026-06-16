@@ -2,6 +2,40 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.5.0] — 2026-06-16
+
+Two themes: tool-surface reduction (focus on `team` + employee bridge) and team multi-agent enhancement (fork-join + synthesis).
+
+### Removed
+
+- **Non-team plugin tools** dropped from `omm-register.ts` registration: `omm_ping`, `omm_cancel`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`. The underlying handlers stay (consumed by `omm-mcp`); only the plugin tool surface is trimmed. Registered tools: 8 → 6.
+- **`omm-mcp-memory` and `omm-mcp-trace` packages** deleted as non-essential. Only `omm-mcp` (state + prompts) ships.
+- **`omm-ping` / `omm-cancel` skills** removed (skills shipped: → 1, `omm-team`).
+- `verifyAgentPromptsAvailable` startup sentinel removed (agent-prompt tools no longer registered at plugin layer).
+
+### Added
+
+- **`omm_employee_result_batch`** plugin tool — `Promise.all` concurrent collection of N dispatch results in one tool call. Required because `omm_employee_result` blocks up to 60s per runId and LLM tool calls execute sequentially; without a batch tool, fork-join collection is physically impossible. Caps at 10 runIds.
+- **`before_compaction` / `after_compaction`** hook events (pure dispatch) + the full 14-hook `hooks` array declared in `openclaw.plugin.json`.
+- **`synthesizing`** phase in the `team` state machine (non-terminal) + **`subtasks`** array structural validation in `validateTeam` (guards against malformed LLM state writes).
+- Typed `PollOutcome` discriminated union returned by `pollSingleResult`, consumed cleanly by both the single and batch tools (no envelope reverse-engineering).
+
+### Changed
+
+- **`omm-team` SKILL.md rewritten** for persona-aware (`roleId`) task assignment, fork-join dispatch (write runIds to state immediately — LLM need not track UUIDs), and a result-synthesis phase (dispatch `critic` when `agent_count > 1`).
+- **MA dispatch-watcher spec** (`docs/plans/omm-ma-employee-bridge.md`) updated to mandate `Promise.all` concurrent processing of distinct runIds — without it, OMM-side parallel dispatch yields no wall-clock gain.
+- `pollSingleResult` no longer re-reads `resultPath` twice per poll tick (one read; `requestPath` read only when result is missing).
+- Version bumped to **0.5.0** across all three `package.json` files, `openclaw.plugin.json`, and the `omm-register.ts` `version` const.
+
+### Docs synced to reality
+
+- `README.md` package table (removed memory/trace rows), `docs/architecture.md` (6 tools / 14 hooks), `docs/roadmap.md` (264 tests / v0.5.0), `CONTEXT.md` (phase list incl. `synthesizing`; hook count 14), `docs/contracts/{hooks,error-codes,mcp}.md`, `docs/adr/008` (v0.5 tool-count note).
+- `AGENTS.md` high-risk list corrected — it previously pointed at MatrixAssistant paths (`electron/main`, `packages/gateway`, `packages/bastion`) that do not exist in this repo; now references omm's actual risk surfaces (state validation, cross-process locking, plugin ABI, employee relay, inline MCP build).
+
+### Test count
+
+255 → **264** (+9: batch tool concurrent/timeout/validation, `synthesizing` phase, `subtasks` schema validation, `synthesis` persistence).
+
 ## [Unreleased]
 
 ### Changed

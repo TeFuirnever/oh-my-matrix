@@ -1,8 +1,10 @@
-<!-- Updated: 2026-05-22 -->
+<!-- Updated: 2026-06-16 -->
 
-# MA Integration Snippets — omm MCP Servers
+# MA Integration Snippets — omm MCP Server
 
-> Drop-in JSON snippets for registering omm's 3 MCP servers into MatrixAssistant (MA) via OpenClaw's native MCP config format. MA reads `~/.openclaw/openclaw.json` and discovers servers under `mcp.servers`.
+> Drop-in JSON snippets for registering omm's MCP server into MatrixAssistant (MA) via OpenClaw's native MCP config format. MA reads `~/.openclaw/openclaw.json` and discovers servers under `mcp.servers`.
+>
+> **v0.5 (2026-06-16):** only `omm-state` (the `omm-mcp` package) ships. The `omm-memory` / `omm-trace` servers were removed as non-essential; any snippets referencing them are obsolete.
 >
 > Cross-references:
 > - [`mcp.md`](./mcp.md) — omm MCP URI scheme and capability matrix
@@ -13,7 +15,7 @@
 
 ## Audience
 
-You are a MatrixAssistant user (or omm-bundle script) who wants MA's built-in MCP client to discover and consume omm's three MCP servers — `omm-state`, `omm-memory`, `omm-trace` — so that MA's UI can list omm Resources (`omm://state/<key>`, `omm://trace/<sessionId>`, `omm://prompts/<name>`) end-to-end. The automated installer is `node omm-scripts/omm-ma-seed.mjs`; it defaults to dry-run and writes only when `--write` is passed.
+You are a MatrixAssistant user (or omm-bundle script) who wants MA's built-in MCP client to discover and consume omm's MCP server — `omm-state` — so that MA's UI can list omm Resources (`omm://state/<key>`) and the agent-prompts catalog (`omm://prompts/<name>`) end-to-end. The automated installer is `node omm-scripts/omm-ma-seed.mjs`; it defaults to dry-run and writes only when `--write` is passed.
 
 ---
 
@@ -62,14 +64,6 @@ This is what `omm-ma-seed.mjs` writes to `~/.openclaw/openclaw.json`:
       "omm-state": {
         "command": "node",
         "args": ["<OMM_ROOT>/omm-mcp/dist/src/index.js"]
-      },
-      "omm-memory": {
-        "command": "node",
-        "args": ["<OMM_ROOT>/omm-mcp-memory/dist/src/index.js"]
-      },
-      "omm-trace": {
-        "command": "node",
-        "args": ["<OMM_ROOT>/omm-mcp-trace/dist/src/index.js"]
       }
     }
   }
@@ -78,7 +72,7 @@ This is what `omm-ma-seed.mjs` writes to `~/.openclaw/openclaw.json`:
 
 Replace `<OMM_ROOT>` with the absolute path where the omm tarball was unpacked or the source checkout root. On Windows, use forward slashes in JSON strings (e.g., `D:/Matrix/Productivity/oh-my-matrix/...`).
 
-The user scope file may already contain other servers (e.g., `matrix-mcp-playwright`, `context7`); omm entries merge under the same `mcp.servers` map. Do not overwrite — see the merge rules below.
+The user scope file may already contain other servers (e.g., `matrix-mcp-playwright`, `context7`); the omm entry merges under the same `mcp.servers` map. Do not overwrite — see the merge rules below.
 
 ---
 
@@ -93,16 +87,6 @@ To isolate omm state to a specific directory, add `env.OMM_STATE_ROOT`:
       "omm-state": {
         "command": "node",
         "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp/dist/src/index.js"],
-        "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
-      },
-      "omm-memory": {
-        "command": "node",
-        "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp-memory/dist/src/index.js"],
-        "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
-      },
-      "omm-trace": {
-        "command": "node",
-        "args": ["D:/Matrix/Productivity/oh-my-matrix/omm-packages/omm-mcp-trace/dist/src/index.js"],
         "env": { "OMM_STATE_ROOT": "D:/Matrix/oh-my-matrix/.omm-dev-state" }
       }
     }
@@ -119,21 +103,21 @@ To isolate omm state to a specific directory, add `env.OMM_STATE_ROOT`:
 | Snippet key | `initialize → serverInfo.name` returned by the server | Source |
 |-------------|-------------------------------------------------------|--------|
 | `omm-state` | `omm-state` | `omm-packages/omm-mcp/dist/src/index.js` |
-| `omm-memory` | `omm-memory` | `omm-packages/omm-mcp-memory/dist/src/index.js` |
-| `omm-trace` | `omm-trace` | `omm-packages/omm-mcp-trace/dist/src/index.js` |
 
-The snippet keys are the user-visible names MA shows in its catalog. The `serverInfo.name` is the protocol-level identity (verified by `omm-scripts/omm-smoke-mcp.mjs`). Keep them aligned to avoid catalog confusion.
+The snippet key is the user-visible name MA shows in its catalog. The `serverInfo.name` is the protocol-level identity (verified by `omm-scripts/omm-smoke-mcp.mjs`). Keep them aligned to avoid catalog confusion.
+
+> Obsolete keys (`omm-memory`, `omm-trace`) and their `omm-mcp-memory` / `omm-mcp-trace` packages were removed in v0.5. If your `openclaw.json` still lists them from an older omm install, remove those entries — their entrypoints no longer exist and will fail to spawn.
 
 ---
 
 ## Idempotent Merge Rules
 
-When an installer (`omm-scripts/omm-ma-seed.mjs`) writes these entries:
+When an installer (`omm-scripts/omm-ma-seed.mjs`) writes this entry:
 
 1. **Read** the target file. If it doesn't exist, create it with the full `mcp.servers` structure.
 2. **Parse** as JSON. If malformed, abort with a clear error — do not silently rewrite.
 3. **Detect** the servers key: prefers `mcp.servers` (OpenClaw native), falls back to `servers` then `mcpServers`.
-4. **Merge** only the three omm entries (`omm-state`, `omm-memory`, `omm-trace`). For each key:
+4. **Merge** only the `omm-state` entry. For the key:
    - If absent → insert.
    - If present **and** every field matches → no-op.
    - If present **and** different → **leave the user value alone** and log a warning. The user may have customized; never overwrite without explicit `--force`.
@@ -155,19 +139,17 @@ node omm-scripts/omm-ma-seed.mjs --json
 # 2. Write to openclaw.json
 node omm-scripts/omm-ma-seed.mjs --write
 
-# 3. Verify entries exist
+# 3. Verify the entry exists
 node -e "const d=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.openclaw/openclaw.json','utf8')); console.log(Object.keys(d.mcp.servers).filter(k=>k.startsWith('omm-')).join(', '))"
 ```
 
 Then in MA:
 
 1. Restart MA (the registry re-scans on startup).
-2. Open MA's MCP catalog UI; the three `omm-*` servers should appear.
+2. Open MA's MCP catalog UI; the `omm-state` server should appear.
 3. Browse Resources:
    - `omm-state` should advertise `omm://state/<key>` resources.
-   - `omm-trace` should advertise `omm://trace/<sessionId>` per recorded session.
    - `omm-state` Prompts should list entries at `omm://prompts/<name>`.
-4. `omm-memory` exposes tools only (no resources/prompts).
 
 The omm-side automated equivalent is `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer`.
 
@@ -179,6 +161,7 @@ The omm-side automated equivalent is `node omm-scripts/omm-smoke-mcp.mjs --as-ma
 - Shell features in args (`$VAR`, backticks, pipes, redirects) — blocked by the seeder's safety checks.
 - Adding `type: "stdio"` — unnecessary; stdio is auto-detected from `command`.
 - Adding `enabled: true` or `tags` — not part of the OpenClaw config schema.
+- Re-registering `omm-memory` / `omm-trace` — removed in v0.5; their entrypoints no longer exist.
 
 ---
 
@@ -187,5 +170,6 @@ The omm-side automated equivalent is `node omm-scripts/omm-smoke-mcp.mjs --as-ma
 This document pins:
 - OpenClaw native format: `mcp.servers` in `~/.openclaw/openclaw.json`.
 - Server entry shape: `{ command, args, env? }` — no type/enabled/tags.
+- Shipped server set: `omm-state` only (v0.5).
 
 If MA's config format changes, regenerate snippets and run the smoke harness `--as-ma-consumer` mode to confirm the wire envelope still matches.

@@ -11,7 +11,7 @@
     "test": "node --test omm-scripts/*.test.mjs $(find omm-packages -path '*/dist/*.test.js' -not -path '*/node_modules/*')",
     "test:coverage": "npx -y c8 --reporter=text-summary --reporter=text --include='omm-packages/**/dist/src/**/*.js' --exclude='**/*.test.js' --exclude='**/*.d.ts' pnpm test",
     "omm:scan-names": "node omm-scripts/omm-scan-names.mjs .",
-    "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.4.2.tgz",
+    "omm:verify-bundle": "node omm-scripts/omm-verify-bundle.mjs omm-dist/omm-suite-0.5.0.tgz",
     "omm:verify-provenance": "node omm-scripts/omm-verify-provenance.mjs",
     "omm:smoke-mcp": "node omm-scripts/omm-smoke-mcp.mjs",
     "omm:ma-seed": "node omm-scripts/omm-ma-seed.mjs",

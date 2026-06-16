@@ -43,6 +43,7 @@ for backward compatibility. New code should branch on `details.structured.code`.
 | `OMM_E_IO_FAILED`         | File-system I/O failed                        | Disk full, permission denied, ENOSPC     | Retry with backoff; if persistent, alert ops       |
 | `OMM_E_LOCK_TIMEOUT`      | Cross-process lock timeout (5s)               | Deadlock or hung writer process          | Retry once; if persistent, scan for orphaned procs |
 | `OMM_E_VERSION_MISMATCH`  | Plugin/MCP API version incompatible with host | Host upgraded ABI without omm refresh    | Refuse to load + tell user to upgrade omm          |
+| `OMM_E_DISPATCH_TIMEOUT`  | MA employee-dispatch result did not arrive before the 60s poll timeout | MA watcher absent / slow / request purged | Retry once; if persistent, verify MA watcher is running and processing dispatch files |
 | `OMM_E_INTERNAL`          | Catch-all unexpected internal error           | Bug in omm                               | Capture + report upstream                          |
 
 ## Stability Policy
