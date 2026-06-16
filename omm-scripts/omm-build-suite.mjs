@@ -13,16 +13,9 @@ const staging = join(dist, "omm-suite");
 const outputName = `omm-suite-${version}.tgz`;
 const output = join(dist, outputName);
 
-// Core skills shipped in suite. Extended skills (omm-deep-interview, omm-ralplan,
-// omm-ultrawork, omm-ultraqa, omm-docs, omm-ui, omm-git, omm-research,
-// omm-refactor) are parked in omm-packages/omm-skills/ for future restore.
-const SHIPPED_SKILLS = [
-  "omm-ping",
-  "omm-cancel",
-  "omm-ralph",
-  "omm-team",
-  "omm-autopilot",
-];
+// Only ping/cancel/team are shipped. All other skill directories were removed
+// (autonomous-loop / artifact skills retired; see ADR-008).
+const SHIPPED_SKILLS = ["omm-ping", "omm-cancel", "omm-team"];
 
 async function copyRequiredFiles() {
   await rm(staging, { recursive: true, force: true });

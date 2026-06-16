@@ -5,9 +5,9 @@
  * SKILL.md authors and host integrations call these three primitives instead
  * of hand-rolling state writes:
  *
- *   await startMode("ralph", { task: "..." }, { stateRoot })
- *   await updateModeState("ralph", { iteration: 1, status: "executing" }, ...)
- *   await cancelMode("ralph", "user requested abort", ...)
+ *   await startMode("team", { task: "..." }, { stateRoot })
+ *   await updateModeState("team", { fix_loop_count: 1, current_phase: "executing" }, ...)
+ *   await cancelMode("team", "user requested abort", ...)
  *
  * Each primitive composes the existing low-level pieces:
  *   sanitizeStateKey → readStateFile → validateStateWrite
@@ -28,7 +28,7 @@ import { sanitizeStateKey } from "./omm-tools/omm-state.js";
 import type { WorkflowStateOf } from "./omm-types.js";
 import { assertWorkflowExclusivity } from "./omm-workflow-guard.js";
 
-export type WorkflowMode = "ralph" | "autopilot" | "team";
+export type WorkflowMode = "team";
 
 // Keep in sync with TERMINAL_PHASES in omm-state-validation.ts.
 // `cancelled` is a RunOutcome kind but not a validator-recognized phase,
@@ -180,7 +180,7 @@ export async function cancelMode<M extends WorkflowMode>(
   }
 
   const phase = outcomeKindToPhase(kind);
-  const phaseField = mode === "team" ? "current_phase" : "status";
+  const phaseField = "current_phase";
   const outcome: RunOutcome = makeRunOutcome({ kind, mode, reason });
   const merged: Record<string, unknown> = {
     ...existing,

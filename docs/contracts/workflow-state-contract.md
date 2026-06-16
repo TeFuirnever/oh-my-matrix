@@ -1,6 +1,8 @@
 # Workflow State Contract（工作流状态机合同）
 
-> Defines phase sets, transition rules, terminal states, and counter invariants for ralph, autopilot, and team modes.
+> **Status update (2026-06-16):** omm converged to a single workflow mode (`team`) per [ADR-008](../adr/008-delegation-to-host.md). The `ralph` and `autopilot` modes below are **removed** (delegated to the host's `@openclaw/autopilot`), and the `linked_ralph` cross-mode linkage no longer exists. The `team` section is the only current contract; `ralph`/`autopilot` sections are retained as historical reference only.
+>
+> Defines phase sets, transition rules, terminal states, and counter invariants for the team workflow mode.
 >
 > This contract extends the [State Contract](state-contract.md) with mode-specific rules.
 

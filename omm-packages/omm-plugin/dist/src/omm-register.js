@@ -4,6 +4,7 @@ import { runOmmAgentPromptGet, runOmmAgentPromptList, } from "./omm-tools/omm-ag
 import { runOmmCancel } from "./omm-tools/omm-cancel.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
 import { runOmmStateList, runOmmStateRead, runOmmStateWrite, } from "./omm-tools/omm-state.js";
+import { runOmmEmployeeDispatch, runOmmEmployeeList, runOmmEmployeeResult, } from "./omm-tools/omm-employee.js";
 /**
  * Plugin/MCP API contract version. Hosts that depend on a specific shape
  * for tool results, error envelopes, or state semantics should compare
@@ -57,7 +58,7 @@ export function register(api) {
     api.registerTool({
         name: "omm_state_write",
         label: "omm state write",
-        description: "Write a validated JSON state object by key. Validates ralph/autopilot/team schemas.",
+        description: "Write a validated JSON state object by key. Validates the team workflow schema.",
         parameters: {
             type: "object",
             additionalProperties: false,
@@ -129,6 +130,52 @@ export function register(api) {
             promptsDir: api.config?.promptsDir,
         }),
     }, { optional: true, name: "omm_agent_prompt_list" });
+    api.registerTool({
+        name: "omm_employee_list",
+        label: "omm employee list",
+        description: "List active MatrixAssistant digital employees from the cached registry. Returns { employees: [] } when no host cache exists (host is not MA, or no employee activated).",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+        },
+        execute: (_toolCallId, params) => runOmmEmployeeList(params, {
+            stateRoot: api.config?.stateRoot,
+        }),
+    }, { optional: true, name: "omm_employee_list" });
+    api.registerTool({
+        name: "omm_employee_dispatch",
+        label: "omm employee dispatch",
+        description: "Dispatch a subtask to an MA digital employee via the state-file relay. Returns { runId, status: 'dispatched' }. Poll with omm_employee_result. MA watches the dispatch dir and fulfills via chat.send.",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                agentId: { type: "string" },
+                message: { type: "string" },
+            },
+            required: ["agentId", "message"],
+        },
+        execute: (_toolCallId, params) => runOmmEmployeeDispatch(params, {
+            stateRoot: api.config?.stateRoot,
+        }),
+    }, { optional: true, name: "omm_employee_dispatch" });
+    api.registerTool({
+        name: "omm_employee_result",
+        label: "omm employee result",
+        description: "Poll for a dispatch result by runId (up to 60s). Returns { runId, status: 'complete', output } or a DISPATCH_TIMEOUT error.",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+                runId: { type: "string" },
+            },
+            required: ["runId"],
+        },
+        execute: (_toolCallId, params) => runOmmEmployeeResult(params, {
+            stateRoot: api.config?.stateRoot,
+        }),
+    }, { optional: true, name: "omm_employee_result" });
     // Verify agent-prompts directory is reachable at startup. Without this,
     // host-layout drift (the loader walks `..` to find `omm-skills/agent-prompts`)
     // silently degrades agent-prompt tools to empty results. See ADR rationale

@@ -27,6 +27,8 @@ export const OMM_ERROR_CODES = {
   LOCK_TIMEOUT: "OMM_E_LOCK_TIMEOUT",
   /** Plugin/MCP API version is incompatible with the host's expectation. */
   VERSION_MISMATCH: "OMM_E_VERSION_MISMATCH",
+  /** Employee-dispatch result did not arrive before the poll timeout. */
+  DISPATCH_TIMEOUT: "OMM_E_DISPATCH_TIMEOUT",
   /** Catch-all for unexpected internal errors. */
   INTERNAL: "OMM_E_INTERNAL",
 } as const;

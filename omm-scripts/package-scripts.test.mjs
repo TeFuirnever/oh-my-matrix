@@ -34,24 +34,9 @@ test("suite builder ships every release skill to both bundle roots", async () =>
     resolve(root, "omm-scripts", "omm-build-suite.mjs"),
     "utf8",
   );
-  const coreSkills = [
-    "omm-ping",
-    "omm-cancel",
-    "omm-ralph",
-    "omm-team",
-    "omm-autopilot",
-  ];
-  const parkedSkills = [
-    "omm-deep-interview",
-    "omm-ralplan",
-    "omm-ultrawork",
-    "omm-ultraqa",
-    "omm-docs",
-    "omm-ui",
-    "omm-git",
-    "omm-research",
-    "omm-refactor",
-  ];
+  const coreSkills = ["omm-ping", "omm-cancel", "omm-team"];
+  // All non-core skills were removed (see ADR-008); no parked skills remain.
+  const parkedSkills = [];
 
   assert.match(source, /const SHIPPED_SKILLS = \[/);
   assert.match(source, /join\(staging, "omm-skills", skill\)/);
@@ -69,7 +54,7 @@ test("suite builder ships every release skill to both bundle roots", async () =>
     );
   }
 
-  // Parked skills still exist on disk but are not in SHIPPED_SKILLS
+  // Parked skills (none currently) must exist on disk if listed
   for (const skill of parkedSkills) {
     assert.equal(
       existsSync(

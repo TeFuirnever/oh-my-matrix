@@ -188,25 +188,6 @@ async function withCrossProcessLock<T>(
  * not the raw MCP state_write tool. See CONTEXT.md "Known Trade-offs".
  * ── */
 
-const RALPH_PHASES = new Set([
-  "init",
-  "planning",
-  "executing",
-  "verifying",
-  "fixing",
-  "complete",
-  "failed",
-]);
-const AUTOPILOT_PHASES = new Set([
-  "analyzing",
-  "planning",
-  "executing",
-  "verifying",
-  "retry",
-  "complete",
-  "blocked",
-  "failed",
-]);
 const TEAM_PHASES = new Set([
   "planning",
   "decomposing",
@@ -215,6 +196,7 @@ const TEAM_PHASES = new Set([
   "fixing",
   "delegating",
   "complete",
+  "blocked",
   "failed",
 ]);
 const TERMINAL = new Set(["complete", "failed", "blocked"]);
@@ -246,15 +228,10 @@ function validateMcpStateWrite(
   const next: Record<string, unknown> = { ...value, lastUpdatedAt: now };
   const mode = (value.mode as string | undefined) ?? key;
 
-  const phaseMap: Record<string, Set<string>> = {
-    ralph: RALPH_PHASES,
-    autopilot: AUTOPILOT_PHASES,
-    team: TEAM_PHASES,
-  };
-  const phases = phaseMap[mode];
-  if (!phases) return { ok: true, state: next };
+  if (mode !== "team") return { ok: true, state: next };
+  const phases = TEAM_PHASES;
 
-  const statusField = mode === "team" ? "current_phase" : "status";
+  const statusField = "current_phase";
   const raw = next[statusField];
   if (typeof raw === "string") {
     const normalized = raw.trim().toLowerCase();
@@ -428,7 +405,7 @@ async function toolRead(key: unknown): Promise<string> {
   return readFile(filePath, "utf8");
 }
 
-const WORKFLOW_MODES = new Set(["ralph", "autopilot", "team"]);
+const WORKFLOW_MODES = new Set(["team"]);
 
 function detectWorkflowMode(
   key: string,
@@ -436,21 +413,6 @@ function detectWorkflowMode(
 ): string | null {
   const mode = (value.mode as string | undefined) ?? key;
   return WORKFLOW_MODES.has(mode) ? mode : null;
-}
-
-function isLinkedPair(
-  incomingMode: string,
-  incoming: Record<string, unknown>,
-  existingMode: string,
-  existing: Record<string, unknown>,
-): boolean {
-  if (incomingMode === "ralph" && existingMode === "team") {
-    return existing.linked_ralph === true;
-  }
-  if (incomingMode === "team" && existingMode === "ralph") {
-    return incoming.linked_ralph === true;
-  }
-  return false;
 }
 
 async function assertExclusivity(
@@ -481,7 +443,6 @@ async function assertExclusivity(
     const existingMode = detectWorkflowMode(existingKey, parsed);
     if (!existingMode) continue;
     if (parsed.active !== true) continue;
-    if (isLinkedPair(incomingMode, incoming, existingMode, parsed)) continue;
     throw new OmmError(
       OMM_E_WORKFLOW_CONFLICT,
       `cannot activate ${incomingMode}: ${existingMode} is already active (only one workflow mode may be active at a time)`,

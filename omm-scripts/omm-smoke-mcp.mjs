@@ -47,7 +47,7 @@ const SERVERS = [
     roundtrip: async (call) => {
       const w = await call("omm_state_write", {
         key: "smoke",
-        value: { mode: "ralph", active: false, current_phase: "complete" },
+        value: { mode: "team", active: false, current_phase: "complete" },
       });
       assertOk(w, "omm_state_write");
       const r = await call("omm_state_read", { key: "smoke" });

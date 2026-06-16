@@ -1,23 +1,4 @@
-/** State validation for omm workflow skills (ralph, autopilot, team). */
-const RALPH_PHASES = [
-    "init",
-    "planning",
-    "executing",
-    "verifying",
-    "fixing",
-    "complete",
-    "failed",
-];
-const AUTOPILOT_PHASES = [
-    "analyzing",
-    "planning",
-    "executing",
-    "verifying",
-    "retry",
-    "complete",
-    "blocked",
-    "failed",
-];
+/** State validation for the omm team workflow skill. */
 const TEAM_PHASES = [
     "planning",
     "decomposing",
@@ -26,10 +7,9 @@ const TEAM_PHASES = [
     "fixing",
     "delegating",
     "complete",
+    "blocked",
     "failed",
 ];
-const RALPH_PHASE_SET = new Set(RALPH_PHASES);
-const AUTOPILOT_PHASE_SET = new Set(AUTOPILOT_PHASES);
 const TEAM_PHASE_SET = new Set(TEAM_PHASES);
 const TERMINAL_PHASES = new Set(["complete", "failed", "blocked"]);
 function asNonNegInt(value) {
@@ -61,18 +41,6 @@ function normalizePhase(raw, validSet, label) {
     }
     return { phase: normalized };
 }
-function validateTerminalRules(next, nowIso) {
-    const phase = next.status;
-    if (phase && TERMINAL_PHASES.has(phase)) {
-        if (next.active === true) {
-            return "terminal status requires active=false";
-        }
-        if (next.completedAt == null) {
-            next.completedAt = nowIso;
-        }
-    }
-    return undefined;
-}
 function validateTimestamps(next) {
     if (next.startedAt != null && !isIsoTimestamp(next.startedAt)) {
         return "startedAt must be an ISO8601 timestamp";
@@ -84,110 +52,6 @@ function validateTimestamps(next) {
         return "lastUpdatedAt must be an ISO8601 timestamp";
     }
     return undefined;
-}
-function validateRalph(candidate, nowIso) {
-    const next = { ...candidate };
-    if (next.status != null) {
-        const r = normalizePhase(next.status, RALPH_PHASE_SET, "ralph.status");
-        if (r.error)
-            return { ok: false, error: r.error };
-        next.status = r.phase;
-    }
-    if (next.active === true) {
-        if (next.iteration == null)
-            next.iteration = 0;
-        if (next.max_iterations == null)
-            next.max_iterations = 10;
-        if (next.fix_attempt == null)
-            next.fix_attempt = 0;
-        if (next.max_fix_attempts == null)
-            next.max_fix_attempts = 3;
-        if (next.status == null)
-            next.status = "init";
-        if (next.startedAt == null)
-            next.startedAt = nowIso;
-    }
-    if (next.iteration != null && asNonNegInt(next.iteration) === null) {
-        return {
-            ok: false,
-            error: "ralph.iteration must be a non-negative integer",
-        };
-    }
-    if (next.max_iterations != null && asPosInt(next.max_iterations) === null) {
-        return {
-            ok: false,
-            error: "ralph.max_iterations must be a positive integer",
-        };
-    }
-    if (next.fix_attempt != null && asNonNegInt(next.fix_attempt) === null) {
-        return {
-            ok: false,
-            error: "ralph.fix_attempt must be a non-negative integer",
-        };
-    }
-    if (next.max_fix_attempts != null &&
-        asPosInt(next.max_fix_attempts) === null) {
-        return {
-            ok: false,
-            error: "ralph.max_fix_attempts must be a positive integer",
-        };
-    }
-    const termErr = validateTerminalRules(next, nowIso);
-    if (termErr)
-        return { ok: false, error: termErr };
-    const tsErr = validateTimestamps(next);
-    if (tsErr)
-        return { ok: false, error: tsErr };
-    next.lastUpdatedAt = nowIso;
-    return { ok: true, state: next };
-}
-function validateAutopilot(candidate, nowIso) {
-    const next = { ...candidate };
-    if (next.status != null) {
-        const r = normalizePhase(next.status, AUTOPILOT_PHASE_SET, "autopilot.status");
-        if (r.error)
-            return { ok: false, error: r.error };
-        next.status = r.phase;
-    }
-    if (next.active === true) {
-        if (next.current_step == null)
-            next.current_step = 0;
-        if (next.total_steps == null)
-            next.total_steps = 0;
-        if (next.max_retries_per_step == null)
-            next.max_retries_per_step = 3;
-        if (next.status == null)
-            next.status = "analyzing";
-        if (next.startedAt == null)
-            next.startedAt = nowIso;
-    }
-    if (next.current_step != null && asNonNegInt(next.current_step) === null) {
-        return {
-            ok: false,
-            error: "autopilot.current_step must be a non-negative integer",
-        };
-    }
-    if (next.total_steps != null && asNonNegInt(next.total_steps) === null) {
-        return {
-            ok: false,
-            error: "autopilot.total_steps must be a non-negative integer",
-        };
-    }
-    if (next.max_retries_per_step != null &&
-        asPosInt(next.max_retries_per_step) === null) {
-        return {
-            ok: false,
-            error: "autopilot.max_retries_per_step must be a positive integer",
-        };
-    }
-    const termErr = validateTerminalRules(next, nowIso);
-    if (termErr)
-        return { ok: false, error: termErr };
-    const tsErr = validateTimestamps(next);
-    if (tsErr)
-        return { ok: false, error: tsErr };
-    next.lastUpdatedAt = nowIso;
-    return { ok: true, state: next };
 }
 function validateTeam(candidate, nowIso) {
     const next = { ...candidate };
@@ -237,8 +101,6 @@ function validateTeam(candidate, nowIso) {
     return { ok: true, state: next };
 }
 const VALIDATORS = {
-    ralph: validateRalph,
-    autopilot: validateAutopilot,
     team: validateTeam,
 };
 /** Validate and normalize state for a given key. Unknown keys pass through with timestamp only. */

@@ -34,7 +34,7 @@ rename("{key}.json.tmp", "{key}.json")
 
 ```
 mode = value.mode ?? key
-validator = VALIDATORS[mode]  // ralph | autopilot | team
+validator = VALIDATORS[mode]  // team (single mode, post-ADR-008)
 if (validator) → mode-specific validation
 else → pass through with lastUpdatedAt only
 ```
@@ -43,8 +43,6 @@ else → pass through with lastUpdatedAt only
 
 | Mode        | Validator             | Status Field    |
 | ----------- | --------------------- | --------------- |
-| `ralph`     | `validateRalph()`     | `status`        |
-| `autopilot` | `validateAutopilot()` | `status`        |
 | `team`      | `validateTeam()`      | `current_phase` |
 
 See [Workflow State Contract](workflow-state-contract.md) for mode-specific rules.

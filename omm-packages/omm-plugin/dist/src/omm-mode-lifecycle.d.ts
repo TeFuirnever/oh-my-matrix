@@ -1,6 +1,6 @@
 import { type RunOutcomeKind } from "./omm-run-outcome.js";
 import type { WorkflowStateOf } from "./omm-types.js";
-export type WorkflowMode = "ralph" | "autopilot" | "team";
+export type WorkflowMode = "team";
 export interface ModeLifecycleConfig {
     stateRoot?: string;
 }

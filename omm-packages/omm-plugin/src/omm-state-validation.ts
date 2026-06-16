@@ -1,25 +1,4 @@
-/** State validation for omm workflow skills (ralph, autopilot, team). */
-
-const RALPH_PHASES = [
-  "init",
-  "planning",
-  "executing",
-  "verifying",
-  "fixing",
-  "complete",
-  "failed",
-] as const;
-
-const AUTOPILOT_PHASES = [
-  "analyzing",
-  "planning",
-  "executing",
-  "verifying",
-  "retry",
-  "complete",
-  "blocked",
-  "failed",
-] as const;
+/** State validation for the omm team workflow skill. */
 
 const TEAM_PHASES = [
   "planning",
@@ -29,11 +8,10 @@ const TEAM_PHASES = [
   "fixing",
   "delegating",
   "complete",
+  "blocked",
   "failed",
 ] as const;
 
-const RALPH_PHASE_SET = new Set<string>(RALPH_PHASES);
-const AUTOPILOT_PHASE_SET = new Set<string>(AUTOPILOT_PHASES);
 const TEAM_PHASE_SET = new Set<string>(TEAM_PHASES);
 
 const TERMINAL_PHASES = new Set<string>(["complete", "failed", "blocked"]);
@@ -77,22 +55,6 @@ function normalizePhase(
   return { phase: normalized };
 }
 
-function validateTerminalRules(
-  next: Record<string, unknown>,
-  nowIso: string,
-): string | undefined {
-  const phase = next.status as string | undefined;
-  if (phase && TERMINAL_PHASES.has(phase)) {
-    if (next.active === true) {
-      return "terminal status requires active=false";
-    }
-    if (next.completedAt == null) {
-      next.completedAt = nowIso;
-    }
-  }
-  return undefined;
-}
-
 function validateTimestamps(next: Record<string, unknown>): string | undefined {
   if (next.startedAt != null && !isIsoTimestamp(next.startedAt)) {
     return "startedAt must be an ISO8601 timestamp";
@@ -104,121 +66,6 @@ function validateTimestamps(next: Record<string, unknown>): string | undefined {
     return "lastUpdatedAt must be an ISO8601 timestamp";
   }
   return undefined;
-}
-
-function validateRalph(
-  candidate: Record<string, unknown>,
-  nowIso: string,
-): StateValidationResult {
-  const next = { ...candidate };
-
-  if (next.status != null) {
-    const r = normalizePhase(next.status, RALPH_PHASE_SET, "ralph.status");
-    if (r.error) return { ok: false, error: r.error };
-    next.status = r.phase;
-  }
-
-  if (next.active === true) {
-    if (next.iteration == null) next.iteration = 0;
-    if (next.max_iterations == null) next.max_iterations = 10;
-    if (next.fix_attempt == null) next.fix_attempt = 0;
-    if (next.max_fix_attempts == null) next.max_fix_attempts = 3;
-    if (next.status == null) next.status = "init";
-    if (next.startedAt == null) next.startedAt = nowIso;
-  }
-
-  if (next.iteration != null && asNonNegInt(next.iteration) === null) {
-    return {
-      ok: false,
-      error: "ralph.iteration must be a non-negative integer",
-    };
-  }
-  if (next.max_iterations != null && asPosInt(next.max_iterations) === null) {
-    return {
-      ok: false,
-      error: "ralph.max_iterations must be a positive integer",
-    };
-  }
-  if (next.fix_attempt != null && asNonNegInt(next.fix_attempt) === null) {
-    return {
-      ok: false,
-      error: "ralph.fix_attempt must be a non-negative integer",
-    };
-  }
-  if (
-    next.max_fix_attempts != null &&
-    asPosInt(next.max_fix_attempts) === null
-  ) {
-    return {
-      ok: false,
-      error: "ralph.max_fix_attempts must be a positive integer",
-    };
-  }
-
-  const termErr = validateTerminalRules(next, nowIso);
-  if (termErr) return { ok: false, error: termErr };
-
-  const tsErr = validateTimestamps(next);
-  if (tsErr) return { ok: false, error: tsErr };
-
-  next.lastUpdatedAt = nowIso;
-  return { ok: true, state: next };
-}
-
-function validateAutopilot(
-  candidate: Record<string, unknown>,
-  nowIso: string,
-): StateValidationResult {
-  const next = { ...candidate };
-
-  if (next.status != null) {
-    const r = normalizePhase(
-      next.status,
-      AUTOPILOT_PHASE_SET,
-      "autopilot.status",
-    );
-    if (r.error) return { ok: false, error: r.error };
-    next.status = r.phase;
-  }
-
-  if (next.active === true) {
-    if (next.current_step == null) next.current_step = 0;
-    if (next.total_steps == null) next.total_steps = 0;
-    if (next.max_retries_per_step == null) next.max_retries_per_step = 3;
-    if (next.status == null) next.status = "analyzing";
-    if (next.startedAt == null) next.startedAt = nowIso;
-  }
-
-  if (next.current_step != null && asNonNegInt(next.current_step) === null) {
-    return {
-      ok: false,
-      error: "autopilot.current_step must be a non-negative integer",
-    };
-  }
-  if (next.total_steps != null && asNonNegInt(next.total_steps) === null) {
-    return {
-      ok: false,
-      error: "autopilot.total_steps must be a non-negative integer",
-    };
-  }
-  if (
-    next.max_retries_per_step != null &&
-    asPosInt(next.max_retries_per_step) === null
-  ) {
-    return {
-      ok: false,
-      error: "autopilot.max_retries_per_step must be a positive integer",
-    };
-  }
-
-  const termErr = validateTerminalRules(next, nowIso);
-  if (termErr) return { ok: false, error: termErr };
-
-  const tsErr = validateTimestamps(next);
-  if (tsErr) return { ok: false, error: tsErr };
-
-  next.lastUpdatedAt = nowIso;
-  return { ok: true, state: next };
 }
 
 function validateTeam(
@@ -282,8 +129,6 @@ const VALIDATORS: Record<
   string,
   (c: Record<string, unknown>, now: string) => StateValidationResult
 > = {
-  ralph: validateRalph,
-  autopilot: validateAutopilot,
   team: validateTeam,
 };
 

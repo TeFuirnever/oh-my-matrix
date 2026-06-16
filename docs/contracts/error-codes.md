@@ -39,7 +39,7 @@ for backward compatibility. New code should branch on `details.structured.code`.
 | `OMM_E_VALUE_MISSING`     | Required `value` argument absent              | Tool called without `value`              | Surface as "user input incomplete"                 |
 | `OMM_E_VALUE_INVALID`     | `value` not a plain JSON object               | Array / primitive / null passed as value | Surface as "value type wrong"                      |
 | `OMM_E_STATE_INVALID`     | State payload failed schema                   | Missing `mode`, `active`, etc.           | Show validation message to caller                  |
-| `OMM_E_WORKFLOW_CONFLICT` | Workflow exclusivity guard fired              | Started ralph while autopilot active     | Hint user to cancel current workflow               |
+| `OMM_E_WORKFLOW_CONFLICT` | Workflow exclusivity guard fired              | Started a second team while one active   | Hint user to cancel current workflow               |
 | `OMM_E_IO_FAILED`         | File-system I/O failed                        | Disk full, permission denied, ENOSPC     | Retry with backoff; if persistent, alert ops       |
 | `OMM_E_LOCK_TIMEOUT`      | Cross-process lock timeout (5s)               | Deadlock or hung writer process          | Retry once; if persistent, scan for orphaned procs |
 | `OMM_E_VERSION_MISMATCH`  | Plugin/MCP API version incompatible with host | Host upgraded ABI without omm refresh    | Refuse to load + tell user to upgrade omm          |

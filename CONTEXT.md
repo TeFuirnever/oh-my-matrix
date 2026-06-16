@@ -6,20 +6,16 @@
 
 ### Workflow Mode
 
-One of `ralph`, `autopilot`, or `team`. Exactly one may be active at a time (enforced by the workflow exclusivity guard in `omm-workflow-guard.ts`).
+`team` — the **sole** workflow mode. Coordinated parallel agents with a shared plan. Tracks `fix_loop_count` for convergence. At most one `team` may be active at a time (enforced by the workflow exclusivity guard in `omm-workflow-guard.ts`).
 
-- **ralph** — Sequential iteration loop: plan → execute → verify → fix → repeat. Terminates when all acceptance criteria pass or `max_iterations` exhausted.
-- **autopilot** — Autonomous pipeline: analyze → plan → execute (parallel) → QA cycle → validate. Advances through a `Stage[]` plan.
-- **team** — Coordinated parallel agents with a shared plan. Tracks `fix_loop_count` for convergence.
+> **History (2026-06-16):** omm previously supported three modes (`ralph`, `autopilot`, `team`). `ralph` and `autopilot` were **deleted and delegated to the host** (MA's `@openclaw/autopilot` plugin), which covers autonomous-loop and goal capabilities more maturely. See [ADR-008](docs/adr/008-delegation-to-host.md) and [ADR-002](docs/adr/002-team-delegation-to-host.md) for the delegation principle. omm now focuses on `team` orchestration + the digital-employee bridge.
 
 ### Phase
 
-A mode-specific lifecycle step. Each mode defines its own set (see `omm-state-validation.ts`):
+A `team`-mode lifecycle step (see `omm-state-validation.ts`):
 
 | Mode | Phases | Field |
 |------|--------|-------|
-| ralph | init, planning, executing, verifying, fixing, complete, failed | `status` |
-| autopilot | analyzing, planning, executing, verifying, retry, complete, blocked, failed | `status` |
 | team | planning, decomposing, executing, verifying, fixing, delegating, complete, failed | `current_phase` |
 
 Terminal phases (`complete`, `failed`, `blocked`) require `active=false` and auto-set `completedAt`.
@@ -30,12 +26,10 @@ A JSON file (`{mode}.json`) in `{stateRoot}/state/`. Validated on write via `val
 
 ### Counter
 
-Mode-specific numeric fields injected with defaults on `active=true`:
+`team`-mode numeric fields injected with defaults on `active=true`:
 
 | Mode | Counters |
 |------|----------|
-| ralph | `iteration` (0), `max_iterations` (10), `fix_attempt` (0), `max_fix_attempts` (3) |
-| autopilot | `current_step` (0), `total_steps` (0), `max_retries_per_step` (3) |
 | team | `fix_loop_count` (0), `max_fix_loops` (3) |
 
 ### Trace
@@ -65,37 +59,35 @@ Two styles coexist in `agent-prompts/`:
 
 Both styles parse identically through `parseAgentPrompt` (body is opaque text). Starter prompts MAY be refactored to XML structure over time if clarity benefits warrant, but ported prompts MUST NOT be rewritten to lean style without explicit approval (violates "borrow proven personas, do not rewrite them" principle).
 
-**Agent Inventory (post-Phase-1):**
+**Agent Inventory:**
 
-| Name | Model tier | Skill anchor | Anchor reality | Source |
-|------|------------|--------------|----------------|--------|
-| analyst | opus | omm-deep-interview, omm-ralplan | REAL | bundled (lean) |
-| architect | opus | omm-ralplan, omm-ultraqa | REAL | bundled (lean) |
-| critic | opus | omm-ralplan | REAL | bundled (lean) |
-| executor | sonnet | omm-autopilot | REAL | bundled (lean) |
-| verifier | sonnet | omm-autopilot, omm-ralph | REAL | bundled (lean) |
-| planner | opus | omm-ralplan (Phase 1 step 1) | REAL | ported from omc (XML) |
-| tracer | sonnet | omm-deep-interview | REAL | ported from omc (XML) |
-| code-reviewer | opus | omm-ultraqa | REAL | ported from omc (XML) |
-| security-reviewer | opus | omm-ultraqa | REAL | ported from omc (XML) |
-| test-engineer | sonnet | omm-ultraqa | REAL | ported from omc (XML) |
-| debugger | sonnet | omm-autopilot | REAL | ported from omc (XML) |
-| qa-tester | sonnet | omm-ultraqa | REAL | ported from omc (XML) |
-| explore | haiku | omm-deep-interview | REAL | ported from omc (XML) |
-| document-specialist | sonnet | omm-docs | REAL | ported from omc (XML) |
-| designer | sonnet | omm-ui | REAL | ported from omc (XML) |
-| writer | haiku | omm-docs | REAL | ported from omc (XML) |
-| git-master | sonnet | omm-git | REAL | ported from omc (XML) |
-| scientist | sonnet | omm-research | REAL | ported from omc (XML) |
-| code-simplifier | opus | omm-refactor | REAL | ported from omc (XML) |
+> Agent prompts are a **persona library consumed by `omm-team` orchestration** (loaded via `omm_agent_prompt_get` / `omm_agent_prompt_list`). With only `omm-team` shipped ([ADR-008](docs/adr/008-delegation-to-host.md)), agents no longer carry per-skill anchors — every persona is available for team delegation. Autonomous-loop and artifact-pipeline skills that previously anchored these personas were removed; autonomous execution is delegated to the host's `@openclaw/autopilot`.
 
-**Placeholder agents** (0): all P0/P1/P2 agents now have real skill anchors. The omm v0.4.x agent inventory is fully consumed by current skills.
+| Name | Model tier | Source |
+|------|------------|--------|
+| analyst | opus | bundled (lean) |
+| architect | opus | bundled (lean) |
+| critic | opus | bundled (lean) |
+| executor | sonnet | bundled (lean) |
+| verifier | sonnet | bundled (lean) |
+| planner | opus | ported from omc (XML) |
+| tracer | sonnet | ported from omc (XML) |
+| code-reviewer | opus | ported from omc (XML) |
+| security-reviewer | opus | ported from omc (XML) |
+| test-engineer | sonnet | ported from omc (XML) |
+| debugger | sonnet | ported from omc (XML) |
+| qa-tester | sonnet | ported from omc (XML) |
+| explore | haiku | ported from omc (XML) |
+| document-specialist | sonnet | ported from omc (XML) |
+| designer | sonnet | ported from omc (XML) |
+| writer | haiku | ported from omc (XML) |
+| git-master | sonnet | ported from omc (XML) |
+| scientist | sonnet | ported from omc (XML) |
+| code-simplifier | opus | ported from omc (XML) |
 
 ### Skill
 
-A SKILL.md file consumed by OpenClaw's AgentSkills system. Defines a structured workflow (deep-interview, ralplan, ultrawork, ultraqa, etc.) that orchestrates agent prompts and state tools.
-
-All skills follow the **Lifecycle Conventions** (state init, agent loading, terminal markers) defined in `docs/contracts/skill-lifecycle.md` §1. Skills that produce a single artifact (omm-docs, omm-ui, omm-research, omm-refactor) follow the **3-Phase Pipeline Pattern** (discover → generate → verify) defined in §2 of the same contract.
+A SKILL.md file consumed by OpenClaw's AgentSkills system. omm ships a single workflow skill: **`omm-team`** (multi-agent team orchestration with the MA digital-employee bridge). All other skills (ralph, autopilot, ralplan, deep-interview, ultrawork, ultraqa, docs, ui, git, research, refactor) were removed — autonomous execution is delegated to the host's `@openclaw/autopilot` ([ADR-008](docs/adr/008-delegation-to-host.md)). `omm-team` follows the **Lifecycle Conventions** in `docs/contracts/skill-lifecycle.md` §1.
 
 ## Architecture Invariants
 

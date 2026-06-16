@@ -122,8 +122,8 @@ Returned by `tools/list`:
   "params": {
     "name": "omm_state_write",
     "arguments": {
-      "key": "ralph",
-      "value": { "mode": "ralph", "active": true, "status": "init" }
+      "key": "team",
+      "value": { "mode": "team", "active": true, "current_phase": "planning" }
     }
   }
 }
@@ -139,7 +139,7 @@ Returned by `tools/list`:
     "content": [
       {
         "type": "text",
-        "text": "Written: /home/user/.openclaw/omm/state/ralph.json"
+        "text": "Written: /home/user/.openclaw/omm/state/team.json"
       }
     ]
   }

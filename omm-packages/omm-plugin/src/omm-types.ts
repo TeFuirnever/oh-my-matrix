@@ -1,38 +1,19 @@
 /**
- * Typed workflow state shapes — discriminated union over mode.
+ * Typed workflow state shape for the team mode.
  *
  * Internal plumbing (readState, writeState, validateStateWrite) stays
  * Record<string, unknown> because state is parsed from JSON. These types
  * give callers compile-time narrowing at the API boundary.
  *
  * Usage:
- *   import type { RalphState } from "./omm-types.js";
- *   const raw = await getModeState("ralph", { stateRoot });
- *   const ralph = raw as RalphState | null;
- *   if (ralph?.active) { ... ralph.iteration, ralph.status ... }
+ *   import type { TeamState } from "./omm-types.js";
+ *   const raw = await getModeState("team", { stateRoot });
+ *   const team = raw as TeamState | null;
+ *   if (team?.active) { ... team.fix_loop_count, team.current_phase ... }
  */
 import type { RunOutcome } from "./omm-run-outcome.js";
 
 // ── Phase literal types (source of truth: omm-state-validation.ts) ──
-
-export type RalphPhase =
-  | "init"
-  | "planning"
-  | "executing"
-  | "verifying"
-  | "fixing"
-  | "complete"
-  | "failed";
-
-export type AutopilotPhase =
-  | "analyzing"
-  | "planning"
-  | "executing"
-  | "verifying"
-  | "retry"
-  | "complete"
-  | "blocked"
-  | "failed";
 
 export type TeamPhase =
   | "planning"
@@ -42,41 +23,11 @@ export type TeamPhase =
   | "fixing"
   | "delegating"
   | "complete"
+  | "blocked"
   | "failed";
 
-// ── State shapes ──
-// Index signature keeps these assignable to Record<string, unknown>.
-
-export interface RalphState {
-  [key: string]: unknown;
-  mode: "ralph";
-  active: boolean;
-  status?: RalphPhase;
-  iteration?: number;
-  max_iterations?: number;
-  fix_attempt?: number;
-  max_fix_attempts?: number;
-  startedAt?: string;
-  completedAt?: string;
-  lastUpdatedAt?: string;
-  outcome?: RunOutcome;
-  task?: string;
-}
-
-export interface AutopilotState {
-  [key: string]: unknown;
-  mode: "autopilot";
-  active: boolean;
-  status?: AutopilotPhase;
-  current_step?: number;
-  total_steps?: number;
-  max_retries_per_step?: number;
-  startedAt?: string;
-  completedAt?: string;
-  lastUpdatedAt?: string;
-  outcome?: RunOutcome;
-  task?: string;
-}
+// ── State shape ──
+// Index signature keeps this assignable to Record<string, unknown>.
 
 export interface TeamState {
   [key: string]: unknown;
@@ -92,7 +43,7 @@ export interface TeamState {
   task?: string;
 }
 
-export type WorkflowState = RalphState | AutopilotState | TeamState;
+export type WorkflowState = TeamState;
 
 // ── Mode → State mapping (for typed lifecycle API) ──
 
@@ -101,16 +52,8 @@ export type WorkflowState = RalphState | AutopilotState | TeamState;
  *
  * Used by `omm-mode-lifecycle.ts` to give callers compile-time narrowing:
  *
- *   const ralph = await getModeState("ralph");  // typed as RalphState | null
- *   const team  = await getModeState("team");   // typed as TeamState | null
- *
- * Without this mapping callers had to cast from Record<string, unknown>.
+ *   const team = await getModeState("team");  // typed as TeamState | null
  */
-export type WorkflowStateOf<M extends "ralph" | "autopilot" | "team"> =
-  M extends "ralph"
-    ? RalphState
-    : M extends "autopilot"
-      ? AutopilotState
-      : M extends "team"
-        ? TeamState
-        : never;
+export type WorkflowStateOf<M extends "team"> = M extends "team"
+  ? TeamState
+  : never;

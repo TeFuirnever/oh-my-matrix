@@ -1,13 +1,13 @@
 /**
  * Runtime completion contract — typed terminal outcomes for a workflow run.
  *
- * Every workflow mode (ralph/autopilot/team) ends in exactly one of:
+ * The team workflow mode ends in exactly one of:
  *   completed | failed | blocked | cancelled
  *
  * `RunOutcome` captures the kind, an optional reason, the mode, and the
  * timestamp the outcome was produced. Consumers can persist it on the state
  * record under the `outcome` field to make completion machine-readable
- * across sessions instead of inferring from `status`/`current_phase`.
+ * across sessions instead of inferring from `current_phase`.
  */
 const VALID_KINDS = new Set([
     "completed",
@@ -15,11 +15,7 @@ const VALID_KINDS = new Set([
     "blocked",
     "cancelled",
 ]);
-const VALID_MODES = new Set([
-    "ralph",
-    "autopilot",
-    "team",
-]);
+const VALID_MODES = new Set(["team"]);
 const KIND_TO_PHASE = {
     completed: "complete",
     failed: "failed",
@@ -86,8 +82,7 @@ export function isRunOutcome(value) {
 }
 /**
  * Extract a `RunOutcome` from a terminal state record, or null if the state
- * is still active. Reads `mode`, the relevant phase field (`status` for
- * ralph/autopilot, `current_phase` for team), and `completedAt`.
+ * is still active. Reads `mode`, the `current_phase` field, and `completedAt`.
  */
 export function deriveOutcomeFromState(state) {
     const mode = state.mode;
@@ -95,7 +90,7 @@ export function deriveOutcomeFromState(state) {
         !VALID_MODES.has(mode)) {
         return null;
     }
-    const phaseField = mode === "team" ? "current_phase" : "status";
+    const phaseField = "current_phase";
     const phase = state[phaseField];
     if (typeof phase !== "string")
         return null;

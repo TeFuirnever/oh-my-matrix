@@ -138,7 +138,7 @@ describe("bundled agent prompts", () => {
         }
     });
 });
-describe("expanded agent inventory (Phase 1 ported prompts)", () => {
+describe("expanded agent inventory (ported prompts)", () => {
     const PORTED_PROMPTS = [
         "planner",
         "tracer",
@@ -151,6 +151,9 @@ describe("expanded agent inventory (Phase 1 ported prompts)", () => {
         "document-specialist",
         "designer",
         "writer",
+        "git-master",
+        "scientist",
+        "code-simplifier",
     ];
     const BANNED_TOKENS = [
         "Task(subagent_type=",
@@ -161,9 +164,9 @@ describe("expanded agent inventory (Phase 1 ported prompts)", () => {
         "<External_Consultation>",
         "mcp__plugin_oh-my-claudecode",
     ];
-    it("ships >= 16 agent prompts (5 starter + 11 ported)", async () => {
+    it("ships >= 19 agent prompts (5 starter + 14 ported)", async () => {
         const names = await listAgentPrompts(BUNDLED_PROMPTS_DIR);
-        assert.ok(names.length >= 16, `expected >= 16 prompts, got ${names.length}`);
+        assert.ok(names.length >= 19, `expected >= 19 prompts, got ${names.length}`);
     });
     it("each ported prompt parses and has no Claude-only semantic tokens", async () => {
         const prompts = await Promise.all(PORTED_PROMPTS.map((name) => loadAgentPrompt(name, BUNDLED_PROMPTS_DIR)));

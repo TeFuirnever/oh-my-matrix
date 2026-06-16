@@ -4,7 +4,7 @@
 
 ## Project Positioning
 
-omm provides persistent workflow capabilities (ralph/autopilot/team) for any OpenClaw-compatible host.
+omm provides team workflow orchestration (plus the digital-employee bridge) for any OpenClaw-compatible host. Autonomous-loop and goal capabilities are delegated to the host — see [ADR-008](adr/008-delegation-to-host.md).
 It is modeled after [oh-my-codex](https://github.com/anthropics/oh-my-codex) but redesigned as a **pure plugin** — no standalone CLI, no Rust native modules, zero runtime dependencies.
 
 | Dimension          | oh-my-codex                    | omm                                      |
@@ -24,14 +24,14 @@ omm-packages/
 ├── omm-mcp/        Stdio JSON-RPC MCP server for workflow state + prompts
 ├── omm-mcp-memory/ Stdio JSON-RPC MCP server for key-value memory
 ├── omm-mcp-trace/  Stdio JSON-RPC MCP server for execution traces
-└── omm-skills/     SKILL.md definitions for workflow and artifact modes
+└── omm-skills/     SKILL.md for the team workflow (plus agent-prompts persona library)
 ```
 
 ### omm-plugin（插件核心）
 
 The plugin entry point `register(api)` conforms to the OpenClaw Plugin ABI:
 
-- **11 tools** registered via `api.registerTool()`: `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`, `omm_goal_write`, `omm_goal_update`, `omm_goal_read`, `omm_goal_list`, `omm_goal_delete`, `omm_goal_handoff`
+- **10 tools** registered via `api.registerTool()` (all `optional: true`): `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`, `omm_employee_list`, `omm_employee_dispatch`, `omm_employee_result`
 - **2 lifecycle hooks** registered via `api.on()`: `session_start`, `session_end`
 - All tools are `{ optional: true }` — the host functions without omm
 
@@ -40,15 +40,14 @@ Key modules:
 | Module                    | Responsibility                                                        |
 | ------------------------- | --------------------------------------------------------------------- |
 | `omm-register.ts`         | Plugin entry point; wires tools and hooks to the OpenClaw API         |
-| `omm-state-validation.ts` | Mode-aware state validation（三模式状态验证）for ralph/autopilot/team |
+| `omm-state-validation.ts` | State validation（单模式状态验证）for the team workflow |
 | `omm-config.ts`           | Resolves state root directory; defaults to `~/.openclaw/omm`          |
 | `omm-state.ts`            | Smoke record writer for session lifecycle events                      |
 | `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence                   |
 | `omm-tools/omm-ping.ts`   | Health-check tool                                                     |
 | `omm-tools/omm-cancel.ts` | Session cancellation tool                                             |
-| `omm-goal-state.ts`       | Goal CRUD with safe write contract, gate validation, handoff generator|
-| `omm-goal-ledger.ts`      | Append-only JSONL audit ledger for goal transitions                   |
-| `omm-tools/omm-goal.ts`   | Goal mode tools (write/update/read/list/delete/handoff)               |
+| `omm-tools/omm-employee.ts` | MA digital-employee bridge (list/dispatch/result) via state-file relay |
+| _(removed)_               | Goal tracking delegated to MA `@openclaw/autopilot` `goal_manager` ([ADR-008](adr/008-delegation-to-host.md)) |
 
 ### omm-mcp / omm-mcp-memory / omm-mcp-trace（MCP 服务器）
 
@@ -64,21 +63,15 @@ See [ADR-003](adr/003-zero-dependency-mcp.md) and [MCP Protocol Contract](contra
 
 ### omm-skills（技能定义）
 
-Five core skills are shipped in the suite tarball. Nine extended skills remain in `omm-packages/omm-skills/` but are excluded from packaging to focus MA integration testing on the core workflow engine.
+Three skills are shipped in the suite tarball: `omm-ping`, `omm-cancel`, `omm-team`. All other skill directories (ralph, autopilot, ralplan, deep-interview, ultrawork, ultraqa, docs, ui, git, research, refactor) were removed — autonomous execution is delegated to the host's `@openclaw/autopilot` ([ADR-008](adr/008-delegation-to-host.md)).
 
-**Shipped（5 core）:**
+**Shipped（3）:**
 
 | Skill           | Type                    | Purpose                                                                                 |
 | --------------- | ----------------------- | --------------------------------------------------------------------------------------- |
 | `omm-ping`      | Tool dispatch（无模型） | Direct `omm_ping` call                                                                  |
 | `omm-cancel`    | Tool dispatch（无模型） | Direct `omm_cancel` call                                                                |
-| `omm-ralph`     | Model-driven workflow   | INIT → PLANNING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED                      |
-| `omm-autopilot` | Model-driven workflow   | ANALYZING → PLANNING → STEP_N → VERIFYING ↔ RETRY → COMPLETE/BLOCKED/FAILED             |
 | `omm-team`      | Model-driven workflow   | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED  |
-
-**Parked（9 extended, not in suite tarball）:**
-
-`omm-deep-interview`, `omm-ralplan`, `omm-ultrawork`, `omm-ultraqa`, `omm-docs`, `omm-ui`, `omm-git`, `omm-research`, `omm-refactor`
 
 See [ADR-004](adr/004-three-mode-state-machine.md) and [Workflow State Contract](contracts/workflow-state-contract.md).
 
@@ -140,7 +133,7 @@ The primary consumer (MatrixAssistant) integrates omm via:
 | Add a new tool       | Create handler in `omm-tools/`, register in `omm-register.ts`, add to consumer whitelist |
 | Add a new skill      | Create `omm-skills/<name>/SKILL.md`, add it to `SHIPPED_SKILLS` in `omm-build-suite.mjs` |
 | Add a new state mode | Add validator function in `omm-state-validation.ts`, add to `VALIDATORS` map             |
-| Add a new goal tool   | Add handler in `omm-goal-state.ts`, register in `omm-tools/omm-goal.ts`                  |
+| Add a new employee tool | Handler in `omm-tools/omm-employee.ts`, register in `omm-register.ts` (state-file relay) |
 | Add a lifecycle hook | Register via `api.on()` in `omm-register.ts`                                             |
 
 ## Build and Compliance（构建与合规）
@@ -161,5 +154,5 @@ CI pipeline (`.gitlab-ci.yml`): install → build → test → lint → scan-nam
 
 - Framework: `node:test` (zero dependencies)
 - Script tests under `omm-scripts/*.test.mjs` plus compiled package tests
-- 411 tests covering plugin tools/state, workflow lifecycle, MCP state/memory/trace, Resources/Prompts, seeders, and bundle/package checks
+- 299 tests covering plugin tools/state/employee-bridge, workflow lifecycle, MCP state/memory/trace, Resources/Prompts, seeders, and bundle/package checks
 - Full suite: `pnpm test`

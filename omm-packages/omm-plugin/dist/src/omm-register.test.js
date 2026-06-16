@@ -65,16 +65,16 @@ describe("omm-register: 4-arg execute(toolCallId, params, signal, onUpdate)", ()
         const { tools, stateRoot, cleanup } = await registerWithTempRoot();
         try {
             const writeResult = (await tools.omm_state_write.execute("call-id-write", {
-                key: "ralph",
-                value: { mode: "ralph", active: false, status: "complete" },
+                key: "team",
+                value: { mode: "team", active: false, current_phase: "complete" },
             }, undefined, () => undefined));
-            assert.match(writeResult.content[0].text, /omm_state_write: ralph/);
+            assert.match(writeResult.content[0].text, /omm_state_write: team/);
             // Verify the file actually exists at the expected path.
-            const onDisk = await readFile(join(stateRoot, "state", "ralph.json"), "utf8");
-            assert.match(onDisk, /"mode": "ralph"/);
+            const onDisk = await readFile(join(stateRoot, "state", "team.json"), "utf8");
+            assert.match(onDisk, /"mode": "team"/);
             // Round-trip via omm_state_read.
-            const readResult = (await tools.omm_state_read.execute("call-id-read", { key: "ralph" }, undefined, () => undefined));
-            assert.match(readResult.content[0].text, /"mode": "ralph"/);
+            const readResult = (await tools.omm_state_read.execute("call-id-read", { key: "team" }, undefined, () => undefined));
+            assert.match(readResult.content[0].text, /"mode": "team"/);
         }
         finally {
             await cleanup();

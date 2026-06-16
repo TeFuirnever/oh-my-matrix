@@ -1,18 +1,18 @@
 /**
  * Runtime completion contract — typed terminal outcomes for a workflow run.
  *
- * Every workflow mode (ralph/autopilot/team) ends in exactly one of:
+ * The team workflow mode ends in exactly one of:
  *   completed | failed | blocked | cancelled
  *
  * `RunOutcome` captures the kind, an optional reason, the mode, and the
  * timestamp the outcome was produced. Consumers can persist it on the state
  * record under the `outcome` field to make completion machine-readable
- * across sessions instead of inferring from `status`/`current_phase`.
+ * across sessions instead of inferring from `current_phase`.
  */
 export type RunOutcomeKind = "completed" | "failed" | "blocked" | "cancelled";
 export interface RunOutcome {
     kind: RunOutcomeKind;
-    mode: "ralph" | "autopilot" | "team";
+    mode: "team";
     reason?: string;
     finishedAt: string;
 }
@@ -40,7 +40,6 @@ export declare function makeRunOutcome(input: {
 export declare function isRunOutcome(value: unknown): value is RunOutcome;
 /**
  * Extract a `RunOutcome` from a terminal state record, or null if the state
- * is still active. Reads `mode`, the relevant phase field (`status` for
- * ralph/autopilot, `current_phase` for team), and `completedAt`.
+ * is still active. Reads `mode`, the `current_phase` field, and `completedAt`.
  */
 export declare function deriveOutcomeFromState(state: Record<string, unknown>): RunOutcome | null;

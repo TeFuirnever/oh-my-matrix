@@ -147,7 +147,7 @@ describe("omm-trace MCP server", () => {
       await withClient(async (client) => {
         await callTool(client, "omm_trace_record", {
           session_id: "s1",
-          event: ev("2026-04-26T10:00:00Z", "start", { mode: "ralph" }),
+          event: ev("2026-04-26T10:00:00Z", "start", { mode: "team" }),
         });
         await callTool(client, "omm_trace_record", {
           session_id: "s1",

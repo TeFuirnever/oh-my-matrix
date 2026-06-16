@@ -6,6 +6,6 @@ export interface ExclusivityCheckResult {
 }
 /**
  * Reject `active=true` workflow writes when another workflow mode is already
- * active. Same-key overwrites and linked ralph↔team pairs are allowed.
+ * active. Same-key overwrites are allowed.
  */
 export declare function assertWorkflowExclusivity(stateDir: string, incomingKey: string, incomingValue: Record<string, unknown>): Promise<ExclusivityCheckResult>;

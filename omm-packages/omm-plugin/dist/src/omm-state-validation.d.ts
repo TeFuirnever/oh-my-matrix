@@ -1,4 +1,4 @@
-/** State validation for omm workflow skills (ralph, autopilot, team). */
+/** State validation for the omm team workflow skill. */
 export interface StateValidationResult {
     ok: boolean;
     state?: Record<string, unknown>;

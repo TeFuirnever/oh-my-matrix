@@ -5,9 +5,9 @@
  * SKILL.md authors and host integrations call these three primitives instead
  * of hand-rolling state writes:
  *
- *   await startMode("ralph", { task: "..." }, { stateRoot })
- *   await updateModeState("ralph", { iteration: 1, status: "executing" }, ...)
- *   await cancelMode("ralph", "user requested abort", ...)
+ *   await startMode("team", { task: "..." }, { stateRoot })
+ *   await updateModeState("team", { fix_loop_count: 1, current_phase: "executing" }, ...)
+ *   await cancelMode("team", "user requested abort", ...)
  *
  * Each primitive composes the existing low-level pieces:
  *   sanitizeStateKey → readStateFile → validateStateWrite
@@ -118,7 +118,7 @@ export async function cancelMode(mode, reason, config = {}) {
         return { ok: true, state: existing };
     }
     const phase = outcomeKindToPhase(kind);
-    const phaseField = mode === "team" ? "current_phase" : "status";
+    const phaseField = "current_phase";
     const outcome = makeRunOutcome({ kind, mode, reason });
     const merged = {
         ...existing,

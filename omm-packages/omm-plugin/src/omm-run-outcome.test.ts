@@ -41,9 +41,9 @@ describe("outcomeKindToPhase", () => {
 
 describe("makeRunOutcome", () => {
   it("constructs a valid outcome with auto-timestamp", () => {
-    const o = makeRunOutcome({ kind: "completed", mode: "ralph" });
+    const o = makeRunOutcome({ kind: "completed", mode: "team" });
     assert.equal(o.kind, "completed");
-    assert.equal(o.mode, "ralph");
+    assert.equal(o.mode, "team");
     assert.equal(o.reason, undefined);
     assert.ok(Number.isFinite(Date.parse(o.finishedAt)));
   });
@@ -51,7 +51,7 @@ describe("makeRunOutcome", () => {
   it("preserves reason when provided", () => {
     const o = makeRunOutcome({
       kind: "blocked",
-      mode: "autopilot",
+      mode: "team",
       reason: "step 3 retries exhausted",
     });
     assert.equal(o.reason, "step 3 retries exhausted");
@@ -71,7 +71,7 @@ describe("makeRunOutcome", () => {
       () =>
         makeRunOutcome({
           kind: "bogus" as never,
-          mode: "ralph",
+          mode: "team",
         }),
       /invalid RunOutcome kind/,
     );
@@ -93,7 +93,7 @@ describe("makeRunOutcome", () => {
       () =>
         makeRunOutcome({
           kind: "completed",
-          mode: "ralph",
+          mode: "team",
           finishedAt: "not a date",
         }),
       /finishedAt must be a valid ISO8601 timestamp/,
@@ -105,7 +105,7 @@ describe("makeRunOutcome", () => {
       () =>
         makeRunOutcome({
           kind: "failed",
-          mode: "ralph",
+          mode: "team",
           reason: 42 as never,
         }),
       /reason must be a string/,
@@ -115,7 +115,7 @@ describe("makeRunOutcome", () => {
 
 describe("isRunOutcome", () => {
   it("accepts a structurally-valid outcome", () => {
-    const o = makeRunOutcome({ kind: "completed", mode: "ralph" });
+    const o = makeRunOutcome({ kind: "completed", mode: "team" });
     assert.equal(isRunOutcome(o), true);
   });
 
@@ -129,14 +129,14 @@ describe("isRunOutcome", () => {
   it("rejects missing or wrong-typed fields", () => {
     assert.equal(isRunOutcome({}), false);
     assert.equal(
-      isRunOutcome({ kind: "completed", mode: "ralph" }),
+      isRunOutcome({ kind: "completed", mode: "team" }),
       false,
       "missing finishedAt",
     );
     assert.equal(
       isRunOutcome({
         kind: "completed",
-        mode: "ralph",
+        mode: "team",
         finishedAt: "garbage",
       }),
       false,
@@ -144,7 +144,7 @@ describe("isRunOutcome", () => {
     assert.equal(
       isRunOutcome({
         kind: "bogus",
-        mode: "ralph",
+        mode: "team",
         finishedAt: new Date().toISOString(),
       }),
       false,
@@ -160,7 +160,7 @@ describe("isRunOutcome", () => {
     assert.equal(
       isRunOutcome({
         kind: "completed",
-        mode: "ralph",
+        mode: "team",
         finishedAt: new Date().toISOString(),
         reason: 1,
       }),
@@ -170,35 +170,35 @@ describe("isRunOutcome", () => {
 });
 
 describe("deriveOutcomeFromState", () => {
-  it("derives completed outcome from ralph terminal state", () => {
+  it("derives completed outcome from team terminal state", () => {
     const o = deriveOutcomeFromState({
-      mode: "ralph",
+      mode: "team",
       active: false,
-      status: "complete",
+      current_phase: "complete",
       completedAt: "2026-04-26T10:00:00.000Z",
     });
     assert.ok(o);
     assert.equal(o?.kind, "completed");
-    assert.equal(o?.mode, "ralph");
+    assert.equal(o?.mode, "team");
     assert.equal(o?.finishedAt, "2026-04-26T10:00:00.000Z");
   });
 
-  it("derives failed outcome from autopilot terminal state", () => {
+  it("derives failed outcome from team failed phase", () => {
     const o = deriveOutcomeFromState({
-      mode: "autopilot",
+      mode: "team",
       active: false,
-      status: "failed",
+      current_phase: "failed",
       completedAt: "2026-04-26T10:00:00.000Z",
     });
     assert.equal(o?.kind, "failed");
-    assert.equal(o?.mode, "autopilot");
+    assert.equal(o?.mode, "team");
   });
 
-  it("derives blocked outcome from autopilot blocked state", () => {
+  it("derives blocked outcome from team blocked phase", () => {
     const o = deriveOutcomeFromState({
-      mode: "autopilot",
+      mode: "team",
       active: false,
-      status: "blocked",
+      current_phase: "blocked",
       completedAt: "2026-04-26T10:00:00.000Z",
     });
     assert.equal(o?.kind, "blocked");
@@ -217,18 +217,18 @@ describe("deriveOutcomeFromState", () => {
 
   it("returns null for active=true (still running)", () => {
     const o = deriveOutcomeFromState({
-      mode: "ralph",
+      mode: "team",
       active: true,
-      status: "executing",
+      current_phase: "executing",
     });
     assert.equal(o, null);
   });
 
   it("returns null for non-terminal phase even with active=false", () => {
     const o = deriveOutcomeFromState({
-      mode: "ralph",
+      mode: "team",
       active: false,
-      status: "executing",
+      current_phase: "executing",
     });
     assert.equal(o, null);
   });
@@ -237,22 +237,22 @@ describe("deriveOutcomeFromState", () => {
     const o = deriveOutcomeFromState({
       mode: "swarm",
       active: false,
-      status: "complete",
+      current_phase: "complete",
     });
     assert.equal(o, null);
   });
 
   it("returns null when phase field is missing", () => {
-    const o = deriveOutcomeFromState({ mode: "ralph", active: false });
+    const o = deriveOutcomeFromState({ mode: "team", active: false });
     assert.equal(o, null);
   });
 
   it("falls back to current time when completedAt missing", () => {
     const before = Date.now();
     const o = deriveOutcomeFromState({
-      mode: "ralph",
+      mode: "team",
       active: false,
-      status: "complete",
+      current_phase: "complete",
     });
     const after = Date.now();
     assert.ok(o);

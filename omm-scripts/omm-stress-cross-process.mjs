@@ -57,7 +57,7 @@ async function main() {
     const t0 = process.hrtime.bigint();
     const result = await runOmmStateWrite({
       key: "${KEY}",
-      value: { mode: "ralph", active: false, current_phase: "complete", counter: i, writer },
+      value: { mode: "team", active: false, current_phase: "complete", counter: i, writer },
     });
     const t1 = process.hrtime.bigint();
     const ms = Number(t1 - t0) / 1e6;
@@ -156,7 +156,7 @@ async function runMcpWriter(stateRoot, label, count, samples) {
       arguments: {
         key: KEY,
         value: {
-          mode: "ralph",
+          mode: "team",
           active: false,
           current_phase: "complete",
           counter: i,

@@ -1,29 +1,15 @@
-/** Workflow exclusivity guard — only one of ralph/autopilot/team may be active=true. */
+/** Workflow exclusivity guard — only one team workflow may be active=true. */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-export const WORKFLOW_MODES = new Set(["ralph", "autopilot", "team"]);
+export const WORKFLOW_MODES = new Set(["team"]);
 /** Detect the workflow mode for an incoming state value, or null if not a workflow write. */
 function detectWorkflowMode(key, value) {
     const mode = value.mode ?? key;
     return WORKFLOW_MODES.has(mode) ? mode : null;
 }
 /**
- * True when the two modes are validly linked. Linkage is UNIDIRECTIONAL —
- * only team writes `linked_ralph: true` to declare it was launched by ralph.
- * Ralph never writes any linkage field.
- */
-function isLinkedPair(incomingMode, incoming, existingMode, existing) {
-    if (incomingMode === "ralph" && existingMode === "team") {
-        return existing.linked_ralph === true;
-    }
-    if (incomingMode === "team" && existingMode === "ralph") {
-        return incoming.linked_ralph === true;
-    }
-    return false;
-}
-/**
  * Reject `active=true` workflow writes when another workflow mode is already
- * active. Same-key overwrites and linked ralph↔team pairs are allowed.
+ * active. Same-key overwrites are allowed.
  */
 export async function assertWorkflowExclusivity(stateDir, incomingKey, incomingValue) {
     if (incomingValue.active !== true)
@@ -56,8 +42,6 @@ export async function assertWorkflowExclusivity(stateDir, incomingKey, incomingV
         if (!existingMode)
             continue;
         if (parsed.active !== true)
-            continue;
-        if (isLinkedPair(incomingMode, incomingValue, existingMode, parsed))
             continue;
         return {
             ok: false,

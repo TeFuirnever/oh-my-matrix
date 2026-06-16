@@ -3,6 +3,8 @@
 > Canonical lifecycle conventions and pipeline patterns for omm SKILL.md files.
 > Date: 2026-05-08
 
+> **Status update (2026-06-16):** omm now ships only `omm-team` ([ADR-008](../adr/008-delegation-to-host.md)). The artifact-pipeline skills referenced below (omm-docs, omm-ui, omm-research, omm-refactor, omm-deep-interview, omm-ultraqa) were removed. §1 Lifecycle Conventions still apply to `omm-team`; §2 (3-Phase Pipeline Pattern) and the per-skill tables are retained as historical reference for any future artifact skill.
+
 This document defines the **shared lifecycle contract** that every omm skill follows, plus the **3-phase pipeline pattern** used by skills that produce a single artifact (omm-docs, omm-ui, omm-research, omm-refactor, and future siblings).
 
 Each SKILL.md should reference this contract instead of restating the lifecycle conventions verbatim.
@@ -19,15 +21,6 @@ Each skill owns a state key matching its short name (the part after `omm-`):
 
 | Skill | State key |
 |-------|-----------|
-| omm-docs | `docs` |
-| omm-ui | `ui` |
-| omm-ultraqa | `ultraqa` |
-| omm-git | `git` |
-| omm-research | `research` |
-| omm-refactor | `refactor` |
-| omm-deep-interview | `deep-interview` |
-| omm-ralph | `ralph` |
-| omm-autopilot | `autopilot` |
 | omm-team | `team` |
 
 State is persisted via `omm_state_write` and read via `omm_state_read`. The full state file lives at `{stateRoot}/state/{key}.json`.
@@ -193,8 +186,6 @@ Skills NOT following the 3-phase pattern still honor §1 Lifecycle Conventions. 
 |-------|-------------|-----------------|
 | omm-deep-interview | Init → question loop → synthesize | Output emerges from interview rounds, not a single artifact target |
 | omm-ultraqa | Run QA → Check → Diagnose → Fix → Record (cyclic, max 5) | Goal is convergence, not single-artifact production; loops are essential |
-| omm-ralph | Plan → execute → verify → fix (cyclic) | Outer persistence loop with multiple inner artifacts |
-| omm-autopilot | Multi-stage pipeline driven by `Stage[]` plan | Plan-driven, not pattern-driven |
 | omm-team | Multi-agent staged pipeline | Concurrent execution, not single-artifact |
 
 ---

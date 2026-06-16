@@ -164,22 +164,22 @@ describe("omm-mcp server", () => {
     it("writes and reads back a state file", async () => {
       await withClient(async (client) => {
         const w = await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: false, status: "complete" },
+          key: "team",
+          value: { mode: "team", active: false, current_phase: "complete" },
         });
         assert.equal(w.error, undefined);
-        const r = await callTool(client, "omm_state_read", { key: "ralph" });
+        const r = await callTool(client, "omm_state_read", { key: "team" });
         const result = r.result as { content: Array<{ text: string }> };
         const data = JSON.parse(result.content[0].text);
-        assert.equal(data.status, "complete");
+        assert.equal(data.current_phase, "complete");
       });
     });
 
     it("lists state keys", async () => {
       await withClient(async (client) => {
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: false, status: "complete" },
+          key: "team",
+          value: { mode: "team", active: false, current_phase: "complete" },
         });
         await callTool(client, "omm_state_write", {
           key: "custom-data",
@@ -188,7 +188,7 @@ describe("omm-mcp server", () => {
         const r = await callTool(client, "omm_state_list", {});
         const result = r.result as { content: Array<{ text: string }> };
         const keys = JSON.parse(result.content[0].text) as string[];
-        assert.ok(keys.includes("ralph"));
+        assert.ok(keys.includes("team"));
         assert.ok(keys.includes("custom-data"));
       });
     });
@@ -223,8 +223,8 @@ describe("omm-mcp server", () => {
     it("rejects invalid state via inline validator", async () => {
       await withClient(async (client) => {
         const r = await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", status: "bogus-phase" },
+          key: "team",
+          value: { mode: "team", current_phase: "bogus-phase" },
         });
         assert.equal(r.error?.code, -32000);
       });
@@ -232,65 +232,67 @@ describe("omm-mcp server", () => {
   });
 
   describe("workflow exclusivity guard (MCP path)", () => {
-    it("rejects autopilot active=true while ralph is active", async () => {
+    it("rejects a second team active=true while another team key is active", async () => {
       await withClient(async (client) => {
         const a = await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: true },
+          key: "team",
+          value: { mode: "team", active: true },
         });
         assert.equal(a.error, undefined);
         const b = await callTool(client, "omm_state_write", {
-          key: "autopilot",
-          value: { mode: "autopilot", active: true },
+          key: "team-other",
+          value: { mode: "team", active: true },
         });
         assert.equal(b.error?.code, -32000);
-        assert.match(b.error?.message ?? "", /ralph is already active/);
+        assert.match(b.error?.message ?? "", /team is already active/);
       });
     });
 
-    it("allows same-mode overwrite", async () => {
+    it("allows same-key overwrite", async () => {
       await withClient(async (client) => {
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: true },
-        });
-        const r = await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: true, iteration: 5 },
-        });
-        assert.equal(r.error, undefined);
-      });
-    });
-
-    it("allows team with linked_ralph alongside ralph", async () => {
-      await withClient(async (client) => {
-        await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: true },
+          key: "team",
+          value: { mode: "team", active: true },
         });
         const r = await callTool(client, "omm_state_write", {
           key: "team",
-          value: { mode: "team", active: true, linked_ralph: true },
+          value: { mode: "team", active: true, iteration: 5 },
         });
         assert.equal(r.error, undefined);
       });
     });
 
-    it("allows autopilot after ralph terminates", async () => {
+    it("allows another team key after the active one terminates", async () => {
       await withClient(async (client) => {
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: true },
+          key: "team",
+          value: { mode: "team", active: true },
         });
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: false, status: "complete" },
+          key: "team",
+          value: { mode: "team", active: false, current_phase: "complete" },
         });
         const r = await callTool(client, "omm_state_write", {
-          key: "autopilot",
-          value: { mode: "autopilot", active: true },
+          key: "team-other",
+          value: { mode: "team", active: true },
         });
         assert.equal(r.error, undefined);
+      });
+    });
+
+    it("treats blocked as a valid terminal phase requiring active=false", async () => {
+      await withClient(async (client) => {
+        const blocked = await callTool(client, "omm_state_write", {
+          key: "team",
+          value: { mode: "team", active: false, current_phase: "blocked" },
+        });
+        assert.equal(blocked.error, undefined);
+        // blocked is terminal → may not be combined with active=true
+        const conflict = await callTool(client, "omm_state_write", {
+          key: "team",
+          value: { mode: "team", active: true, current_phase: "blocked" },
+        });
+        assert.equal(conflict.error?.code, -32000);
       });
     });
   });
@@ -343,16 +345,16 @@ describe("omm-mcp server", () => {
     it("resources/list returns written state files as omm://state/<key>", async () => {
       await withClient(async (client) => {
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: false },
+          key: "team",
+          value: { mode: "team", active: false },
         });
         const r = await client.send("resources/list");
         const resources = (r.result as { resources: Array<{ uri: string }> })
           .resources;
         const uris = resources.map((x) => x.uri);
         assert.ok(
-          uris.includes("omm://state/ralph"),
-          `expected omm://state/ralph in ${JSON.stringify(uris)}`,
+          uris.includes("omm://state/team"),
+          `expected omm://state/team in ${JSON.stringify(uris)}`,
         );
       });
     });
@@ -360,18 +362,18 @@ describe("omm-mcp server", () => {
     it("resources/read returns JSON content for valid URI", async () => {
       await withClient(async (client) => {
         await callTool(client, "omm_state_write", {
-          key: "ralph",
-          value: { mode: "ralph", active: false, note: "unit-test" },
+          key: "team",
+          value: { mode: "team", active: false, note: "unit-test" },
         });
         const r = await client.send("resources/read", {
-          uri: "omm://state/ralph",
+          uri: "omm://state/team",
         });
         const contents = (
           r.result as {
             contents: Array<{ uri: string; mimeType: string; text: string }>;
           }
         ).contents;
-        assert.equal(contents[0].uri, "omm://state/ralph");
+        assert.equal(contents[0].uri, "omm://state/team");
         assert.equal(contents[0].mimeType, "application/json");
         assert.match(contents[0].text, /"note": "unit-test"/);
       });

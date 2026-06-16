@@ -11,12 +11,12 @@ omm is composed of independent subsystems: the in-process plugin (state, skill e
 
 ## 1. omm-memory MCP Fails
 
-**Does ralph still work?** Yes.
+**Does team still work?** Yes.
 
 omm-memory is an optional observability aid. It provides the `omm_memory_set`, `omm_memory_get`, `omm_memory_delete`, and `omm_memory_list` tools via MCP. When the server is unavailable:
 
 - The four memory tools become unavailable to the host runtime.
-- ralph SKILL.md instructions that recommend memory operations (e.g. "store context for next turn") continue to execute but return an MCP-unavailable error from the host.
+- team SKILL.md instructions that recommend memory operations (e.g. "store context for next turn") continue to execute but return an MCP-unavailable error from the host.
 - Skill loop retry logic treats memory errors as non-fatal: the loop logs the failure, skips the memory step, and continues execution.
 - No workflow state is affected; `omm_state_write` and `omm_state_read` are unrelated to the memory MCP.
 
@@ -29,13 +29,13 @@ omm-memory is an optional observability aid. It provides the `omm_memory_set`, `
 | `omm_memory_delete`   | Unavailable  | MCP transport error (host-level) |
 | `omm_memory_list`     | Unavailable  | MCP transport error (host-level) |
 | `omm_state_write`     | Unaffected   | —                                |
-| ralph skill execution | Unaffected   | —                                |
+| team skill execution | Unaffected   | —                                |
 
 ---
 
 ## 2. omm-trace MCP Fails
 
-**Does autopilot still complete?** Yes.
+**Does team still complete?** Yes.
 
 omm-trace is observability-only. It provides `omm_trace_record` and `omm_trace_metrics`. When the server is unavailable:
 
@@ -52,7 +52,7 @@ omm-trace is observability-only. It provides `omm_trace_record` and `omm_trace_m
 }
 ```
 
-- autopilot, ralph, and team SKILL.md execution paths are unaffected. Tracing is not on the execution critical path.
+- team SKILL.md execution paths are unaffected. Tracing is not on the execution critical path.
 - Hosts may choose to surface a warning indicator in their UI but must not block workflow execution.
 
 ---
@@ -65,7 +65,7 @@ The omm-plugin's `omm_state_write` and `omm_state_read` tools run in-process ins
 
 When the MCP server is unavailable but the plugin is loaded:
 
-- In-process callers (ralph, autopilot, team SKILL.md via plugin tools) continue normally. All state writes succeed.
+- In-process callers (team SKILL.md via plugin tools) continue normally. All state writes succeed.
 - Out-of-process MCP clients (external tools, omm CLI, dashboard) lose access to the state directory.
 - Workflow state transitions remain consistent because all active workflows use the plugin path.
 - No recovery action is required for in-flight workflows.
@@ -78,7 +78,7 @@ When the MCP server is unavailable but the plugin is loaded:
 | Plugin `omm_state_read`  | Functional  | Reads succeed            |
 | MCP `omm_state_write`    | Unavailable | JSON-RPC transport error |
 | MCP `omm_state_read`     | Unavailable | JSON-RPC transport error |
-| ralph / autopilot / team | Unaffected  | Continue normally        |
+| team | Unaffected  | Continue normally        |
 
 Host integrators should treat this mode as a degraded-but-stable state: log the MCP server absence, suppress external dashboard features, and allow workflows to proceed.
 
@@ -92,7 +92,7 @@ When the plugin's own state subsystem fails — due to a full disk, permission d
 
 **For new workflow starts:**
 
-- The host must refuse to start new ralph, autopilot, or team workflows.
+- The host must refuse to start new team workflows.
 - Surface the failure to the user via `formatOmmError()` with retry guidance.
 - Example user-facing message: `"Workflow storage unavailable (OMM_E_IO_FAILED). Free disk space and retry, or contact support."`
 

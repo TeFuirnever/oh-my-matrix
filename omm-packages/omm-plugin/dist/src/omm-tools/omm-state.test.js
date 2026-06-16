@@ -14,19 +14,19 @@ async function withTmpDir(fn) {
     }
 }
 describe("omm_state_write", () => {
-    it("writes validated ralph state", async () => {
+    it("writes validated team state", async () => {
         await withTmpDir(async (dir) => {
-            const r = await runOmmStateWrite({ key: "ralph", value: { mode: "ralph", active: true, task: "test" } }, { stateRoot: dir });
-            assert.ok(r.content[0].text.includes("omm_state_write: ralph"));
-            const raw = await readFile(join(dir, "state", "ralph.json"), "utf8");
+            const r = await runOmmStateWrite({ key: "team", value: { mode: "team", active: true, task: "test" } }, { stateRoot: dir });
+            assert.ok(r.content[0].text.includes("omm_state_write: team"));
+            const raw = await readFile(join(dir, "state", "team.json"), "utf8");
             const data = JSON.parse(raw);
-            assert.equal(data.status, "init");
-            assert.equal(data.iteration, 0);
+            assert.equal(data.current_phase, "planning");
+            assert.equal(data.fix_loop_count, 0);
         });
     });
     it("rejects invalid state", async () => {
         await withTmpDir(async (dir) => {
-            const r = await runOmmStateWrite({ key: "ralph", value: { mode: "ralph", status: "bogus" } }, { stateRoot: dir });
+            const r = await runOmmStateWrite({ key: "team", value: { mode: "team", current_phase: "bogus" } }, { stateRoot: dir });
             assert.ok(r.content[0].text.includes("error"));
         });
     });
@@ -41,12 +41,12 @@ describe("omm_state_read", () => {
     it("reads written state", async () => {
         await withTmpDir(async (dir) => {
             await runOmmStateWrite({
-                key: "ralph",
-                value: { mode: "ralph", active: false, status: "complete" },
+                key: "team",
+                value: { mode: "team", active: false, current_phase: "complete" },
             }, { stateRoot: dir });
-            const r = await runOmmStateRead({ key: "ralph" }, { stateRoot: dir });
+            const r = await runOmmStateRead({ key: "team" }, { stateRoot: dir });
             const data = JSON.parse(r.content[0].text);
-            assert.equal(data.status, "complete");
+            assert.equal(data.current_phase, "complete");
         });
     });
     it("returns null for missing key", async () => {
@@ -59,11 +59,11 @@ describe("omm_state_read", () => {
 describe("omm_state_list", () => {
     it("lists keys after writes", async () => {
         await withTmpDir(async (dir) => {
-            await runOmmStateWrite({ key: "ralph", value: { mode: "ralph", active: true } }, { stateRoot: dir });
+            await runOmmStateWrite({ key: "team", value: { mode: "team", active: true } }, { stateRoot: dir });
             await runOmmStateWrite({ key: "custom", value: { foo: 1 } }, { stateRoot: dir });
             const r = await runOmmStateList({}, { stateRoot: dir });
             const keys = JSON.parse(r.content[0].text);
-            assert.ok(keys.includes("ralph"));
+            assert.ok(keys.includes("team"));
             assert.ok(keys.includes("custom"));
         });
     });
@@ -76,7 +76,7 @@ describe("omm_state_list", () => {
 });
 describe("sanitizeStateKey", () => {
     it("accepts safe keys", () => {
-        for (const k of ["ralph", "autopilot", "team", "custom_key", "k-1", "a"]) {
+        for (const k of ["team", "custom_key", "k-1", "a"]) {
             assert.equal(sanitizeStateKey(k).ok, true, k);
         }
     });
@@ -134,24 +134,30 @@ describe("path traversal defense (integration)", () => {
     });
 });
 describe("workflow exclusivity (integration via runOmmStateWrite)", () => {
-    it("rejects autopilot active=true while ralph is active", async () => {
+    it("rejects a second active team under a different key while team is active", async () => {
         await withTmpDir(async (dir) => {
-            const a = await runOmmStateWrite({ key: "ralph", value: { mode: "ralph", active: true } }, { stateRoot: dir });
-            assert.ok(a.content[0].text.startsWith("omm_state_write: ralph"));
-            const b = await runOmmStateWrite({ key: "autopilot", value: { mode: "autopilot", active: true } }, { stateRoot: dir });
+            // Seed an active team record directly under a foreign key, then attempt
+            // to start the canonical "team" key via runOmmStateWrite. The exclusivity
+            // guard detects the foreign active workflow and rejects.
+            const { writeFile, mkdir } = await import("node:fs/promises");
+            await mkdir(join(dir, "state"), { recursive: true });
+            await writeFile(join(dir, "state", "team-other.json"), JSON.stringify({ mode: "team", active: true }), "utf8");
+            const b = await runOmmStateWrite({ key: "team", value: { mode: "team", active: true } }, { stateRoot: dir });
             assert.ok(b.content[0].text.includes("error"));
-            assert.match(b.content[0].text, /ralph is already active/);
+            assert.match(b.content[0].text, /team is already active/);
         });
     });
-    it("allows autopilot active=true after ralph terminates", async () => {
+    it("allows team activation after a foreign team terminates", async () => {
         await withTmpDir(async (dir) => {
-            await runOmmStateWrite({ key: "ralph", value: { mode: "ralph", active: true } }, { stateRoot: dir });
-            await runOmmStateWrite({
-                key: "ralph",
-                value: { mode: "ralph", active: false, status: "complete" },
-            }, { stateRoot: dir });
-            const r = await runOmmStateWrite({ key: "autopilot", value: { mode: "autopilot", active: true } }, { stateRoot: dir });
-            assert.ok(r.content[0].text.startsWith("omm_state_write: autopilot"));
+            const { writeFile, mkdir } = await import("node:fs/promises");
+            await mkdir(join(dir, "state"), { recursive: true });
+            await writeFile(join(dir, "state", "team-other.json"), JSON.stringify({
+                mode: "team",
+                active: false,
+                current_phase: "complete",
+            }), "utf8");
+            const r = await runOmmStateWrite({ key: "team", value: { mode: "team", active: true } }, { stateRoot: dir });
+            assert.ok(r.content[0].text.startsWith("omm_state_write: team"));
         });
     });
 });

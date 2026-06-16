@@ -1,5 +1,7 @@
 # ADR-002: Team Delegation to Host Skill
 
+> **Status update (2026-06-16):** The `linked_ralph` ralph↔team coordination mentioned below was removed when ralph was delegated to the host (`@openclaw/autopilot`) — see [ADR-008](008-delegation-to-host.md). The team-delegation principle itself stands; only the ralph linkage is historical.
+
 ## Context
 
 oh-my-codex implements team parallelism with 20+ files: a runtime orchestrator, tmux pane management, git worktree creation, worker spawning, and state synchronization. This infrastructure is necessary because Codex CLI operates independently without access to a host orchestration layer.

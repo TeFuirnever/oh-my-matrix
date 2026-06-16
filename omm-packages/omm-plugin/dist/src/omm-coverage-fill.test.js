@@ -14,11 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { parseAgentPrompt } from "./omm-agent-prompts.js";
-import { advanceStage, incrementRetry, validatePlan, } from "./omm-autopilot-pipeline.js";
 import { resolveOmmStateRoot } from "./omm-config.js";
 import { dispatchHooks, loadHooks } from "./omm-hook-loader.js";
 import { cancelMode, getModeState, startMode, updateModeState, } from "./omm-mode-lifecycle.js";
-import { loadPrd, markStoryPasses, validatePrd, validateProgressEntry, } from "./omm-ralph-store.js";
 import { deriveOutcomeFromState } from "./omm-run-outcome.js";
 import { validateStateWrite } from "./omm-state-validation.js";
 import { runOmmPing } from "./omm-tools/omm-ping.js";
@@ -68,7 +66,7 @@ describe("coverage fill — runOmmStateWrite value-must-be-object", () => {
     it("rejects array values", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await runOmmStateWrite({ key: "ralph", value: ["nope"] }, { stateRoot });
+            const r = await runOmmStateWrite({ key: "custom", value: ["nope"] }, { stateRoot });
             assert.match(r.content[0].text, /value must be a JSON object/);
         }
         finally {
@@ -78,7 +76,7 @@ describe("coverage fill — runOmmStateWrite value-must-be-object", () => {
     it("rejects null values", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await runOmmStateWrite({ key: "ralph", value: null }, { stateRoot });
+            const r = await runOmmStateWrite({ key: "custom", value: null }, { stateRoot });
             assert.match(r.content[0].text, /value must be a JSON object/);
         }
         finally {
@@ -88,7 +86,7 @@ describe("coverage fill — runOmmStateWrite value-must-be-object", () => {
     it("rejects primitive values", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await runOmmStateWrite({ key: "ralph", value: "string" }, { stateRoot });
+            const r = await runOmmStateWrite({ key: "custom", value: "string" }, { stateRoot });
             assert.match(r.content[0].text, /value must be a JSON object/);
         }
         finally {
@@ -125,160 +123,7 @@ body`;
         assert.throws(() => parseAgentPrompt(md), /name must match/);
     });
 });
-describe("coverage fill — autopilot pipeline non-object stage + retry/advance not-found", () => {
-    it("rejects plan whose entry is not an object", () => {
-        const r = validatePlan([null]);
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /must be a valid Stage/);
-    });
-    it("rejects plan whose entry is an array", () => {
-        const r = validatePlan([["fake"]]);
-        assert.equal(r.ok, false);
-    });
-    it("incrementRetry returns error when step not found", () => {
-        const state = {
-            plan: [{ step: 0, description: "first", status: "pending", retries: 0 }],
-        };
-        const r = incrementRetry(state, 99);
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /not found/);
-    });
-    it("incrementRetry returns error when plan is missing", () => {
-        const r = incrementRetry({}, 0);
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /missing or malformed/);
-    });
-    it("advanceStage returns error when current step is not complete", () => {
-        const state = {
-            plan: [
-                { step: 0, description: "first", status: "in_progress", retries: 0 },
-                { step: 1, description: "second", status: "pending", retries: 0 },
-            ],
-            current_step: 0,
-        };
-        const r = advanceStage(state);
-        assert.equal(r.ok, false);
-    });
-});
-describe("coverage fill — ralph PRD validation branches", () => {
-    it("rejects story whose value is not an object", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [null],
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /stories\[0\] must be an object/);
-    });
-    it("rejects story missing id", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [{ id: "", title: "t", criteria: [], passes: false }],
-        });
-        assert.equal(r.ok, false);
-    });
-    it("rejects story whose title is not a string", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [{ id: "s1", title: 42, criteria: [], passes: false }],
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /title must be a string/);
-    });
-    it("rejects story whose criteria is not a string array", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [{ id: "s1", title: "t", criteria: [123], passes: false }],
-        });
-        assert.equal(r.ok, false);
-    });
-    it("rejects story whose passes is not boolean", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [{ id: "s1", title: "t", criteria: [], passes: "no" }],
-        });
-        assert.equal(r.ok, false);
-    });
-    it("rejects story whose notes is non-string when present", () => {
-        const r = validatePrd({
-            version: 1,
-            task: "x",
-            stories: [
-                { id: "s1", title: "t", criteria: [], passes: false, notes: 7 },
-            ],
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /notes must be a string/);
-    });
-    it("markStoryPasses returns error when PRD does not exist", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            const r = await markStoryPasses("any", true, stateRoot);
-            assert.equal(r.ok, false);
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
-    });
-    it("loadPrd returns error when prd.json is malformed", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            await mkdir(join(stateRoot, "state"), { recursive: true });
-            await writeFile(join(stateRoot, "state", "ralph-prd.json"), "not json", "utf8");
-            const r = await loadPrd(stateRoot);
-            assert.equal(r.ok, false);
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
-    });
-});
-describe("coverage fill — progress entry non-object", () => {
-    it("rejects null entry", () => {
-        assert.match(validateProgressEntry(null) ?? "", /must be a JSON object/);
-    });
-    it("rejects array entry", () => {
-        assert.match(validateProgressEntry([]) ?? "", /must be a JSON object/);
-    });
-    it("rejects primitive entry", () => {
-        assert.match(validateProgressEntry("nope") ?? "", /must be a JSON object/);
-    });
-});
-describe("coverage fill — state-validation autopilot/team active defaults", () => {
-    it("autopilot active=true injects status, current_step, max_retries_per_step, total_steps", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-        });
-        assert.equal(r.ok, true);
-        const s = r.state;
-        assert.equal(s.status, "analyzing");
-        assert.equal(s.current_step, 0);
-        assert.equal(s.total_steps, 0);
-        assert.equal(s.max_retries_per_step, 3);
-        assert.ok(typeof s.startedAt === "string");
-    });
-    it("autopilot rejects current_step that is not a non-negative integer", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-            current_step: -1,
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /current_step/);
-    });
-    it("autopilot rejects total_steps that is not a non-negative integer", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-            total_steps: 1.5,
-        });
-        assert.equal(r.ok, false);
-    });
+describe("coverage fill — state-validation team active defaults", () => {
     it("team active=true injects fix_loop_count, max_fix_loops, current_phase", () => {
         const r = validateStateWrite("team", {
             mode: "team",
@@ -301,15 +146,12 @@ describe("coverage fill — state-validation autopilot/team active defaults", ()
     });
 });
 describe("coverage fill — mode-lifecycle writeState early-return branches", () => {
-    it("startMode rejects sanitization failure", async () => {
+    it("startMode rejects a validator failure before exclusivity", async () => {
         const stateRoot = await tempRoot();
         try {
-            // mode is whitelisted, but the validator rejects unknown initialFields
-            // for the autopilot mode if we feed a totally bad shape. The explicit
-            // sanitization-failure path is hit by passing a key with traversal,
-            // which can only happen via the tools layer — instead trigger a
-            // validator failure here, which exits writeState before exclusivity.
-            const r = await updateModeState("autopilot", { current_step: -5 }, { stateRoot });
+            // An invalid current_phase makes validateStateWrite fail inside
+            // writeState, exiting before the exclusivity guard runs.
+            const r = await updateModeState("team", { current_phase: "frobulating" }, { stateRoot });
             assert.equal(r.ok, false);
         }
         finally {
@@ -319,10 +161,13 @@ describe("coverage fill — mode-lifecycle writeState early-return branches", ()
     it("startMode + exclusivity rejection path", async () => {
         const stateRoot = await tempRoot();
         try {
-            const a = await startMode("ralph", {}, { stateRoot });
-            assert.equal(a.ok, true);
-            const b = await startMode("autopilot", {}, { stateRoot });
-            assert.equal(b.ok, false); // ralph already active
+            // Pre-seed a *different* team key with active=true so the exclusivity
+            // guard rejects a fresh startMode("team") write.
+            const stateDir = join(stateRoot, "state");
+            await mkdir(stateDir, { recursive: true });
+            await writeFile(join(stateDir, "team-other.json"), JSON.stringify({ mode: "team", active: true }), "utf8");
+            const b = await startMode("team", {}, { stateRoot });
+            assert.equal(b.ok, false); // foreign team already active
             assert.match(b.error ?? "", /already active/);
         }
         finally {
@@ -359,65 +204,7 @@ purpose: t
         assert.throws(() => parseAgentPrompt(md), /body is empty/);
     });
 });
-describe("coverage fill — autopilot stage summary type", () => {
-    it("rejects stage with non-string summary", () => {
-        const r = validatePlan([
-            {
-                step: 0,
-                description: "x",
-                status: "pending",
-                retries: 0,
-                summary: 42,
-            },
-        ]);
-        assert.equal(r.ok, false);
-    });
-    it("rejects stage with non-integer step", () => {
-        const r = validatePlan([
-            { step: 1.5, description: "x", status: "pending", retries: 0 },
-        ]);
-        assert.equal(r.ok, false);
-    });
-    it("rejects stage with unknown status", () => {
-        const r = validatePlan([
-            { step: 0, description: "x", status: "bogus", retries: 0 },
-        ]);
-        assert.equal(r.ok, false);
-    });
-    it("rejects stage with negative retries", () => {
-        const r = validatePlan([
-            { step: 0, description: "x", status: "pending", retries: -1 },
-        ]);
-        assert.equal(r.ok, false);
-    });
-    it("rejects duplicate step values across stages", () => {
-        const r = validatePlan([
-            { step: 0, description: "x", status: "pending", retries: 0 },
-            { step: 0, description: "y", status: "pending", retries: 0 },
-        ]);
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /duplicate stage step/);
-    });
-});
 describe("coverage fill — state-validation positive-int rejection branches", () => {
-    it("ralph max_fix_attempts must be a positive integer", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
-            active: true,
-            max_fix_attempts: 0,
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /max_fix_attempts/);
-    });
-    it("autopilot max_retries_per_step must be a positive integer", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-            max_retries_per_step: -1,
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /max_retries_per_step/);
-    });
     it("team max_fix_loops must be a positive integer", () => {
         const r = validateStateWrite("team", {
             mode: "team",
@@ -432,15 +219,15 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("cancelMode marks an active record terminal with the requested kind", async () => {
         const stateRoot = await tempRoot();
         try {
-            await startMode("ralph", { task: "x" }, { stateRoot });
-            const r = await cancelMode("ralph", "user abort", {
+            await startMode("team", { task: "x" }, { stateRoot });
+            const r = await cancelMode("team", "user abort", {
                 stateRoot,
                 kind: "failed",
             });
             assert.equal(r.ok, true);
             const s = r.state;
             assert.equal(s.active, false);
-            assert.equal(s.status, "failed");
+            assert.equal(s.current_phase, "failed");
         }
         finally {
             await rm(stateRoot, { recursive: true, force: true });
@@ -449,9 +236,9 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("cancelMode is idempotent on already-terminal state", async () => {
         const stateRoot = await tempRoot();
         try {
-            await startMode("ralph", {}, { stateRoot });
-            await cancelMode("ralph", undefined, { stateRoot, kind: "completed" });
-            const second = await cancelMode("ralph", undefined, {
+            await startMode("team", {}, { stateRoot });
+            await cancelMode("team", undefined, { stateRoot, kind: "completed" });
+            const second = await cancelMode("team", undefined, {
                 stateRoot,
                 kind: "completed",
             });
@@ -464,7 +251,7 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("cancelMode returns error when state file does not exist", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await cancelMode("ralph", undefined, { stateRoot });
+            const r = await cancelMode("team", undefined, { stateRoot });
             assert.equal(r.ok, false);
             assert.match(r.error ?? "", /not found/);
         }
@@ -475,7 +262,7 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("updateModeState rejects when state file does not exist", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await updateModeState("ralph", { iteration: 1 }, { stateRoot });
+            const r = await updateModeState("team", { fix_loop_count: 1 }, { stateRoot });
             assert.equal(r.ok, false);
             assert.match(r.error ?? "", /not found/);
         }
@@ -486,9 +273,9 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("updateModeState rejects when mode is not active", async () => {
         const stateRoot = await tempRoot();
         try {
-            await startMode("ralph", {}, { stateRoot });
-            await cancelMode("ralph", undefined, { stateRoot, kind: "completed" });
-            const r = await updateModeState("ralph", { iteration: 1 }, { stateRoot });
+            await startMode("team", {}, { stateRoot });
+            await cancelMode("team", undefined, { stateRoot, kind: "completed" });
+            const r = await updateModeState("team", { fix_loop_count: 1 }, { stateRoot });
             assert.equal(r.ok, false);
             assert.match(r.error ?? "", /not active/);
         }
@@ -499,7 +286,7 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("getModeState returns null when state file does not exist", async () => {
         const stateRoot = await tempRoot();
         try {
-            const r = await getModeState("ralph", { stateRoot });
+            const r = await getModeState("team", { stateRoot });
             assert.equal(r, null);
         }
         finally {
@@ -509,41 +296,9 @@ describe("coverage fill — mode-lifecycle cancel + getModeState", () => {
     it("getModeState returns the parsed record when present", async () => {
         const stateRoot = await tempRoot();
         try {
-            await startMode("ralph", { task: "y" }, { stateRoot });
-            const r = await getModeState("ralph", { stateRoot });
+            await startMode("team", { task: "y" }, { stateRoot });
+            const r = await getModeState("team", { stateRoot });
             assert.ok(r && r.active === true);
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
-    });
-});
-describe("coverage fill — markStoryPasses error propagation", () => {
-    it("propagates loadPrd error when prd file is malformed", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            await mkdir(join(stateRoot, "state"), { recursive: true });
-            await writeFile(join(stateRoot, "state", "ralph-prd.json"), "{ broken", "utf8");
-            const r = await markStoryPasses("any", true, stateRoot);
-            assert.equal(r.ok, false);
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
-    });
-    it("returns error when story id not found", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            await mkdir(join(stateRoot, "state"), { recursive: true });
-            const prd = {
-                version: 1,
-                task: "t",
-                stories: [{ id: "s1", title: "t", criteria: ["c"], passes: false }],
-            };
-            await writeFile(join(stateRoot, "state", "ralph-prd.json"), JSON.stringify(prd), "utf8");
-            const r = await markStoryPasses("missing", true, stateRoot);
-            assert.equal(r.ok, false);
-            assert.match(r.error ?? "", /not found/);
         }
         finally {
             await rm(stateRoot, { recursive: true, force: true });
@@ -583,25 +338,25 @@ describe("coverage fill — hook loader error paths", () => {
 describe("coverage fill — deriveOutcomeFromState branches", () => {
     it("returns null when state is still active", () => {
         const out = deriveOutcomeFromState({
-            mode: "ralph",
+            mode: "team",
             active: true,
-            status: "executing",
+            current_phase: "executing",
         });
         assert.equal(out, null);
     });
     it("returns null when phase is not a recognized terminal", () => {
         const out = deriveOutcomeFromState({
-            mode: "ralph",
+            mode: "team",
             active: false,
-            status: "executing",
+            current_phase: "executing",
         });
         assert.equal(out, null);
     });
     it("returns null when phase is not a string", () => {
         const out = deriveOutcomeFromState({
-            mode: "ralph",
+            mode: "team",
             active: false,
-            status: 42,
+            current_phase: 42,
         });
         assert.equal(out, null);
     });
@@ -614,66 +369,66 @@ describe("coverage fill — deriveOutcomeFromState branches", () => {
         assert.ok(out && out.kind === "completed");
     });
 });
-describe("coverage fill — timestamp validators + ralph fix_attempt", () => {
-    it("rejects ralph startedAt that is not a valid ISO8601 timestamp", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+describe("coverage fill — timestamp validators + team fix_loop_count", () => {
+    it("rejects team startedAt that is not a valid ISO8601 timestamp", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
             startedAt: "not-a-date",
         });
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /startedAt/);
     });
-    it("rejects ralph completedAt that is not a valid ISO8601 timestamp", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects team completedAt that is not a valid ISO8601 timestamp", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: false,
-            status: "complete",
+            current_phase: "complete",
             completedAt: "tomorrow",
         });
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /completedAt/);
     });
-    it("rejects ralph lastUpdatedAt that is not a valid ISO8601 timestamp", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects team lastUpdatedAt that is not a valid ISO8601 timestamp", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
             lastUpdatedAt: "soon",
         });
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /lastUpdatedAt/);
     });
-    it("rejects ralph fix_attempt that is not a non-negative integer", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects team fix_loop_count that is not a non-negative integer", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
-            fix_attempt: -1,
+            fix_loop_count: -1,
         });
         assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /fix_attempt/);
+        assert.match(r.error ?? "", /fix_loop_count/);
     });
-    it("rejects ralph max_iterations that is not positive", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects team max_fix_loops that is not positive", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
-            max_iterations: 0,
+            max_fix_loops: 0,
         });
         assert.equal(r.ok, false);
     });
-    it("rejects empty-string status (validatePhase non-string/empty branch)", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects empty-string current_phase (normalizePhase non-string/empty branch)", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
-            status: "",
+            current_phase: "",
         });
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /non-empty string/);
     });
-    it("rejects non-string status", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects non-string current_phase", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
-            status: 42,
+            current_phase: 42,
         });
         assert.equal(r.ok, false);
     });
@@ -689,7 +444,7 @@ describe("coverage fill — workflow-guard non-workflow existing key", () => {
             const stateDir = join(stateRoot, "state");
             await mkdir(stateDir, { recursive: true });
             await writeFile(join(stateDir, "smoke.json"), JSON.stringify({ active: true, hello: "world" }), "utf8");
-            const r = await startMode("ralph", { task: "x" }, { stateRoot });
+            const r = await startMode("team", { task: "x" }, { stateRoot });
             assert.equal(r.ok, true);
         }
         finally {
@@ -757,19 +512,19 @@ describe("coverage fill — runOmmStateWrite warning vs non-warning text branche
             // injection and therefore no warning, exercising the non-warning
             // arm of the `validation.warning ? ... : ...` ternary.
             const r = await runOmmStateWrite({
-                key: "ralph",
+                key: "team",
                 value: {
-                    mode: "ralph",
+                    mode: "team",
                     active: false,
-                    status: "complete",
-                    iteration: 1,
-                    max_iterations: 3,
+                    current_phase: "complete",
+                    fix_loop_count: 1,
+                    max_fix_loops: 3,
                     startedAt: "2026-04-26T00:00:00.000Z",
                     completedAt: "2026-04-26T00:01:00.000Z",
                 },
             }, { stateRoot });
-            // Plain "omm_state_write: ralph" with no "(warning: ...)" trailer.
-            assert.match(r.content[0].text, /^omm_state_write: ralph$/);
+            // Plain "omm_state_write: team" with no "(warning: ...)" trailer.
+            assert.match(r.content[0].text, /^omm_state_write: team$/);
         }
         finally {
             await rm(stateRoot, { recursive: true, force: true });
@@ -777,15 +532,6 @@ describe("coverage fill — runOmmStateWrite warning vs non-warning text branche
     });
 });
 describe("coverage fill — phase + timestamp error sub-branches", () => {
-    it("autopilot rejects an unknown status value", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-            status: "frobulating",
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /must be one of/);
-    });
     it("team rejects an unknown current_phase value", () => {
         const r = validateStateWrite("team", {
             mode: "team",
@@ -794,15 +540,6 @@ describe("coverage fill — phase + timestamp error sub-branches", () => {
         });
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /must be one of/);
-    });
-    it("autopilot rejects malformed timestamps", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
-            active: true,
-            startedAt: "yesterday",
-        });
-        assert.equal(r.ok, false);
-        assert.match(r.error ?? "", /startedAt/);
     });
     it("team rejects malformed timestamps", () => {
         const r = validateStateWrite("team", {
@@ -813,17 +550,17 @@ describe("coverage fill — phase + timestamp error sub-branches", () => {
         assert.equal(r.ok, false);
         assert.match(r.error ?? "", /startedAt/);
     });
-    it("rejects autopilot fix_attempt non-numeric (asPosInt non-number branch)", () => {
-        const r = validateStateWrite("ralph", {
-            mode: "ralph",
+    it("rejects team max_fix_loops non-numeric (asPosInt non-number branch)", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
-            max_iterations: Infinity,
+            max_fix_loops: Infinity,
         });
         assert.equal(r.ok, false);
     });
-    it("rejects autopilot fix_attempt with empty-string lastUpdatedAt", () => {
-        const r = validateStateWrite("autopilot", {
-            mode: "autopilot",
+    it("rejects team with empty-string lastUpdatedAt", () => {
+        const r = validateStateWrite("team", {
+            mode: "team",
             active: true,
             lastUpdatedAt: "",
         });
