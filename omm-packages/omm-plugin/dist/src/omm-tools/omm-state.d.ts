@@ -1,5 +1,5 @@
 import { type OmmErrorCode } from "../omm-error-codes.js";
-import type { OmmToolResult } from "./omm-ping.js";
+import type { OmmToolResult } from "./omm-tool-result.js";
 export interface OmmStateWriteInput {
     key?: unknown;
     value?: unknown;

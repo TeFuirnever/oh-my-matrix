@@ -6,8 +6,6 @@ export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export const MCP_SOURCES = [
   join(ROOT, "omm-packages", "omm-mcp", "src", "index.ts"),
-  join(ROOT, "omm-packages", "omm-mcp-memory", "src", "index.ts"),
-  join(ROOT, "omm-packages", "omm-mcp-trace", "src", "index.ts"),
 ];
 
 function isGeneratedBorder(line) {

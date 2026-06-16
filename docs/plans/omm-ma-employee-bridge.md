@@ -103,6 +103,20 @@ gatewayManager.on('status', (status) => {
 });
 ```
 
+> **Concurrency requirement (v0.5+):** The watcher MUST process different `runId` dispatch files **concurrently**, not serially. omm-team's fork-join pattern (`omm_employee_result_batch`) dispatches N subtasks in parallel and expects N results to arrive within a single 60s window. If `processDispatchFile` awaits `chat.send` sequentially, a 3-agent task takes 3×60s worst case instead of 1×60s. Implement the scan loop as:
+> ```typescript
+> async function scanDispatchDir() {
+>   const pending = readdirSync(DISPATCH_DIR)
+>     .filter(f => f.endsWith('.json') && !f.endsWith('.result.json'))
+>     .map(f => join(DISPATCH_DIR, f))
+>     .filter(f => !inFlight.has(extractRunId(f)));
+>   // Concurrent processing of distinct runIds — the fork-join contract.
+>   await Promise.all(pending.map(f => processDispatchFile(f).catch(() => {})));
+> }
+> ```
+> The `inFlight` set still guards the same-runId race (fs.watch vs setInterval); `Promise.all` enables cross-runId concurrency.
+
+
 ### Task 3: omm Bridge Tools
 **New file:** `omm-packages/omm-plugin/src/omm-tools/omm-employee.ts` | **Lines:** ~105
 

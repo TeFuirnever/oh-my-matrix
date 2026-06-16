@@ -7,10 +7,14 @@ import {
   runOmmEmployeeDispatch,
   runOmmEmployeeList,
   runOmmEmployeeResult,
+  runOmmEmployeeResultBatch,
 } from "./omm-employee.js";
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
-  const dir = join(tmpdir(), `omm-employee-test-${Math.random().toString(36).slice(2, 10)}`);
+  const dir = join(
+    tmpdir(),
+    `omm-employee-test-${Math.random().toString(36).slice(2, 10)}`,
+  );
   await mkdir(dir, { recursive: true });
   try {
     await fn(dir);
@@ -58,7 +62,10 @@ describe("runOmmEmployeeList", () => {
     await withTmpDir(async (dir) => {
       const stateDir = join(dir, "state");
       await mkdir(stateDir, { recursive: true });
-      await writeJson(join(stateDir, "ma-employees.json"), { employees: [], generatedAt: 1 });
+      await writeJson(join(stateDir, "ma-employees.json"), {
+        employees: [],
+        generatedAt: 1,
+      });
 
       const result = await runOmmEmployeeList({}, { stateRoot: dir });
       const payload = JSON.parse(result.content[0].text);
@@ -81,7 +88,12 @@ describe("runOmmEmployeeDispatch", () => {
       assert.equal(result.details.status, "dispatched");
 
       // Verify the dispatch file was written atomically
-      const requestPath = join(dir, "state", "dispatch", `${payload.runId}.json`);
+      const requestPath = join(
+        dir,
+        "state",
+        "dispatch",
+        `${payload.runId}.json`,
+      );
       const raw = await readFile(requestPath, "utf8");
       const request = JSON.parse(raw);
       assert.equal(request.agentId, "test-agent");
@@ -139,7 +151,10 @@ describe("runOmmEmployeeResult", () => {
       const dispatchDir = join(dir, "state", "dispatch");
       await mkdir(dispatchDir, { recursive: true });
       // Write request and result ahead of time
-      await writeJson(join(dispatchDir, `${runId}.json`), { runId, status: "pending" });
+      await writeJson(join(dispatchDir, `${runId}.json`), {
+        runId,
+        status: "pending",
+      });
       await writeJson(join(dispatchDir, `${runId}.result.json`), {
         runId,
         result: { text: "all done" },
@@ -169,6 +184,91 @@ describe("runOmmEmployeeResult", () => {
       );
       assert.ok(result.content[0].text.includes("expired"));
       assert.equal(result.details.code, "OMM_E_DISPATCH_TIMEOUT");
+    });
+  });
+});
+
+describe("runOmmEmployeeResultBatch", () => {
+  it("collects results for multiple runIds concurrently", async () => {
+    await withTmpDir(async (dir) => {
+      const dispatchDir = join(dir, "state", "dispatch");
+      await mkdir(dispatchDir, { recursive: true });
+      const runId1 = "batch-run-1";
+      const runId2 = "batch-run-2";
+      // Pre-write requests and results so polls resolve immediately
+      await writeJson(join(dispatchDir, `${runId1}.json`), {
+        runId: runId1,
+        status: "pending",
+      });
+      await writeJson(join(dispatchDir, `${runId1}.result.json`), {
+        runId: runId1,
+        result: { text: "done-1" },
+        completedAt: 1718500000001,
+      });
+      await writeJson(join(dispatchDir, `${runId2}.json`), {
+        runId: runId2,
+        status: "pending",
+      });
+      await writeJson(join(dispatchDir, `${runId2}.result.json`), {
+        runId: runId2,
+        result: { text: "done-2" },
+        completedAt: 1718500000002,
+      });
+
+      const result = await runOmmEmployeeResultBatch(
+        { runIds: [runId1, runId2] },
+        { stateRoot: dir },
+      );
+      const payload = JSON.parse(result.content[0].text);
+      assert.equal(payload.results.length, 2);
+      assert.equal(payload.count, 2);
+      const statuses = payload.results
+        .map((r: { status: string }) => r.status)
+        .sort();
+      assert.deepEqual(statuses, ["complete", "complete"]);
+    });
+  });
+
+  it("reports timeout status for missing results without throwing", async () => {
+    await withTmpDir(async (dir) => {
+      const dispatchDir = join(dir, "state", "dispatch");
+      await mkdir(dispatchDir, { recursive: true });
+      const runId = "batch-timeout";
+      // Write the request but never the result → poll loop hits "expired"
+      await writeJson(join(dispatchDir, `${runId}.json`), {
+        runId,
+        status: "pending",
+      });
+
+      const result = await runOmmEmployeeResultBatch(
+        { runIds: [runId] },
+        { stateRoot: dir },
+      );
+      const payload = JSON.parse(result.content[0].text);
+      assert.equal(payload.results.length, 1);
+      assert.equal(payload.results[0].status, "timeout");
+    });
+  });
+
+  it("rejects empty runIds array", async () => {
+    await withTmpDir(async (dir) => {
+      const result = await runOmmEmployeeResultBatch(
+        { runIds: [] },
+        { stateRoot: dir },
+      );
+      assert.ok(result.content[0].text.includes("error"));
+      assert.equal(result.details.code, "OMM_E_VALUE_INVALID");
+    });
+  });
+
+  it("rejects non-array runIds", async () => {
+    await withTmpDir(async (dir) => {
+      const result = await runOmmEmployeeResultBatch(
+        { runIds: "not-an-array" },
+        { stateRoot: dir },
+      );
+      assert.ok(result.content[0].text.includes("error"));
+      assert.equal(result.details.code, "OMM_E_VALUE_INVALID");
     });
   });
 });

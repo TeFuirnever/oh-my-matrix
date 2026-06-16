@@ -18,8 +18,6 @@ const SHELL_METACHAR_REGEX = /[;|&$`><!(){}~*?\r\n\0#'"[\]]/;
 
 const SERVER_DEFS = [
   { name: "omm-state", packageName: "omm-mcp" },
-  { name: "omm-memory", packageName: "omm-mcp-memory" },
-  { name: "omm-trace", packageName: "omm-mcp-trace" },
 ];
 
 function isPlainObject(value) {

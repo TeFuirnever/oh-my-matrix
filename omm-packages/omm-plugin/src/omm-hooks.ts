@@ -27,7 +27,9 @@ export type OmmHookEvent =
   | "subagent_spawned"
   | "subagent_ended"
   | "gateway_start"
-  | "gateway_stop";
+  | "gateway_stop"
+  | "before_compaction"
+  | "after_compaction";
 
 export interface OmmSessionRecord {
   event: "session_start" | "session_end";
@@ -235,6 +237,8 @@ export const handleSubagentSpawned =
 export const handleSubagentEnded = makeDispatchOnlyHandler("subagent_ended");
 export const handleGatewayStart = makeDispatchOnlyHandler("gateway_start");
 export const handleGatewayStop = makeDispatchOnlyHandler("gateway_stop");
+export const handleBeforeCompaction = makeDispatchOnlyHandler("before_compaction");
+export const handleAfterCompaction = makeDispatchOnlyHandler("after_compaction");
 
 // ── Session handlers (custom logic for session record file) ──
 

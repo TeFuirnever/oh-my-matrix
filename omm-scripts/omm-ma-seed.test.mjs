@@ -23,11 +23,7 @@ test("buildMcpServers emits OpenClaw-native server entries (no type/enabled/tags
     stateRoot: "D:\\Matrix\\oh-my-matrix\\.omm-dev-state",
   });
 
-  assert.deepEqual(Object.keys(servers), [
-    "omm-state",
-    "omm-memory",
-    "omm-trace",
-  ]);
+  assert.deepEqual(Object.keys(servers), ["omm-state"]);
   const entry = servers["omm-state"];
   assert.equal(entry.command, "node");
   assert.equal(entry.type, undefined);
@@ -55,10 +51,10 @@ test("buildMcpServers supports unpacked suite layout without env", async () => {
   });
 
   assert.match(
-    slash(servers["omm-trace"].args[0]),
-    /\/opt\/omm-suite\/omm-mcp-trace\/dist\/src\/index\.js$/,
+    slash(servers["omm-state"].args[0]),
+    /\/opt\/omm-suite\/omm-mcp\/dist\/src\/index\.js$/,
   );
-  assert.equal(servers["omm-trace"].env, undefined);
+  assert.equal(servers["omm-state"].env, undefined);
 });
 
 test("mergeMcpConfig inserts into mcp.servers (OpenClaw native format)", async () => {
@@ -80,18 +76,16 @@ test("mergeMcpConfig inserts into mcp.servers (OpenClaw native format)", async (
   assert.ok(first.config.mcp.servers["matrix-mcp-playwright"]);
   assert.ok(first.config.mcp.servers.context7);
   assert.ok(first.config.mcp.servers["omm-state"]);
-  assert.ok(first.config.mcp.servers["omm-memory"]);
-  assert.ok(first.config.mcp.servers["omm-trace"]);
   assert.deepEqual(
     first.actions.map((item) => item.action),
-    ["inserted", "inserted", "inserted"],
+    ["inserted"],
   );
 
   const second = mergeMcpConfig(first.config, servers);
   assert.equal(second.changed, false);
   assert.deepEqual(
     second.actions.map((item) => item.action),
-    ["unchanged", "unchanged", "unchanged"],
+    ["unchanged"],
   );
 });
 
@@ -131,7 +125,7 @@ test("mergeMcpConfig falls back to servers key when mcp.servers absent", async (
   );
 
   assert.equal(result.key, "servers");
-  assert.ok(result.config.servers["omm-memory"]);
+  assert.ok(result.config.servers["omm-state"]);
   assert.ok(result.config.servers.existing);
 });
 
@@ -179,8 +173,6 @@ test("seedMatrixAssistantConfig writes atomically and is idempotent", async () =
     const parsed = JSON.parse(await readFile(target, "utf8"));
     assert.deepEqual(parsed.plugins, { keep: true });
     assert.ok(parsed.mcp.servers["omm-state"]);
-    assert.ok(parsed.mcp.servers["omm-memory"]);
-    assert.ok(parsed.mcp.servers["omm-trace"]);
 
     const second = await seedMatrixAssistantConfig({
       scope: "user",

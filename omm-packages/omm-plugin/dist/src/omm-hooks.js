@@ -121,6 +121,8 @@ export const handleSubagentSpawned = makeDispatchOnlyHandler("subagent_spawned")
 export const handleSubagentEnded = makeDispatchOnlyHandler("subagent_ended");
 export const handleGatewayStart = makeDispatchOnlyHandler("gateway_start");
 export const handleGatewayStop = makeDispatchOnlyHandler("gateway_stop");
+export const handleBeforeCompaction = makeDispatchOnlyHandler("before_compaction");
+export const handleAfterCompaction = makeDispatchOnlyHandler("after_compaction");
 // ── Session handlers (custom logic for session record file) ──
 /** Write session_start record + dispatch user hooks. */
 export async function handleSessionStart(args, config) {

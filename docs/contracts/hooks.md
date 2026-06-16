@@ -35,6 +35,8 @@ event args.
     subagent_ended/
     gateway_start/
     gateway_stop/
+    before_compaction/
+    after_compaction/
 ```
 
 The default `stateRoot` resolves via `resolveOmmStateRoot()`. Override per
@@ -79,6 +81,8 @@ still run.
 | `subagent_ended`     | Subagent has finished                                      | `{ targetSessionKey, reason, outcome }`               |
 | `gateway_start`      | OpenClaw gateway starts                                    | `{ port }`                                            |
 | `gateway_stop`       | OpenClaw gateway stops                                     | `{ reason? }`                                         |
+| `before_compaction`  | Host is about to compact the context window                | `{ messageCount, tokenCount?, compactingCount? }`     |
+| `after_compaction`   | Host has finished compacting the context window            | `{ messageCount?, sessionId? }`                       |
 
 The exact payload depends on the host's emitter. omm passes the args
 through verbatim to user hook handlers.
@@ -133,7 +137,7 @@ For OpenClaw / MatrixAssistant / other hosts wiring lifecycle events:
    inspecting omm trace MCP for `hook.invoke` events (if observability
    metrics are enabled — see roadmap.md P2).
 
-omm's `omm-register.ts` already calls `api.on(event, …)` for all 12 events
+omm's `omm-register.ts` already calls `api.on(event, …)` for all 14 events
 defensively; hosts only need to implement `api.on()` itself.
 
 Events `before_tool_call`, `after_tool_call`, `llm_input`, `llm_output`, and

@@ -29,13 +29,13 @@ describe("omm-hooks event sources", () => {
        export async function handler(args) {
          writeFileSync(${JSON.stringify(sentinelPath)}, JSON.stringify(args));
        }`, "utf8");
-        const outcome = await dispatchOmmHooks("after_tool_call", { toolName: "omm_ping", durationMs: 5 }, { stateRoot });
+        const outcome = await dispatchOmmHooks("after_tool_call", { toolName: "omm_state_read", durationMs: 5 }, { stateRoot });
         assert.ok(outcome);
         assert.equal(outcome.outcomes.length, 1);
         assert.equal(outcome.outcomes[0].ok, true);
         const { readFileSync } = await import("node:fs");
         const fired = JSON.parse(readFileSync(sentinelPath, "utf8"));
-        assert.equal(fired.toolName, "omm_ping");
+        assert.equal(fired.toolName, "omm_state_read");
         assert.equal(fired.durationMs, 5);
     });
     it("dispatchOmmHooks swallows handler errors (other hooks still run)", async () => {
@@ -115,7 +115,7 @@ describe("omm-hooks event sources", () => {
         }
     });
     it("handleBeforeToolCall writes trace event when sessionId is present", async () => {
-        await handleBeforeToolCall({ toolName: "omm_ping", sessionId: "trace-test", toolCallId: "tc1" }, { stateRoot });
+        await handleBeforeToolCall({ toolName: "omm_state_read", sessionId: "trace-test", toolCallId: "tc1" }, { stateRoot });
         const { existsSync, readFileSync } = await import("node:fs");
         const traceFile = join(stateRoot, "trace", "trace-test.jsonl");
         assert.ok(existsSync(traceFile), "trace file created");
@@ -123,10 +123,10 @@ describe("omm-hooks event sources", () => {
         assert.equal(lines.length, 1);
         const record = JSON.parse(lines[0]);
         assert.equal(record.type, "before_tool_call");
-        assert.equal(record.toolName, "omm_ping");
+        assert.equal(record.toolName, "omm_state_read");
     });
     it("handleAfterToolCall writes trace event with duration", async () => {
-        await handleAfterToolCall({ toolName: "omm_ping", sessionId: "trace-test2", durationMs: 42 }, { stateRoot });
+        await handleAfterToolCall({ toolName: "omm_state_read", sessionId: "trace-test2", durationMs: 42 }, { stateRoot });
         const { readFileSync } = await import("node:fs");
         const traceFile = join(stateRoot, "trace", "trace-test2.jsonl");
         const record = JSON.parse(readFileSync(traceFile, "utf8").trim());

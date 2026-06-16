@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveOmmStateRoot } from "../omm-config.js";
-import { makeError, OMM_ERROR_CODES } from "../omm-error-codes.js";
+import { makeError, OMM_ERROR_CODES, } from "../omm-error-codes.js";
 import { withCrossProcessLock } from "../omm-fs-queue.js";
 const DISPATCH_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 500;
@@ -105,7 +105,17 @@ export async function runOmmEmployeeResult(input, config = {}) {
     if (!isNonEmptyString(input.runId)) {
         return missingArg("runId", "Pass the runId returned by omm_employee_dispatch");
     }
-    const runId = input.runId.trim();
+    return outcomeToResult(await pollSingleResult(input.runId.trim(), config));
+}
+/**
+ * Poll a single dispatch until its result arrives, the request is purged, or
+ * the timeout elapses. Read-only — does not take the cross-process write lock.
+ *
+ * Reads `resultPath` once per tick; reads `requestPath` only when the result
+ * is still missing (to detect the purged-dispatch case). Avoids re-reading
+ * `resultPath` twice per tick.
+ */
+async function pollSingleResult(runId, config) {
     const dir = dispatchDir(config.stateRoot);
     const resultPath = join(dir, `${runId}.result.json`);
     const requestPath = join(dir, `${runId}.json`);
@@ -114,58 +124,109 @@ export async function runOmmEmployeeResult(input, config = {}) {
         const result = await readJsonIfExists(resultPath);
         if (result) {
             return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify({
-                            runId,
-                            status: "complete",
-                            output: result.result ?? null,
-                        }),
-                    },
-                ],
-                details: {
-                    runId,
-                    status: "complete",
-                    output: result.result ?? null,
-                    completedAt: result.completedAt,
-                },
+                kind: "complete",
+                runId,
+                output: result.result ?? null,
+                completedAt: result.completedAt,
             };
         }
-        // If both the request and result are gone, the dispatch was purged.
-        const [resStillMissing, reqMissing] = await Promise.all([
-            readJsonIfExists(resultPath),
-            readJsonIfExists(requestPath),
-        ]);
-        if (resStillMissing === null && reqMissing === null) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `omm_employee_result error: dispatch ${runId} expired`,
-                    },
-                ],
-                details: {
-                    error: `dispatch ${runId} expired`,
-                    code: OMM_ERROR_CODES.DISPATCH_TIMEOUT,
-                    structured: makeError(OMM_ERROR_CODES.DISPATCH_TIMEOUT, `dispatch ${runId} expired`, "The dispatch request was purged before a result arrived"),
-                },
-            };
+        // Result still missing. If the request file is also gone, the dispatch
+        // was purged before completing — fail fast rather than waiting out the
+        // full timeout.
+        if ((await readJsonIfExists(requestPath)) === null) {
+            return { kind: "expired", runId };
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
+    return { kind: "timeout", runId };
+}
+/** Shape a PollOutcome into the single-tool OmmToolResult envelope. */
+function outcomeToResult(o) {
+    if (o.kind === "complete") {
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        runId: o.runId,
+                        status: "complete",
+                        output: o.output,
+                    }),
+                },
+            ],
+            details: {
+                runId: o.runId,
+                status: "complete",
+                output: o.output,
+                completedAt: o.completedAt,
+            },
+        };
+    }
+    // expired + timeout share the DISPATCH_TIMEOUT code; only the message differs.
+    const message = o.kind === "expired"
+        ? `dispatch ${o.runId} expired`
+        : `result for ${o.runId} timed out after ${DISPATCH_TIMEOUT_MS}ms`;
+    return {
+        content: [{ type: "text", text: `omm_employee_result error: ${message}` }],
+        details: {
+            error: message,
+            code: OMM_ERROR_CODES.DISPATCH_TIMEOUT,
+            structured: makeError(OMM_ERROR_CODES.DISPATCH_TIMEOUT, message, o.kind === "expired"
+                ? "The dispatch request was purged before a result arrived"
+                : "The MA watcher did not fulfill the dispatch in time"),
+        },
+    };
+}
+const MAX_BATCH_RUN_IDS = 10;
+/** Shared error envelope for batch validation failures. */
+function batchError(message, code, hint) {
+    return {
+        content: [
+            { type: "text", text: `omm_employee_result_batch error: ${message}` },
+        ],
+        details: {
+            error: message,
+            code,
+            structured: makeError(code, message, hint),
+        },
+    };
+}
+/** Poll for multiple dispatch results concurrently. Returns all results at once. */
+export async function runOmmEmployeeResultBatch(input, config = {}) {
+    const raw = input.runIds;
+    if (!Array.isArray(raw) || raw.length === 0) {
+        return batchError("runIds must be a non-empty array", OMM_ERROR_CODES.VALUE_INVALID, "Pass an array of runId strings returned by omm_employee_dispatch");
+    }
+    if (raw.length > MAX_BATCH_RUN_IDS) {
+        return batchError(`runIds exceeds max of ${MAX_BATCH_RUN_IDS}`, OMM_ERROR_CODES.VALUE_INVALID, `Pass at most ${MAX_BATCH_RUN_IDS} runId strings`);
+    }
+    const runIds = [];
+    for (const r of raw) {
+        if (!isNonEmptyString(r)) {
+            return batchError("every runId must be a non-empty string", OMM_ERROR_CODES.KEY_INVALID, "Pass an array of runId strings returned by omm_employee_dispatch");
+        }
+        runIds.push(r.trim());
+    }
+    // Concurrent collection — the whole point of the batch tool. Each poll runs
+    // its own 60s timeout loop independently; the batch resolves when all do.
+    const outcomes = await Promise.all(runIds.map((id) => pollSingleResult(id, config)));
+    // Map the typed outcome directly — no envelope reverse-engineering.
+    const results = outcomes.map((o) => o.kind === "complete"
+        ? {
+            runId: o.runId,
+            status: "complete",
+            output: o.output,
+            completedAt: o.completedAt,
+        }
+        : { runId: o.runId, status: "timeout", output: null });
     return {
         content: [
             {
                 type: "text",
-                text: `omm_employee_result error: result for ${runId} timed out after ${DISPATCH_TIMEOUT_MS}ms`,
+                text: JSON.stringify({ results, count: results.length }),
             },
         ],
-        details: {
-            error: `result for ${runId} timed out`,
-            code: OMM_ERROR_CODES.DISPATCH_TIMEOUT,
-            structured: makeError(OMM_ERROR_CODES.DISPATCH_TIMEOUT, `result for ${runId} timed out after ${DISPATCH_TIMEOUT_MS}ms`, "The MA watcher did not fulfill the dispatch in time"),
-        },
+        details: { results, count: results.length },
     };
 }
 //# sourceMappingURL=omm-employee.js.map

@@ -35,6 +35,8 @@ Meanwhile, omm's remaining responsibility — `team` orchestration plus the plan
 - **Code**: `omm-autopilot-pipeline.ts`, `omm-ralph-store.ts`, `omm-goal-state.ts`, `omm-goal-ledger.ts`, `omm-tools/omm-goal.ts`, and related validators/guards.
 - **Skills**: `omm-skills/omm-ralph/`, `omm-skills/omm-autopilot/`, `omm-skills/omm-ralplan/` deleted. `SHIPPED_SKILLS` reduced to `["omm-ping", "omm-cancel", "omm-team"]`.
 - **Plugin tools**: All six `omm_goal_*` tools removed. The plugin now registers **7 tools**: `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`.
+
+> **v0.5.0 update (2026-06-16):** Further reduced to **5 tools** (`omm_state_write`, `omm_state_read`, `omm_employee_list`, `omm_employee_dispatch`, `omm_employee_result`). `omm_ping`, `omm_cancel`, `omm_state_list`, `omm_agent_prompt_get`, and `omm_agent_prompt_list` were removed from plugin registration. Agent prompts remain accessible via MCP Prompts catalog.
 - **State machine**: `omm-state-validation.ts`, `omm-workflow-guard.ts`, `omm-mode-lifecycle.ts`, `omm-run-outcome.ts`, and `omm-types.ts` collapsed to single-mode `team` only. The exclusivity guard now only recognizes `team` as a workflow key.
 
 ### What was kept

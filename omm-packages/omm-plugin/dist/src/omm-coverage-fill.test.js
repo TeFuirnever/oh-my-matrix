@@ -19,7 +19,6 @@ import { dispatchHooks, loadHooks } from "./omm-hook-loader.js";
 import { cancelMode, getModeState, startMode, updateModeState, } from "./omm-mode-lifecycle.js";
 import { deriveOutcomeFromState } from "./omm-run-outcome.js";
 import { validateStateWrite } from "./omm-state-validation.js";
-import { runOmmPing } from "./omm-tools/omm-ping.js";
 import { runOmmStateWrite } from "./omm-tools/omm-state.js";
 async function tempRoot() {
     return mkdtemp(join(tmpdir(), "omm-cov-fill-"));
@@ -36,30 +35,6 @@ describe("coverage fill — omm-config", () => {
     it("falls back when configRoot is non-string", () => {
         const got = resolveOmmStateRoot(42);
         assert.match(got, /\.openclaw[\\/]omm$/);
-    });
-});
-describe("coverage fill — omm_ping", () => {
-    it("normalizes non-string command to default 'ping'", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            const r = await runOmmPing({ command: 42 }, { stateRoot });
-            assert.equal(r.content[0].text, "omm pong: ping");
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
-    });
-    it("normalizes empty commandName/skillName to null", async () => {
-        const stateRoot = await tempRoot();
-        try {
-            const r = await runOmmPing({ command: "go", commandName: "   ", skillName: 99 }, { stateRoot });
-            const record = r.details.record;
-            assert.equal(record.commandName, null);
-            assert.equal(record.skillName, null);
-        }
-        finally {
-            await rm(stateRoot, { recursive: true, force: true });
-        }
     });
 });
 describe("coverage fill — runOmmStateWrite value-must-be-object", () => {

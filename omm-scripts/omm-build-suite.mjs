@@ -13,9 +13,9 @@ const staging = join(dist, "omm-suite");
 const outputName = `omm-suite-${version}.tgz`;
 const output = join(dist, outputName);
 
-// Only ping/cancel/team are shipped. All other skill directories were removed
+// Only team is shipped. All other skill directories were removed
 // (autonomous-loop / artifact skills retired; see ADR-008).
-const SHIPPED_SKILLS = ["omm-ping", "omm-cancel", "omm-team"];
+const SHIPPED_SKILLS = ["omm-team"];
 
 async function copyRequiredFiles() {
   await rm(staging, { recursive: true, force: true });
@@ -76,22 +76,6 @@ async function copyRequiredFiles() {
       { recursive: true },
     ),
     cp(pkg("omm-mcp", "dist"), join(staging, "omm-mcp", "dist"), {
-      recursive: true,
-    }),
-    cp(
-      pkg("omm-mcp-memory", "package.json"),
-      join(staging, "omm-mcp-memory", "package.json"),
-      { recursive: true },
-    ),
-    cp(pkg("omm-mcp-memory", "dist"), join(staging, "omm-mcp-memory", "dist"), {
-      recursive: true,
-    }),
-    cp(
-      pkg("omm-mcp-trace", "package.json"),
-      join(staging, "omm-mcp-trace", "package.json"),
-      { recursive: true },
-    ),
-    cp(pkg("omm-mcp-trace", "dist"), join(staging, "omm-mcp-trace", "dist"), {
       recursive: true,
     }),
   ]);

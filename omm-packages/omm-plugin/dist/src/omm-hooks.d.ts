@@ -7,7 +7,7 @@ import { type HookDispatchOutcome, type HookLoadIssue } from "./omm-hook-loader.
  *
  * @since 0.3.0
  */
-export type OmmHookEvent = "session_start" | "session_end" | "before_tool_call" | "after_tool_call" | "llm_input" | "llm_output" | "agent_end" | "subagent_spawning" | "subagent_spawned" | "subagent_ended" | "gateway_start" | "gateway_stop";
+export type OmmHookEvent = "session_start" | "session_end" | "before_tool_call" | "after_tool_call" | "llm_input" | "llm_output" | "agent_end" | "subagent_spawning" | "subagent_spawned" | "subagent_ended" | "gateway_start" | "gateway_stop" | "before_compaction" | "after_compaction";
 export interface OmmSessionRecord {
     event: "session_start" | "session_end";
     timestamp: string;
@@ -33,6 +33,8 @@ export declare const handleSubagentSpawned: HookHandler;
 export declare const handleSubagentEnded: HookHandler;
 export declare const handleGatewayStart: HookHandler;
 export declare const handleGatewayStop: HookHandler;
+export declare const handleBeforeCompaction: HookHandler;
+export declare const handleAfterCompaction: HookHandler;
 /** Write session_start record + dispatch user hooks. */
 export declare function handleSessionStart(args: Record<string, unknown>, config?: {
     stateRoot?: string;

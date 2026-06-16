@@ -1,9 +1,9 @@
 ---
 name: omm-team
-description: Multi-agent team orchestration with external team skill bridge
+description: Multi-agent team orchestration with persona-aware dispatch, fork-join collection, and result synthesis
 user-invocable: true
 disable-model-invocation: false
-version: 0.2.0
+version: 0.3.0
 ---
 
 Start or resume an omm-team multi-agent execution pipeline.
@@ -17,66 +17,127 @@ Start or resume an omm-team multi-agent execution pipeline.
 
 ## Architecture
 
-omm-team provides **state tracking and integration coordination** while delegating actual parallel execution to the host environment's team skill. This avoids reimplementing worker spawning — the native `Task` tool with `TeamCreate`/`TaskCreate`/`SendMessage` handles parallelism.
+omm-team provides **state tracking and persona-aware orchestration** while delegating actual parallel execution to MA digital employees (via the state-file relay) or the host's native team skill as fallback. This avoids reimplementing worker spawning.
+
+The orchestrator is a **pure coordinator**: it decomposes, dispatches, collects, and synthesizes. It does not produce content itself — every subtask goes to a specialized persona.
 
 ## Lifecycle
+
+### Phase 1 — INIT
 
 1. **Receive** user task description and optional `N:agent-type` parameter.
 2. **Read state** via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal, resume from that phase.
 
-   > **Important — interpreting `omm_state_read` responses**: when no state file exists yet (first run, or after `cancel`), the tool returns the literal text `null`. **This is normal — it means "not started yet", not an error.** Do not retry, do not assume the tool is broken. Proceed by initializing state via `omm_state_write` with `key=team` and `active=true` (or call `startMode("team", ...)`).
+   > **Important — interpreting `omm_state_read` responses**: when no state file exists yet, the tool returns the literal text `null`. **This is normal — it means "not started yet", not an error.** Do not retry. Proceed by initializing state.
 
-3. **Write initial state** via `omm_state_write`:
+3. **Write initial state** via `omm_state_write` with `key=team`:
    ```json
    {
      "mode": "team",
      "active": true,
      "task": "<original task>",
-     "current_phase": "delegating",
+     "current_phase": "decomposing",
      "agent_count": 3,
      "fix_loop_count": 0,
      "max_fix_loops": 3,
      "startedAt": "..."
    }
    ```
-4. **Detect MA digital employees** (MA-employee priority with host fallback). Call `omm_employee_list`:
-   - **Employees available**: decompose the task into subtasks, then for each subtask call `omm_employee_dispatch({ agentId, message })` → poll `omm_employee_result({ runId })` until `status: "complete"` or timeout. Aggregate outputs for the verify step.
-   - **No employees** (empty list — host is not MatrixAssistant, or no employee activated): fall back to host-native execution — `Skill()` the team skill with `args="<N:agent-type> <task>"`.
 
-   > MA digital employees (OpenClaw Agents) are the preferred execution backend when available; the host team skill is the universal fallback. See `docs/plans/omm-ma-employee-bridge.md`.
-5. The host team skill (fallback path) handles the full pipeline: `TeamCreate` → task decomposition → `TaskCreate` → worker spawn → monitor → verify/fix loop → `TeamDelete`.
-6. **On completion**, write terminal state via `omm_state_write`:
+### Phase 2 — DECOMPOSING (Persona-Aware Task Assignment)
+
+1. **Detect available workers**: call `omm_employee_list`.
+   - **Employees available**: proceed with persona-aware assignment (path A).
+   - **No employees** (`employees: []`): fall back to host-native `Skill("team")` (path B) — skip to Phase 6.
+
+2. **Path A — Assign each subtask a persona**: For each subtask, inspect the employee `roleId` (not `agentId`) and assign the best-matching persona. Reference the persona matrix:
+
+   | Subtask type | Target roleId contains |
+   |-------------|----------------------|
+   | Design / architecture | `architect` |
+   | Implementation / coding | `executor` |
+   | Testing / verification | `verifier` |
+   | Security review | `security-reviewer` |
+   | Documentation | `writer` |
+   | Debugging | `debugger` |
+   | Requirements analysis | `analyst` |
+
+3. **Persist the assignment**: write the full `subtasks` array to state immediately. Each entry:
    ```json
    {
-     "mode": "team",
-     "active": false,
-     "current_phase": "complete",
-     "task": "<original task>"
+     "id": "s1",
+     "description": "implement auth module",
+     "roleId": "executor",
+     "assignedTo": "<agentId>",
+     "status": "pending"
    }
    ```
+   Storing `assignedTo`/`roleId` in state means you do NOT need to remember which employee handles which subtask — read it back from state on resume.
+
+4. Transition: `current_phase = "delegating"`.
+
+### Phase 3 — DELEGATING (Fork: Dispatch All)
+
+Dispatch every pending subtask. **Dispatch all before collecting any** — this is the fork.
+
+For each subtask in `subtasks`:
+1. Call `omm_employee_dispatch({ agentId: subtask.assignedTo, message: subtask.description })`.
+2. **Immediately** write the returned `runId` back into the subtask via `omm_state_write`:
+   ```json
+   { "subtasks": [ { "id": "s1", ..., "runId": "<returned-runId>", "status": "dispatched" }, ... ] }
+   ```
+   > Critical: persist `runId` to state right after each dispatch. Do NOT hold runIds in memory — on resume or compaction you must be able to recover them from state.
+
+3. After all subtasks are dispatched, transition: `current_phase = "executing"`.
+
+### Phase 4 — EXECUTING (Join: Collect All)
+
+Collect all dispatched results in a single call using the batch tool:
+
+1. Gather all `runId` values from `subtasks` where `status === "dispatched"`.
+2. Call `omm_employee_result_batch({ runIds: ["<id1>", "<id2>", ...] })`.
+   - This polls all runIds **concurrently** and returns when all resolve (each has its own 60s timeout).
+   - Do NOT call `omm_employee_result` individually in a loop — that serializes what should be parallel.
+3. For each result in `results`, update the matching subtask:
+   - `status: "complete"` → set `subtask.status = "complete"`, store `subtask.result`.
+   - `status: "timeout"` → set `subtask.status = "failed"`, note the failure.
+4. Write the updated `subtasks` to state.
+
+### Phase 5 — SYNTHESIZING (Multi-Agent Result Merge)
+
+**Only when `agent_count > 1`** and a `critic` persona employee is available. For single-agent or no-critic cases, skip to Phase 6.
+
+1. Transition: `current_phase = "synthesizing"`.
+2. Gather all `subtask.result` values into a single context block.
+3. Dispatch a synthesis task to the `critic` employee:
+   - Message: "Synthesize these subtask results into a unified summary. Identify conflicts and coverage gaps." + the concatenated results.
+   - If no employee has a `critic` roleId, skip synthesis (fall through to Phase 6).
+4. Poll the result via `omm_employee_result({ runId })`.
+5. Write the synthesis to state:
+   ```json
+   { "synthesis": { "summary": "...", "conflicts": [...], "completedAt": "..." } }
+   ```
+6. The VERIFYING phase (next) validates against `synthesis.summary`, not raw subtask outputs.
+
+### Phase 6 — VERIFYING / FIXING / COMPLETE
+
+1. Transition: `current_phase = "verifying"`.
+2. Verify the synthesis (or single result) against the original task. If issues found and `fix_loop_count < max_fix_loops`:
+   - `current_phase = "fixing"`, increment `fix_loop_count`, dispatch a fix subtask to `debugger`/`executor`.
+   - Return to EXECUTING for the fix.
+3. On success: `current_phase = "complete"`, `active = false`. Report what was accomplished.
+4. On failure (max loops exceeded): `current_phase = "failed"`, `active = false`. Report remaining issues.
 
 ## Recommended API (omm v0.2 onwards)
 
-Prefer the unified mode-lifecycle helpers from `omm-plugin/src/omm-mode-lifecycle.ts`
-over hand-assembling state objects. The team mode uses `current_phase` (not
-`status`) — the helpers handle this automatically.
+Prefer the unified mode-lifecycle helpers from `omm-plugin/src/omm-mode-lifecycle.ts`:
 
 ```ts
 import { startMode, updateModeState, cancelMode } from "omm-plugin";
-
-// init
 await startMode("team", { task, agent_count: 3 });
-
-// during run, e.g. after delegating
 await updateModeState("team", { current_phase: "delegating" });
-
-// when the upstream team skill returns success
 await cancelMode("team", "all subtasks verified", { kind: "completed" });
 ```
-
-When running under MatrixAssistant with active digital employees, the
-MA-employee dispatch path (lifecycle step 4) takes priority over
-host-native team execution.
 
 ## State Schema
 
@@ -85,11 +146,22 @@ host-native team execution.
   "mode": "team",
   "active": true,
   "task": "<original task>",
-  "current_phase": "delegating",
-  "subtasks": [],
+  "current_phase": "executing",
   "agent_count": 3,
   "fix_loop_count": 0,
   "max_fix_loops": 3,
+  "subtasks": [
+    {
+      "id": "s1",
+      "description": "implement auth module",
+      "roleId": "executor",
+      "assignedTo": "agent-uuid-1",
+      "runId": "dispatch-uuid-1",
+      "status": "dispatched",
+      "result": null
+    }
+  ],
+  "synthesis": null,
   "startedAt": "...",
   "lastUpdatedAt": "..."
 }
@@ -97,22 +169,31 @@ host-native team execution.
 
 ### Valid Phases
 
-`planning` → `decomposing` → `executing` → `verifying` → `fixing` → `complete`
+`planning` → `decomposing` → `delegating` → `executing` → `synthesizing` → `verifying` → (`fixing` loop) → `complete` | `failed`
 
-The `delegating` phase indicates the upstream team skill is in control.
+`synthesizing` is non-terminal (`active` may be `true`).
+
+### Subtask Status Values
+
+`pending` → `dispatched` → `complete` | `failed`
 
 ## MA Digital-Employee Bridge
 
-When MatrixAssistant is the host with active digital employees, omm-team dispatches subtasks to them via `omm_employee_dispatch` / `omm_employee_result` (lifecycle step 4) instead of the host team skill. Autonomous-loop retry/convergence for those subtasks is the host's responsibility (MA `@openclaw/autopilot`, per [ADR-008](docs/adr/008-delegation-to-host.md)). If no employees are available, omm-team falls back to host-native `Skill("team")`.
+When MatrixAssistant is the host with active digital employees, omm-team dispatches subtasks via `omm_employee_dispatch` and collects via `omm_employee_result_batch`. The MA watcher (host-side) must process dispatch files **concurrently** (`Promise.all` over pending files) for the fork-join pattern to deliver wall-clock speedup. See `docs/plans/omm-ma-employee-bridge.md`.
+
+Autonomous-loop retry/convergence for dispatched subtasks is the host's responsibility (MA `@openclaw/autopilot`, per ADR-008).
 
 ## Resume
 
-Read state via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal, resume by re-delegating to the upstream team skill.
+Read state via `omm_state_read` with `key=team`. If `active=true` and `current_phase` is non-terminal:
+- Re-read `subtasks[].runId` from state (do NOT reconstruct from memory).
+- If mid-EXECUTING: call `omm_employee_result_batch` with the surviving dispatched runIds.
+- If pre-DELEGATING: re-dispatch pending subtasks.
 
 ## Completion
 
-When the upstream team skill finishes, write `current_phase=complete`, `active=false`. Report what was accomplished.
+When all subtasks are verified, write `current_phase=complete`, `active=false`. Report what was accomplished, citing the `synthesis.summary`.
 
 ## Failure
 
-If the upstream team skill fails or max fix loops exceeded, write `current_phase=failed`, `active=false`. Report remaining issues.
+If subtasks fail beyond `max_fix_loops`, write `current_phase=failed`, `active=false`. Report remaining issues and which subtasks are `failed`.

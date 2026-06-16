@@ -22,8 +22,6 @@ See [ADR-001](adr/001-pure-plugin-no-cli.md), [ADR-002](adr/002-team-delegation-
 omm-packages/
 ├── omm-plugin/     OpenClaw plugin — tools, hooks, state validation
 ├── omm-mcp/        Stdio JSON-RPC MCP server for workflow state + prompts
-├── omm-mcp-memory/ Stdio JSON-RPC MCP server for key-value memory
-├── omm-mcp-trace/  Stdio JSON-RPC MCP server for execution traces
 └── omm-skills/     SKILL.md for the team workflow (plus agent-prompts persona library)
 ```
 
@@ -31,8 +29,8 @@ omm-packages/
 
 The plugin entry point `register(api)` conforms to the OpenClaw Plugin ABI:
 
-- **10 tools** registered via `api.registerTool()` (all `optional: true`): `omm_ping`, `omm_cancel`, `omm_state_write`, `omm_state_read`, `omm_state_list`, `omm_agent_prompt_get`, `omm_agent_prompt_list`, `omm_employee_list`, `omm_employee_dispatch`, `omm_employee_result`
-- **2 lifecycle hooks** registered via `api.on()`: `session_start`, `session_end`
+- **6 tools** registered via `api.registerTool()` (all `optional: true`): `omm_state_write`, `omm_state_read`, `omm_employee_list`, `omm_employee_dispatch`, `omm_employee_result`, `omm_employee_result_batch`
+- **14 lifecycle hooks** registered via `api.on()`: `session_start`, `session_end`, `before_tool_call`, `after_tool_call`, `llm_input`, `llm_output`, `agent_end`, `subagent_spawning`, `subagent_spawned`, `subagent_ended`, `gateway_start`, `gateway_stop`, `before_compaction`, `after_compaction`
 - All tools are `{ optional: true }` — the host functions without omm
 
 Key modules:
@@ -44,18 +42,14 @@ Key modules:
 | `omm-config.ts`           | Resolves state root directory; defaults to `~/.openclaw/omm`          |
 | `omm-state.ts`            | Smoke record writer for session lifecycle events                      |
 | `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence                   |
-| `omm-tools/omm-ping.ts`   | Health-check tool                                                     |
-| `omm-tools/omm-cancel.ts` | Session cancellation tool                                             |
 | `omm-tools/omm-employee.ts` | MA digital-employee bridge (list/dispatch/result) via state-file relay |
 | _(removed)_               | Goal tracking delegated to MA `@openclaw/autopilot` `goal_manager` ([ADR-008](adr/008-delegation-to-host.md)) |
 
-### omm-mcp / omm-mcp-memory / omm-mcp-trace（MCP 服务器）
+### omm-mcp（MCP 服务器）
 
-Three standalone stdio JSON-RPC servers implement MCP protocol 2024-11-05:
+A standalone stdio JSON-RPC server implements MCP protocol 2024-11-05:
 
 - `omm-mcp` exposes workflow state tools (`read`, `write`, `list`), Resources, and Prompts.
-- `omm-mcp-memory` exposes persistent key-value memory tools.
-- `omm-mcp-trace` exposes trace record/query/list/metrics tools and trace Resources.
 
 `omm-mcp` inlines a simplified copy of the validation logic from `omm-state-validation.ts` to maintain zero cross-package dependencies.
 
@@ -63,15 +57,13 @@ See [ADR-003](adr/003-zero-dependency-mcp.md) and [MCP Protocol Contract](contra
 
 ### omm-skills（技能定义）
 
-Three skills are shipped in the suite tarball: `omm-ping`, `omm-cancel`, `omm-team`. All other skill directories (ralph, autopilot, ralplan, deep-interview, ultrawork, ultraqa, docs, ui, git, research, refactor) were removed — autonomous execution is delegated to the host's `@openclaw/autopilot` ([ADR-008](adr/008-delegation-to-host.md)).
+One skill is shipped in the suite tarball: `omm-team`. All other skill directories (ping, cancel, ralph, autopilot, ralplan, deep-interview, ultrawork, ultraqa, docs, ui, git, research, refactor) were removed — autonomous execution is delegated to the host's `@openclaw/autopilot` ([ADR-008](adr/008-delegation-to-host.md)).
 
-**Shipped（3）:**
+**Shipped（1）:**
 
 | Skill           | Type                    | Purpose                                                                                 |
 | --------------- | ----------------------- | --------------------------------------------------------------------------------------- |
-| `omm-ping`      | Tool dispatch（无模型） | Direct `omm_ping` call                                                                  |
-| `omm-cancel`    | Tool dispatch（无模型） | Direct `omm_cancel` call                                                                |
-| `omm-team`      | Model-driven workflow   | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → VERIFYING ↔ FIXING → COMPLETE/FAILED  |
+| `omm-team`      | Model-driven workflow   | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → SYNTHESIZING → VERIFYING ↔ FIXING → COMPLETE/FAILED  |
 
 See [ADR-004](adr/004-three-mode-state-machine.md) and [Workflow State Contract](contracts/workflow-state-contract.md).
 

@@ -58,6 +58,88 @@ describe("validateStateWrite", () => {
       assert.equal(r.ok, true);
     });
 
+    it("accepts synthesizing as a valid non-terminal phase", () => {
+      const r = validateStateWrite(
+        "team",
+        { mode: "team", active: true, current_phase: "synthesizing" },
+        opts,
+      );
+      assert.equal(r.ok, true);
+    });
+
+    it("rejects terminal enforcement for synthesizing phase", () => {
+      // synthesizing is NOT terminal — active=true must be allowed
+      const r = validateStateWrite(
+        "team",
+        { mode: "team", active: true, current_phase: "synthesizing" },
+        opts,
+      );
+      assert.equal(r.ok, true);
+      assert.equal(r.state?.completedAt, undefined);
+    });
+
+    it("accepts a valid subtasks array with persona and runId", () => {
+      const r = validateStateWrite(
+        "team",
+        {
+          mode: "team",
+          active: true,
+          subtasks: [
+            {
+              id: "s1",
+              description: "implement auth",
+              roleId: "executor",
+              assignedTo: "agent-1",
+              runId: "run-uuid-1",
+              status: "dispatched",
+            },
+          ],
+        },
+        opts,
+      );
+      assert.equal(r.ok, true);
+      assert.equal(r.state?.completedAt, undefined);
+    });
+
+    it("rejects subtasks that is a string instead of an array", () => {
+      const r = validateStateWrite(
+        "team",
+        { mode: "team", active: true, subtasks: "not an array" },
+        opts,
+      );
+      assert.equal(r.ok, false);
+      assert.ok(r.error?.includes("subtasks must be an array"));
+    });
+
+    it("rejects subtask missing a string id", () => {
+      const r = validateStateWrite(
+        "team",
+        { mode: "team", active: true, subtasks: [{ description: "no id" }] },
+        opts,
+      );
+      assert.equal(r.ok, false);
+      assert.ok(r.error?.includes("non-empty string id"));
+    });
+
+    it("persists synthesis field through validation", () => {
+      const r = validateStateWrite(
+        "team",
+        {
+          mode: "team",
+          active: false,
+          current_phase: "complete",
+          synthesis: { summary: "all done", conflicts: [], completedAt: NOW },
+        },
+        opts,
+      );
+      assert.equal(r.ok, true);
+      assert.deepEqual(r.state?.synthesis, {
+        summary: "all done",
+        conflicts: [],
+        completedAt: NOW,
+      });
+    });
+
     it("rejects invalid current_phase", () => {
       const r = validateStateWrite(
         "team",

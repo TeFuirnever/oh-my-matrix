@@ -1,7 +1,8 @@
-import { verifyAgentPromptsAvailable } from "./omm-agent-prompts.js";
 import {
+  handleAfterCompaction,
   handleAfterToolCall,
   handleAgentEnd,
+  handleBeforeCompaction,
   handleBeforeToolCall,
   handleGatewayStart,
   handleGatewayStop,
@@ -14,21 +15,12 @@ import {
   handleSubagentSpawning,
 } from "./omm-hooks.js";
 import {
-  runOmmAgentPromptGet,
-  runOmmAgentPromptList,
-} from "./omm-tools/omm-agent-prompt.js";
-import { runOmmCancel } from "./omm-tools/omm-cancel.js";
-import { runOmmPing } from "./omm-tools/omm-ping.js";
-import {
-  runOmmStateList,
-  runOmmStateRead,
-  runOmmStateWrite,
-} from "./omm-tools/omm-state.js";
-import {
   runOmmEmployeeDispatch,
   runOmmEmployeeList,
   runOmmEmployeeResult,
+  runOmmEmployeeResultBatch,
 } from "./omm-tools/omm-employee.js";
+import { runOmmStateRead, runOmmStateWrite } from "./omm-tools/omm-state.js";
 
 /**
  * Plugin/MCP API contract version. Hosts that depend on a specific shape
@@ -70,54 +62,13 @@ interface OmmPluginApi {
 
 export const id = "omm";
 export const name = "omm";
-export const version = "0.4.0";
+export const version = "0.5.0";
 
 /** OpenClaw plugin entry point — registers omm tools and lifecycle hooks. */
 export function register(api: OmmPluginApi): void {
   if (typeof api.registerTool !== "function") {
     return;
   }
-
-  api.registerTool(
-    {
-      name: "omm_ping",
-      label: "omm ping",
-      description:
-        "Write an omm smoke-test state record and return a pong response.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          command: { type: "string" },
-          commandName: { type: "string" },
-          skillName: { type: "string" },
-        },
-      },
-      execute: (_toolCallId, params) =>
-        runOmmPing(params, { stateRoot: api.config?.stateRoot }),
-    },
-    { optional: true, name: "omm_ping" },
-  );
-
-  api.registerTool(
-    {
-      name: "omm_cancel",
-      label: "omm cancel",
-      description: "Cancel the current omm session and write a cancel record.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          sessionId: { type: "string" },
-        },
-      },
-      execute: (_toolCallId, params) =>
-        runOmmCancel(params, {
-          stateRoot: api.config?.stateRoot as string | undefined,
-        }),
-    },
-    { optional: true, name: "omm_cancel" },
-  );
 
   api.registerTool(
     {
@@ -161,64 +112,6 @@ export function register(api: OmmPluginApi): void {
         }),
     },
     { optional: true, name: "omm_state_read" },
-  );
-
-  api.registerTool(
-    {
-      name: "omm_state_list",
-      label: "omm state list",
-      description: "List all state keys.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {},
-      },
-      execute: (_toolCallId, params) =>
-        runOmmStateList(params, {
-          stateRoot: api.config?.stateRoot as string | undefined,
-        }),
-    },
-    { optional: true, name: "omm_state_list" },
-  );
-
-  api.registerTool(
-    {
-      name: "omm_agent_prompt_get",
-      label: "omm agent prompt get",
-      description:
-        "Load a single agent prompt by name. Returns the prompt body plus modelTier and purpose metadata. Hosts can use this to delegate a turn to a specialised persona.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          name: { type: "string" },
-        },
-        required: ["name"],
-      },
-      execute: (_toolCallId, params) =>
-        runOmmAgentPromptGet(params, {
-          promptsDir: api.config?.promptsDir as string | undefined,
-        }),
-    },
-    { optional: true, name: "omm_agent_prompt_get" },
-  );
-
-  api.registerTool(
-    {
-      name: "omm_agent_prompt_list",
-      label: "omm agent prompt list",
-      description: "List the names of all available agent prompts.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {},
-      },
-      execute: (_toolCallId, params) =>
-        runOmmAgentPromptList(params, {
-          promptsDir: api.config?.promptsDir as string | undefined,
-        }),
-    },
-    { optional: true, name: "omm_agent_prompt_list" },
   );
 
   api.registerTool(
@@ -285,12 +178,30 @@ export function register(api: OmmPluginApi): void {
     { optional: true, name: "omm_employee_result" },
   );
 
-  // Verify agent-prompts directory is reachable at startup. Without this,
-  // host-layout drift (the loader walks `..` to find `omm-skills/agent-prompts`)
-  // silently degrades agent-prompt tools to empty results. See ADR rationale
-  // in docs/adr/ — the sentinel check makes drift loud.
-  void verifyAgentPromptsAvailable(
-    api.config?.promptsDir as string | undefined,
+  api.registerTool(
+    {
+      name: "omm_employee_result_batch",
+      label: "omm employee result batch",
+      description:
+        "Poll for multiple dispatch results concurrently (fork-join collection). Returns all results in one call. Required because omm_employee_result blocks for up to 60s per runId and LLM tool calls execute sequentially.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          runIds: {
+            type: "array",
+            items: { type: "string" },
+            maxItems: 10,
+          },
+        },
+        required: ["runIds"],
+      },
+      execute: (_toolCallId, params) =>
+        runOmmEmployeeResultBatch(params, {
+          stateRoot: api.config?.stateRoot as string | undefined,
+        }),
+    },
+    { optional: true, name: "omm_employee_result_batch" },
   );
 
   if (typeof api.on === "function") {
@@ -339,6 +250,12 @@ export function register(api: OmmPluginApi): void {
     );
     api.on("gateway_stop", (ev, ctx) =>
       handleGatewayStop(merge(ev, ctx), { stateRoot }),
+    );
+    api.on("before_compaction", (ev, ctx) =>
+      handleBeforeCompaction(merge(ev, ctx), { stateRoot }),
+    );
+    api.on("after_compaction", (ev, ctx) =>
+      handleAfterCompaction(merge(ev, ctx), { stateRoot }),
     );
   } else {
     // F3: silent host = invisible debugging. One-time stderr line tells the

@@ -1,6 +1,6 @@
 # omm Development Roadmap
 
-> Current: v0.4.2 — Phase 1–4 automated release surface shipped; MA integration testing in progress.
+> Current: v0.5.0 — Phase 1–4 automated release surface shipped; MA integration testing in progress.
 >
 > **2026-06-16 update ([ADR-008](adr/008-delegation-to-host.md)):** ralph / autopilot / goal deleted and delegated to the host's `@openclaw/autopilot` plugin; omm converged to single-mode `team`. The Phase 1–4 records below are historical.
 
@@ -8,11 +8,11 @@
 
 omm ships the core workflow engine and consumer integration helpers:
 
-- **10 tools** registered via OpenClaw Plugin ABI (incl. MA employee-bridge: list/dispatch/result)
-- **3 packaged skills** (core: team/ping/cancel) — all other skills removed (ralph/autopilot/goal delegated to host `@openclaw/autopilot`; artifact skills deleted per [ADR-008](adr/008-delegation-to-host.md))
-- **3 MCP servers** for state, memory, and trace access
-- **State validation** for the team mode (single-mode, post-ADR-008)
-- **299 tests** passing, CI pipeline operational
+- **6 tools** registered via OpenClaw Plugin ABI (incl. MA employee-bridge: list/dispatch/result/result_batch)
+- **1 packaged skill** (core: team) — all other skills removed (ralph/autopilot/goal delegated to host `@openclaw/autopilot`; ping/cancel removed as non-essential; artifact skills deleted per [ADR-008](adr/008-delegation-to-host.md))
+- **1 MCP server** for state access (omm-mcp; memory and trace removed as non-essential)
+- **State validation** for the team mode (single-mode, post-ADR-008) with `synthesizing` phase and `subtasks` schema (v0.5)
+- **264 tests** passing, CI pipeline operational
 - **Compliance and consumer-seed toolchain** (scan-names, generate/verify inlines, verify-bundle, verify-provenance, smoke-mcp, MA/OpenClaw seeders)
 
 See [Architecture Overview](architecture.md) for module details.

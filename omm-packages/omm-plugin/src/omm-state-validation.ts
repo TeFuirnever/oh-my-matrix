@@ -7,6 +7,7 @@ const TEAM_PHASES = [
   "verifying",
   "fixing",
   "delegating",
+  "synthesizing",
   "complete",
   "blocked",
   "failed",
@@ -115,6 +116,26 @@ function validateTeam(
     }
     if (next.completedAt == null) {
       next.completedAt = nowIso;
+    }
+  }
+
+  // subtasks (optional): when present must be an array of objects with string ids.
+  // Guards against LLM hallucinations writing a string/object instead of an array.
+  if (next.subtasks != null) {
+    if (!Array.isArray(next.subtasks)) {
+      return { ok: false, error: "team.subtasks must be an array" };
+    }
+    for (const st of next.subtasks) {
+      if (typeof st !== "object" || st === null || Array.isArray(st)) {
+        return { ok: false, error: "each subtask must be an object" };
+      }
+      const s = st as Record<string, unknown>;
+      if (typeof s.id !== "string" || s.id.trim() === "") {
+        return {
+          ok: false,
+          error: "each subtask must have a non-empty string id",
+        };
+      }
     }
   }
 

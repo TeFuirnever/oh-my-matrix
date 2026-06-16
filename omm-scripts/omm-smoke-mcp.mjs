@@ -1,10 +1,9 @@
 /**
- * End-to-end smoke test for the 3 omm MCP servers.
+ * End-to-end smoke test for the omm-state MCP server.
  *
- * Spawns each server (omm-state, omm-memory, omm-trace) as the host
- * (mcporter / MatrixAssistant) does, sends `initialize` + `tools/list`
- * + one real tool roundtrip per server, and reports per-server pass/
- * fail. Exit code 0 only if all 3 servers pass every check.
+ * Spawns the omm-state server as the host (mcporter / MatrixAssistant)
+ * does, sends `initialize` + `tools/list` + one real tool roundtrip,
+ * and reports pass/fail. Exit code 0 only if the server passes.
  *
  * Usage:
  *   node omm-scripts/omm-smoke-mcp.mjs
@@ -63,52 +62,6 @@ const SERVERS = [
       }
     },
   },
-  {
-    name: "omm-memory",
-    bin: join(ROOT, "omm-packages/omm-mcp-memory/dist/src/index.js"),
-    expectedTools: [
-      "omm_memory_set",
-      "omm_memory_get",
-      "omm_memory_delete",
-      "omm_memory_list",
-    ],
-    roundtrip: async (call) => {
-      const s = await call("omm_memory_set", {
-        key: "smoke",
-        value: { hello: "world" },
-      });
-      assertOk(s, "omm_memory_set");
-      const g = await call("omm_memory_get", { key: "smoke" });
-      assertOk(g, "omm_memory_get");
-      const parsed = JSON.parse(g.result.content[0].text);
-      if (parsed.hello !== "world") {
-        throw new Error("omm_memory_get payload mismatch");
-      }
-    },
-  },
-  {
-    name: "omm-trace",
-    bin: join(ROOT, "omm-packages/omm-mcp-trace/dist/src/index.js"),
-    expectedTools: [
-      "omm_trace_record",
-      "omm_trace_query",
-      "omm_trace_list_sessions",
-    ],
-    roundtrip: async (call) => {
-      const ts = new Date().toISOString();
-      const rec = await call("omm_trace_record", {
-        session_id: "smoke",
-        event: { timestamp: ts, type: "smoke.start" },
-      });
-      assertOk(rec, "omm_trace_record");
-      const q = await call("omm_trace_query", { session_id: "smoke" });
-      assertOk(q, "omm_trace_query");
-      const events = JSON.parse(q.result.content[0].text);
-      if (!Array.isArray(events) || events.length === 0) {
-        throw new Error("omm_trace_query returned no events");
-      }
-    },
-  },
 ];
 
 function assertOk(rsp, label) {
@@ -125,8 +78,7 @@ function assertOk(rsp, label) {
 // ── MA-consumer probes ─────────────────────────────────────────────
 // Per docs/contracts/mcp.md capability matrix (post-R1):
 //   omm-state:  tools + resources + prompts
-//   omm-trace:  tools + resources
-//   omm-memory: tools only (no resources/prompts) — skipped here
+//   (memory and trace MCP servers removed — kept only state for team workflow)
 
 async function verifyResource(call, serverName, targetUri, expectedMimeType) {
   const list = await call("resources/list", {});
@@ -189,43 +141,6 @@ const MA_CONSUMER_PROBES = {
         prompts_count: prompts.length,
         sample_prompt_name: prompts[0].name,
       };
-    },
-  },
-  "omm-trace": {
-    expectResources: true,
-    expectPrompts: false,
-    seedThenProbe: async (call) => {
-      const { uris, target, first } = await verifyResource(
-        call,
-        "omm-trace",
-        "omm://trace/smoke",
-        "application/x-jsonlines",
-      );
-      return {
-        resources_count: uris.length,
-        sample_resource_uri: target,
-        sample_resource_mime: first.mimeType,
-      };
-    },
-  },
-  "omm-memory": {
-    expectResources: false,
-    expectPrompts: false,
-    seedThenProbe: async (call) => {
-      try {
-        const list = await call("resources/list", {});
-        if (list.result?.resources?.length > 0) {
-          throw new Error(
-            "omm-memory unexpectedly advertised resources — capability matrix says none",
-          );
-        }
-        return { resources_advertised: false };
-      } catch (err) {
-        if (err.message?.includes("-32601")) {
-          return { resources_advertised: false, method_not_found: true };
-        }
-        throw err;
-      }
     },
   },
 };

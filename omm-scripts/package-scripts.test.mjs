@@ -34,7 +34,7 @@ test("suite builder ships every release skill to both bundle roots", async () =>
     resolve(root, "omm-scripts", "omm-build-suite.mjs"),
     "utf8",
   );
-  const coreSkills = ["omm-ping", "omm-cancel", "omm-team"];
+  const coreSkills = ["omm-team"];
   // All non-core skills were removed (see ADR-008); no parked skills remain.
   const parkedSkills = [];
 
@@ -82,8 +82,6 @@ test("bundle verifier reads the expected manifest version dynamically", async ()
 test("MCP TypeScript sources do not contain failed generation sentinels", async () => {
   const sources = [
     "omm-packages/omm-mcp/src/index.ts",
-    "omm-packages/omm-mcp-memory/src/index.ts",
-    "omm-packages/omm-mcp-trace/src/index.ts",
   ];
 
   for (const source of sources) {

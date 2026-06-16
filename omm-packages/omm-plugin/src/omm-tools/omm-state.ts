@@ -9,7 +9,7 @@ import {
 import { withCrossProcessLock } from "../omm-fs-queue.js";
 import { validateStateWrite } from "../omm-state-validation.js";
 import { assertWorkflowExclusivity } from "../omm-workflow-guard.js";
-import type { OmmToolResult } from "./omm-ping.js";
+import type { OmmToolResult } from "./omm-tool-result.js";
 
 export interface OmmStateWriteInput {
   key?: unknown;

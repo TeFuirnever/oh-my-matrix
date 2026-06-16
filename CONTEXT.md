@@ -16,7 +16,7 @@ A `team`-mode lifecycle step (see `omm-state-validation.ts`):
 
 | Mode | Phases | Field |
 |------|--------|-------|
-| team | planning, decomposing, executing, verifying, fixing, delegating, complete, failed | `current_phase` |
+| team | planning, decomposing, delegating, executing, synthesizing, verifying, fixing, complete, failed, blocked | `current_phase` |
 
 Terminal phases (`complete`, `failed`, `blocked`) require `active=false` and auto-set `completedAt`.
 
@@ -38,7 +38,7 @@ Per-session event log (`{stateRoot}/trace/{sessionId}.jsonl`). Records `before_t
 
 ### Hook
 
-An event emitted by OpenClaw runtime (`session_start`, `before_tool_call`, etc.). omm registers 12 hooks that dispatch to user-supplied modules in `{stateRoot}/hooks/{event}/` and optionally append trace records.
+An event emitted by OpenClaw runtime (`session_start`, `before_tool_call`, etc.). omm registers 14 hooks that dispatch to user-supplied modules in `{stateRoot}/hooks/{event}/` and optionally append trace records.
 
 ### RunOutcome
 
@@ -46,7 +46,7 @@ Terminal record stamped on a state when a mode ends. Discriminated by `kind`: `c
 
 ### Agent Prompt
 
-A markdown file (`agent-prompts/{name}.md`) providing a specialized persona (analyst, architect, critic, executor, verifier). Loaded by `omm_agent_prompt_get` for SKILL.md orchestration.
+A markdown file (`agent-prompts/{name}.md`) providing a specialized persona (analyst, architect, critic, executor, verifier). Accessible via MCP Prompts catalog (`omm-mcp` `prompts/get`); agent prompts are no longer exposed as plugin tools as of v0.5.0.
 
 As of the P2 prompt parity pass (2026-05-13), the bundled set is **19 prompts** (5 starter + 14 ported from oh-my-claudecode). Ported prompts retain their omc XML structure but are stripped of Claude-only tool references (7-token strip-check enforced in CI).
 
@@ -61,7 +61,7 @@ Both styles parse identically through `parseAgentPrompt` (body is opaque text). 
 
 **Agent Inventory:**
 
-> Agent prompts are a **persona library consumed by `omm-team` orchestration** (loaded via `omm_agent_prompt_get` / `omm_agent_prompt_list`). With only `omm-team` shipped ([ADR-008](docs/adr/008-delegation-to-host.md)), agents no longer carry per-skill anchors — every persona is available for team delegation. Autonomous-loop and artifact-pipeline skills that previously anchored these personas were removed; autonomous execution is delegated to the host's `@openclaw/autopilot`.
+> Agent prompts are a **persona library consumed by `omm-team` orchestration** (accessible via MCP Prompts catalog). With only `omm-team` shipped ([ADR-008](docs/adr/008-delegation-to-host.md)), agents no longer carry per-skill anchors — every persona is available for team delegation. Autonomous-loop and artifact-pipeline skills that previously anchored these personas were removed; autonomous execution is delegated to the host's `@openclaw/autopilot`.
 
 | Name | Model tier | Source |
 |------|------------|--------|
@@ -105,7 +105,7 @@ A SKILL.md file consumed by OpenClaw's AgentSkills system. omm ships a single wo
 | ADR-006 → MCP 内联构建时代码生成 | 构建时从 omm-plugin/src/ 读取规范源文件并注入到 MCP 服务器 | 单一源真理；零运行时依赖（代码在构建时打包） |
 | MCP 验证是 plugin 验证的子集 | MCP `state_write` 不注入计数器默认值、不校验时间戳格式 | mode lifecycle API 是主路径；MCP 为低级工具 |
 | TRACE_SPECS 使用 `Partial` + `!` | 新增 trace event 时可能遗漏 spec | 可改为 `satisfies` 完整性检查 |
-| omm 覆盖 12/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
+| omm 覆盖 14/26 OpenClaw hooks | 可能遗漏有用的生命周期事件 | 按需添加，当前无功能缺失 |
 | manifest `apiVersion` 作用不确定 | 未来 OpenClaw 版本可能读取此字段 | 监控 OpenClaw changelog |
 | 14 ported agent prompts 是 point-in-time snapshots | 与 oh-my-claudecode 上游 agent prompts 可能漂移 | resync policy 是 owner-driven，不是自动化；7-token strip-check 在 CI 中防止 Claude-only token 回流 |
 | 0 PLACEHOLDER agents — all P0/P1 anchors resolved | n/a (cleared by omm-docs + omm-ui landings) | n/a |

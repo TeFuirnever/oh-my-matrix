@@ -51,7 +51,7 @@ describe("omm-hooks event sources", () => {
     );
     const outcome = await dispatchOmmHooks(
       "after_tool_call",
-      { toolName: "omm_ping", durationMs: 5 },
+      { toolName: "omm_state_read", durationMs: 5 },
       { stateRoot },
     );
     assert.ok(outcome);
@@ -59,7 +59,7 @@ describe("omm-hooks event sources", () => {
     assert.equal(outcome.outcomes[0].ok, true);
     const { readFileSync } = await import("node:fs");
     const fired = JSON.parse(readFileSync(sentinelPath, "utf8"));
-    assert.equal(fired.toolName, "omm_ping");
+    assert.equal(fired.toolName, "omm_state_read");
     assert.equal(fired.durationMs, 5);
   });
 
@@ -185,7 +185,7 @@ describe("omm-hooks event sources", () => {
 
   it("handleBeforeToolCall writes trace event when sessionId is present", async () => {
     await handleBeforeToolCall(
-      { toolName: "omm_ping", sessionId: "trace-test", toolCallId: "tc1" },
+      { toolName: "omm_state_read", sessionId: "trace-test", toolCallId: "tc1" },
       { stateRoot },
     );
     const { existsSync, readFileSync } = await import("node:fs");
@@ -195,12 +195,12 @@ describe("omm-hooks event sources", () => {
     assert.equal(lines.length, 1);
     const record = JSON.parse(lines[0]);
     assert.equal(record.type, "before_tool_call");
-    assert.equal(record.toolName, "omm_ping");
+    assert.equal(record.toolName, "omm_state_read");
   });
 
   it("handleAfterToolCall writes trace event with duration", async () => {
     await handleAfterToolCall(
-      { toolName: "omm_ping", sessionId: "trace-test2", durationMs: 42 },
+      { toolName: "omm_state_read", sessionId: "trace-test2", durationMs: 42 },
       { stateRoot },
     );
     const { readFileSync } = await import("node:fs");

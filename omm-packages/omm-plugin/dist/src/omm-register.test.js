@@ -35,14 +35,18 @@ async function registerWithTempRoot() {
     };
 }
 describe("omm-register: 4-arg execute(toolCallId, params, signal, onUpdate)", () => {
-    it("registers all five tools", async () => {
+    it("registers exactly the 5 team-focused tools", async () => {
         const { tools, cleanup } = await registerWithTempRoot();
         try {
-            assert.ok(tools.omm_ping);
-            assert.ok(tools.omm_cancel);
             assert.ok(tools.omm_state_write);
             assert.ok(tools.omm_state_read);
-            assert.ok(tools.omm_state_list);
+            assert.ok(tools.omm_employee_list);
+            assert.ok(tools.omm_employee_dispatch);
+            assert.ok(tools.omm_employee_result);
+            // Removed tools must NOT be registered (v0.5 surface reduction).
+            assert.equal(tools.omm_state_list, undefined);
+            assert.equal(tools.omm_agent_prompt_get, undefined);
+            assert.equal(tools.omm_agent_prompt_list, undefined);
         }
         finally {
             await cleanup();
@@ -75,50 +79,6 @@ describe("omm-register: 4-arg execute(toolCallId, params, signal, onUpdate)", ()
             // Round-trip via omm_state_read.
             const readResult = (await tools.omm_state_read.execute("call-id-read", { key: "team" }, undefined, () => undefined));
             assert.match(readResult.content[0].text, /"mode": "team"/);
-        }
-        finally {
-            await cleanup();
-        }
-    });
-    it("omm_state_list returns the keys present", async () => {
-        const { tools, cleanup } = await registerWithTempRoot();
-        try {
-            // Seed a key.
-            await tools.omm_state_write.execute("id1", {
-                key: "team",
-                value: { mode: "team", active: false, current_phase: "complete" },
-            }, undefined, () => undefined);
-            const listResult = (await tools.omm_state_list.execute("id2", {}, undefined, () => undefined));
-            const keys = JSON.parse(listResult.content[0].text);
-            assert.ok(Array.isArray(keys));
-            assert.ok(keys.includes("team"));
-        }
-        finally {
-            await cleanup();
-        }
-    });
-    it("omm_ping receives params at arg2, not toolCallId", async () => {
-        const { tools, cleanup } = await registerWithTempRoot();
-        try {
-            const result = (await tools.omm_ping.execute("call-id-ping", { command: "explicit-command", commandName: "test", skillName: "x" }, undefined, () => undefined));
-            // If the signature regresses, command falls through to default "ping".
-            assert.match(result.content[0].text, /^omm pong: explicit-command$/);
-            const record = result.details?.record;
-            assert.equal(record.commandName, "test");
-            assert.equal(record.skillName, "x");
-        }
-        finally {
-            await cleanup();
-        }
-    });
-    it("omm_cancel receives params at arg2", async () => {
-        const { tools, cleanup } = await registerWithTempRoot();
-        try {
-            const result = (await tools.omm_cancel.execute("call-id-cancel", { sessionId: "session-xyz" }, undefined, () => undefined));
-            // If sessionId is undefined (signature regression), the cancel record
-            // would still write but with sessionId=null. Verify it round-trips.
-            const record = result.details?.record;
-            assert.equal(record.sessionId, "session-xyz");
         }
         finally {
             await cleanup();
