@@ -1,0 +1,1 @@
+{"version":3,"file":"goal-manager.d.ts","sourceRoot":"","sources":["../../src/goal-manager.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,SAAS,CAAC;AAG9C,wBAAgB,WAAW,CAAC,KAAK,EAAE,cAAc,EAAE,WAAW,EAAE,MAAM,GAAG,cAAc,CAGtF;AAED,wBAAgB,4BAA4B,CAAC,KAAK,EAAE,cAAc,GAAG,cAAc,CAGlF;AAED,wBAAgB,0BAA0B,CAAC,KAAK,EAAE,cAAc,GAAG,cAAc,CAGhF"}

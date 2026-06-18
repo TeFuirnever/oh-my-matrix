@@ -1,0 +1,62 @@
+{
+  "id": "autopilot",
+  "name": "Autopilot Continuous Mode",
+  "description": "OpenClaw-native continuous execution for long-running tasks",
+  "version": "2.0.0",
+  "main": "dist/index.js",
+  "activation": {
+    "onStartup": true
+  },
+  "hooks": [
+    "before_agent_finalize",
+    "agent_end",
+    "after_tool_call",
+    "before_compaction",
+    "after_compaction",
+    "session_start",
+    "session_end",
+    "agent_turn_prepare",
+    "before_agent_run",
+    "before_tool_call",
+    "llm_output"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "maxAttemptsPerTurn": {
+        "type": "number",
+        "default": 5
+      },
+      "maxTotalContinuations": {
+        "type": "number",
+        "default": 50
+      },
+      "toolErrorThreshold": {
+        "type": "number",
+        "default": 3
+      },
+      "excludedAgents": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "highRiskTools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "tokenBudget": {
+        "type": "number"
+      },
+      "maxConcurrentAutopilot": {
+        "type": "number",
+        "default": 5,
+        "description": "Max concurrent autopilot sessions"
+      }
+    }
+  }
+}

@@ -1,0 +1,156 @@
+{"at":1781771358579,"runId":"run-jriq7t4a","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771358586,"runId":"run-tdoy3h0y","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781771358586,"runId":"run-hj5ym9bs","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781771358587,"runId":"run-akuhoboe","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781771358587,"runId":"run-ywber8cw","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771358587,"runId":"run-dky1o5rq","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771358589,"runId":"run-x7b3b1rn","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771358594,"runId":"run-ta3joexp","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771358597,"runId":"run-hgkrgi6v","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771358603,"runId":"run-u6dbzrb4","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771358603,"runId":"run-fofzmj5k","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771358604,"runId":"run-rx2o8tno","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771358604,"runId":"run-wo937nzy","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781771358604,"runId":"run-xm8sedzi","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771358729,"runId":"run-mxvxwwgx","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771358792,"runId":"run-nlr68hie","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771358794,"runId":"run-di6de5ro","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771358794,"runId":"run-3cxbitrm","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781771358794,"runId":"run-oww664kc","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781771358794,"runId":"run-oww664kc","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771358795,"runId":"run-oww664kc","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781771359033,"runId":"run-vyhx53h3","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771359035,"runId":"run-tmblilqa","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771359036,"runId":"run-yadfo4es","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781771359036,"runId":"run-syw7n4ye","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771359248,"runId":"run-1mwk367b","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781771366425,"runId":"run-ix5kaffj","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771366430,"runId":"run-9tkpk30p","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771366430,"runId":"run-il4dxhm0","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771366430,"runId":"run-3acxryxd","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781771366431,"runId":"run-h61ie3rn","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771366526,"runId":"run-j3zlxf3k","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771366527,"runId":"run-isdptl4d","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781771366528,"runId":"run-na05grn9","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781771366528,"runId":"run-9tw5kpou","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781771366529,"runId":"run-tuuc62yd","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771366529,"runId":"run-6ivi2n4j","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771366529,"runId":"run-ek5si5a7","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771366530,"runId":"run-0mv6onfr","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771366530,"runId":"run-y16c6rme","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771366668,"runId":"run-chen2pog","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781771366721,"runId":"run-jpihz9z1","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771366723,"runId":"run-hxvyzsox","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771366723,"runId":"run-51qh0dkz","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781771366724,"runId":"run-puf90dz4","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781771366724,"runId":"run-puf90dz4","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771366724,"runId":"run-puf90dz4","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781771366724,"runId":"run-xody1rqg","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771366725,"runId":"run-iqdqb7ap","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771366740,"runId":"run-7nebuamh","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771366743,"runId":"run-55p7fahg","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771366744,"runId":"run-87183abe","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781771486789,"runId":"run-3qocy0sv","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771486791,"runId":"run-r5v75iix","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771486791,"runId":"run-5026zsb5","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771486792,"runId":"run-ddnie6s8","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781771486793,"runId":"run-mzxqldfu","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771487000,"runId":"run-np749zob","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771487003,"runId":"run-ivsk23g2","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781771487005,"runId":"run-dimfdecv","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781771487006,"runId":"run-oolnr2kv","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781771487007,"runId":"run-hwp6rycz","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771487007,"runId":"run-9fvoistj","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771487013,"runId":"run-aprntb07","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771487015,"runId":"run-akvoe9ko","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771487016,"runId":"run-inf0xktr","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771487016,"runId":"run-9ajfbebc","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771487136,"runId":"run-7ib0twhx","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781771487144,"runId":"run-fa76ebci","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771487145,"runId":"run-stxhqaa8","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771487145,"runId":"run-veg6wqy3","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781771487146,"runId":"run-publlvni","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781771487146,"runId":"run-publlvni","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771487146,"runId":"run-publlvni","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781771487198,"runId":"run-gkoryewo","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771487199,"runId":"run-w803wnk3","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771487199,"runId":"run-lecr97g5","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781771487347,"runId":"run-tgoqoxid","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771543831,"runId":"run-97abg7ef","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771543832,"runId":"run-r4q21els","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781771543833,"runId":"run-uagpfhl3","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781771543833,"runId":"run-esd9vl4w","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781771543833,"runId":"run-xwwehi9s","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771543834,"runId":"run-abw5yybl","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771543834,"runId":"run-yv2e88ck","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771543835,"runId":"run-39xc3wl4","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771543835,"runId":"run-15g4yua5","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771543841,"runId":"run-t0edkmc6","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771543843,"runId":"run-fxwajikf","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771543844,"runId":"run-ic5wff56","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771543845,"runId":"run-odmpbxh0","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781771543846,"runId":"run-20kmiadf","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771544011,"runId":"run-sah0j0h8","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781771544015,"runId":"run-pbg8afxl","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771544021,"runId":"run-qhvpwb8p","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771544211,"runId":"run-v7xw79nc","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771544214,"runId":"run-jvjhhyle","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771544215,"runId":"run-eupf1h2h","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781771544216,"runId":"run-nonvf6n4","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781771544216,"runId":"run-nonvf6n4","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771544216,"runId":"run-nonvf6n4","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781771544244,"runId":"run-n1xes67h","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771544251,"runId":"run-j9qw5q1h","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771544252,"runId":"run-45a2g6wf","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781771605135,"runId":"run-331jk3ej","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771605137,"runId":"run-rymn8y2b","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771605138,"runId":"run-fupkjucr","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771605139,"runId":"run-pdh090a5","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781771605140,"runId":"run-f0js9tdn","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771605320,"runId":"run-sless2h1","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781771605325,"runId":"run-mdf9okmv","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771605326,"runId":"run-06fblhwr","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771605326,"runId":"run-0d97wdgr","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781771605335,"runId":"run-z5a324jk","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771605337,"runId":"run-q536rqce","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771605338,"runId":"run-t9i18tam","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781771605338,"runId":"run-0y1w9gfs","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781771605338,"runId":"run-0y1w9gfs","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781771605338,"runId":"run-0y1w9gfs","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781771605390,"runId":"run-gu5kmuvi","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781771605442,"runId":"run-949e4bpu","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781771605539,"runId":"run-n0zhkzla","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781771605540,"runId":"run-31i6klkw","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781771605541,"runId":"run-7f7ah9k4","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781771605541,"runId":"run-yn2ig1an","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781771605542,"runId":"run-u24r792e","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771605542,"runId":"run-yl88cqah","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771605543,"runId":"run-04vkydjd","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781771605543,"runId":"run-7v40zgg4","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781771605544,"runId":"run-xyq4ujk3","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781774568141,"runId":"run-pb4dgtb3","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781774568143,"runId":"run-9191l1ek","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781774568143,"runId":"run-bl549w7h","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781774568144,"runId":"run-zbpk2rmz","toolName":"delete_file","commandClass":"unknown","outcome":"block","reason":"delete_file is configured as high-risk tool"}
+{"at":1781774568144,"runId":"run-wtdspm3h","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781774568280,"runId":"run-ojabkagi","toolName":"sudo","commandClass":"system_write","outcome":"block","reason":"System-level write operations are always blocked"}
+{"at":1781774568333,"runId":"run-jhd7c0iw","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781774568335,"runId":"run-v1wn2e9n","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781774568336,"runId":"run-3gzbjsyf","toolName":"dangerous_tool","commandClass":"unknown","outcome":"block","reason":"dangerous_tool is configured as high-risk tool"}
+{"at":1781774568337,"runId":"run-1q57e7rl","toolName":"read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read"}
+{"at":1781774568337,"runId":"run-1q57e7rl","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781774568337,"runId":"run-1q57e7rl","toolName":"write","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: write "}
+{"at":1781774568383,"runId":"run-gz3o4t1c","toolName":"bash","commandClass":"read_only","outcome":"allow","reason":"Read-only command: bash"}
+{"at":1781774568398,"runId":"run-df8o4w6j","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781774568400,"runId":"run-blvgqzye","toolName":"Read","commandClass":"read_only","outcome":"allow","reason":"Read-only command: Read"}
+{"at":1781774568401,"runId":"run-cz4dgvbp","toolName":"write_file","commandClass":"workspace_write","outcome":"allow","reason":"Workspace write: write_file"}
+{"at":1781774568401,"runId":"run-kbahvg9v","toolName":"git","commandClass":"network","outcome":"allow","reason":"Network command allowed: push origin main"}
+{"at":1781774568402,"runId":"run-o5e3p1cy","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781774568403,"runId":"run-unyroaa4","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781774568403,"runId":"run-kjuq1j4u","toolName":"git","commandClass":"destructive_git","outcome":"block","reason":"Destructive git command blocked: reset --hard HEAD~1"}
+{"at":1781774568405,"runId":"run-qa0esus0","toolName":"git","commandClass":"destructive_git","outcome":"allow","reason":"Destructive git allowed by workflow config in workspace: reset --hard HEAD~1"}
+{"at":1781774568406,"runId":"run-1jhx5dio","toolName":"get-credential","commandClass":"credential_access","outcome":"block","reason":"Credential/keychain access is always blocked"}
+{"at":1781774568497,"runId":"run-ryginz2x","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
+{"at":1781774568499,"runId":"run-wb0h3tpf","toolName":"bash","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: bash "}
+{"at":1781774568500,"runId":"run-qqc7sv0u","toolName":"custom_tool","commandClass":"unknown","outcome":"allow","reason":"Unclassified command allowed by default: custom_tool "}
+{"at":1781774568543,"runId":"run-fls686n1","toolName":"read_file","commandClass":"read_only","outcome":"allow","reason":"Read-only command: read_file"}
