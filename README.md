@@ -1,68 +1,59 @@
 # omm (oh-my-matrix)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
-[![pnpm 10+](https://img.shields.io/badge/pnpm-10%2B-orange.svg)](https://pnpm.io/)
 
-OpenClaw-native orchestration extension suite.
+**OpenClaw Dynamic Workflows — AI 自主多 agent 编排。**
 
-## What's included
+> **状态 (0.7.0):** Dynamic Workflows skill 包已交付。对标 Claude Code dynamic workflows——用户说自然语言，AI 自动生成 `.prose` 编排程序，经 OpenProse 扇出多 agent 并行执行，只回最终结果。
 
-| Package            | Description                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| **omm-plugin**     | OpenClaw plugin — state tools, MA employee-bridge tools (incl. `omm_employee_result_batch`), 14 lifecycle hooks, single-mode `team` validation |
-| **omm-skills**     | 1 shipped skill (`omm-team`) + 19 agent-prompts persona library                                      |
-| **omm-mcp**        | MCP server — stdio JSON-RPC exposing state tools, Resources (`omm://state/<key>`), and the agent-prompts catalog |
+## 这是什么
 
-## Quick start
+oh-my-matrix 为 **OpenClaw 及衍生项目**提供 **AI 自主多 agent 编排能力**。核心是一个 SKILL.md 包（`skill/dynamic-workflows/`），教 OpenClaw agent 在任务需要时自动生成 `.prose` 工作流程序并经 OpenProse 执行——涵盖 8 种编排模式（fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop）。
+
+运行时由 OpenProse（OpenClaw bundled plugin）提供——不重复建设。
+
+## 阅读地图（脊柱）
+
+| 文档 | 内容 |
+|------|------|
+| [docs/architecture.md](docs/architecture.md) | 架构总览与设计参考（已标注实现重置） |
+| [docs/roadmap.md](docs/roadmap.md) | 路线图（Phase 1–4 为历史记录） |
+| [CONTEXT.md](CONTEXT.md) | 领域语言与核心概念（Workflow Mode / Phase / State / Counter / Hook …） |
+| [docs/adr/](docs/adr/) | 委托哲学与托管决策（ADR-002、ADR-008、ADR-010） |
+| [docs/archive/](docs/archive/) | v0.x 实现的完整设计记录（ADR / 契约 / 计划 / 调研 / 评审），已归档 |
+| [website/](website/) | VitePress 文档站点 |
+
+## 本地预览文档站
 
 ```bash
 pnpm install
-pnpm build
-pnpm test
-pnpm lint
+pnpm docs:dev      # 本地开发服务器
+pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
 ```
 
-## Scripts
+## 仓库布局
 
-| Script                       | Description                                                      |
-| ---------------------------- | ---------------------------------------------------------------- |
-| `pnpm build`                 | Compile all packages and build `omm-suite-<version>.tgz`         |
-| `pnpm omm:scan-names`        | Scan source files for forbidden naming using hash-based denylist |
-| `pnpm omm:verify-bundle`     | Verify the suite tarball against its embedded manifest           |
-| `pnpm omm:verify-provenance` | Verify `omm-provenance.json` entries reference real files        |
-| `pnpm omm:openclaw-seed`     | Dry-run seed for `~/.openclaw/openclaw.json` plugin registration |
-| `pnpm omm:ma-seed`           | Dry-run seed for MatrixAssistant MCP registry entries            |
-
-## Consumer integration
-
-This repo produces `omm-dist/omm-suite-<version>.tgz` containing the compiled plugin,
-MCP server, and skill definitions. After unpacking the suite, run the bundled
-seeders in dry-run mode first, then pass `--write` when the target config is correct:
-
-```bash
-node <omm-suite>/omm-scripts/omm-openclaw-seed.mjs --omm-root <omm-suite> --layout suite
-node <omm-suite>/omm-scripts/omm-openclaw-seed.mjs --omm-root <omm-suite> --layout suite --write
+```
+.
+├── docs/
+│   ├── architecture.md      设计参考（脊柱）
+│   ├── roadmap.md           路线图（脊柱）
+│   ├── adr/                 委托哲学与托管 ADR（002 / 008 / 010）
+│   ├── agents/              仓库协作约定（issue 跟踪、triage、领域文档）
+│   └── archive/             v0.x 实现设计记录（历史，已归档）
+├── packages/
+│   └── autopilot/           @openclaw/autopilot canonical 源码（托管，非 omm 交付物；见 ADR-010）
+├── skill/dynamic-workflows/ 核心交付物：AI 自主生成 .prose 编排
+├── website/                 VitePress 文档站
+├── CONTEXT.md               领域语言
+├── AGENTS.md                AI 代理工作约定
+└── CHANGELOG.md             变更历史
 ```
 
-`omm-openclaw-seed.mjs` adds `omm` to `plugins.allow`, appends the suite plugin
-directory to `plugins.load.paths`, and creates `plugins.entries.omm` in
-`~/.openclaw/openclaw.json` so OpenClaw discovers the plugin and bundled skills.
-For MatrixAssistant's separate MCP registry, use `omm-ma-seed.mjs`; see
-[`docs/contracts/ma-integration-snippets.md`](docs/contracts/ma-integration-snippets.md).
+## 贡献
+
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全披露见 [SECURITY.md](SECURITY.md)。行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 
 ## License
 
-See [LICENSE](LICENSE).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, and code style.
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for vulnerability reporting.
-
-## Code of Conduct
-
-See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+[MIT](LICENSE).

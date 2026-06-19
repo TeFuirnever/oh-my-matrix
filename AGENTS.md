@@ -36,20 +36,18 @@ Instructions for AI agents working. All content in English.
 - **No Speculation** — do not add abstractions, configuration, or future-proofing that the request does not need.
 - **Verify Before Claiming Done** — evidence over assumptions.
 - **Know When to Stop** — if blocked for more than 2 attempts on the same issue, or if requirements remain ambiguous after clarification, escalate to the user instead of guessing.
-- **Trace Before Fix** — when debugging (especially concurrency or state-persistence issues), trace the FULL execution path from tool call to the persisted state file on disk, step by step. Do not propose architectural solutions based on assumptions. The simplest explanation (wrong phase, missing `active=false` on a terminal phase, a stale cross-process lock) should be checked first. See `docs/adr/005-cross-process-locking.md` for the concurrency model.
 
 ## Workflow
 
 ### Planning & Risk
 
-- Use the active planning workflow for non-trivial tasks, architectural decisions, or work that spans multiple moving parts.
+- This repository is **documentation & design first**. It also hosts the canonical `@openclaw/autopilot` source at `packages/autopilot/` (a pnpm workspace package; see [ADR-010](docs/adr/010-autopilot-source-hosting.md)). The v0.x OpenClaw plugin / MCP implementation has been removed and its design records archived under `docs/archive/`.
+- `packages/autopilot/` is **hosted** source (ADR-010), not an omm deliverable. Changes require `pnpm --filter @openclaw/autopilot build && pnpm --filter @openclaw/autopilot test && pnpm --filter @openclaw/autopilot pack`, then refresh the tgz in MatrixAssistant's `resources/autopilot/` — the tgz filename version is the cross-repo contract.
+- Use the active planning workflow for non-trivial doc work, structural changes, or anything spanning multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.
-- Treat these areas as high-risk and apply stronger planning, review, and verification:
-  - `omm-state-validation.ts` — phase/terminal/counter invariants for the `team` state machine
-  - `omm-fs-queue.ts` — cross-process locking (ADR-005); a regression here causes silent last-write-wins
-  - `omm-register.ts` — the plugin ABI; the 4-arg `execute(toolCallId, params, …)` shape (a 1-arg regression silently drops params, see CHANGELOG 0.2.2)
-  - `omm-tools/omm-employee.ts` — the MA dispatch/result relay and its blocking poll semantics
-  - `omm-build-suite.mjs` / `generate-mcp-inlines.mjs` — the zero-dep MCP inline pipeline (ADR-003/006)
+- Treat these as high-risk and apply stronger review:
+  - **Spine docs** (`CONTEXT.md`, `docs/architecture.md`, `docs/roadmap.md`, `docs/adr/`) — the live, forward-looking surface; edits here reshape the project's stated direction.
+  - **`docs/archive/` integrity** — historical design records; preserve as-is and do not rewrite history. Internal links may be stale **by design** (see `docs/archive/README.md`).
 
 ### Change Discipline
 

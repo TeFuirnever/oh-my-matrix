@@ -2,6 +2,59 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.7.1] — 2026-06-19
+
+**`@openclaw/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@openclaw/autopilot` plugin source; MatrixAssistant consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).
+
+### Added
+
+- **`packages/autopilot/`** — canonical `@openclaw/autopilot@2.0.0` source migrated from MatrixAssistant (`openclaw-extensions/autopilot/`). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
+- **`pnpm-workspace.yaml`** — omm is now a pnpm workspace (`packages/*`).
+- **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@openclaw/autopilot` in omm rather than keep it embedded in MA; documents compatibility with ADR-008.
+
+### Changed
+
+- **MA consumes autopilot as a package** — `"@openclaw/autopilot": "file:resources/autopilot/openclaw-autopilot-2.0.0.tgz"`; MA is self-contained (tgz vendored into `resources/autopilot/`), plugin discovery resolves from `node_modules` in dev and `resources/claw-plugin` when packaged.
+- omm `package.json` version bumped 0.6.0 → 0.7.1.
+
+### Removed
+
+- (MA side, recorded here for cross-repo traceability) `openclaw-extensions/autopilot/` source and `scripts/build-autopilot-plugin.js` removed from MatrixAssistant.
+
+## [0.7.0] — 2026-06-18
+
+**Dynamic Workflows.** AI-autonomous multi-agent orchestration for OpenClaw, modeled after Claude Code dynamic workflows. The agent generates `.prose` programs and executes them via OpenProse — no custom runtime built.
+
+### Added
+
+- **`skill/dynamic-workflows/SKILL.md`** — teaches OpenClaw agents to autonomously generate and run `.prose` workflow programs. Includes 8 orchestration patterns (fan-out-reduce, pipeline, adversarial-verify, loop-until-dry, routing, tournament, generate-and-filter, duel-loop), .prose syntax guide, generate-validate-repair loop, and trigger keywords.
+- **`docs/adr/009-dynamic-workflows-via-openprose.md`** — records the decision to deliver dynamic workflows via OpenProse (route B) rather than building a custom JS runtime. Documents the v1→v8 design journey and E1–E4 pre-research evidence.
+- **`docs/design/dynamic-workflows-design.md`** v8 — design document covering target, architecture, pre-research conclusions, implementation plan, and version evolution (v1→v8 across 3 adversarial reviews + 2 Codex sessions + 4 pre-research experiments).
+- **Pre-research reports** (`.omc/specs/E{1-4}-*.md`, `route-decision.md`) — prompt ceiling, OpenProse boundary, subagent contract, registerTool model, route decision matrix.
+
+### Changed
+
+- **Docs spine** (`README.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/roadmap.md`) updated from v0.6.0 "team direction reset" to v0.7.0 "Dynamic Workflows via OpenProse" direction.
+- `team` orchestration direction superseded by dynamic-workflows ([ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md)).
+
+## [0.6.0] — 2026-06-18
+
+**Strip-to-docs reset.** The entire v0.x implementation is removed; the repository becomes a documentation & design foundation for the next direction. The design vision stays continuous (OpenClaw-native `team` orchestration); implementation is reset.
+
+### Removed
+
+- **All code**: `omm-packages/` (omm-plugin, omm-mcp, omm-skills — sources, tests, agent-prompts, SKILL.md), `omm-scripts/` (build / seed / verify `.mjs`), `omm-dist/` (suite tarball), `coverage/`.
+- **Build toolchain**: `tsconfig.base.json`, `biome.json`, `pnpm-workspace.yaml`, `omm-provenance.json`, `pnpm-lock.yaml` (regenerated).
+- **Code CI**: `.gitlab-ci.yml`, `.github/workflows/ci.yml`. (`.github/workflows/docs.yml` retained — builds & deploys the VitePress site.)
+- `package.json` slimmed to docs-only: kept `docs:dev` / `docs:build` / `docs:preview` and the `vitepress` devDependency; dropped `build`/`lint`/`test`/`test:coverage`/all `omm:*` scripts and `@biomejs/biome` / `@types/node` / `typescript`.
+
+### Changed
+
+- **Implementation-bound docs archived** under `docs/archive/` (contracts/, plans/, specs/, reviews/, research/, and ADRs 001/003/004/005/006/007) with a per-file banner — design knowledge preserved, demoted out of the live surface. See `docs/archive/README.md`.
+- **Spine docs reworked** to reflect the docs-only reality: `README.md`, `AGENTS.md`, `CONTEXT.md`, `CONTRIBUTING.md` rewritten; `docs/architecture.md` and `docs/roadmap.md` marked with an "implementation reset" banner and pruned of dead implementation inventories.
+- **ADR-002 / ADR-008** (delegation philosophy) retained at `docs/adr/` as the continuous-direction spine.
+- **Website** simplified: stale tool/mode/tarball content rewritten; archived mirror pages removed.
+
 ## [0.5.0] — 2026-06-16
 
 Two themes: tool-surface reduction (focus on `team` + employee bridge) and team multi-agent enhancement (fork-join + synthesis).
