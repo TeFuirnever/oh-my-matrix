@@ -42,7 +42,7 @@ Instructions for AI agents working. All content in English.
 ### Planning & Risk
 
 - This repository is **documentation & design first**. It also hosts the canonical `@openclaw/autopilot` source at `packages/autopilot/` (a pnpm workspace package; see [ADR-010](docs/adr/010-autopilot-source-hosting.md)). The v0.x OpenClaw plugin / MCP implementation has been removed and its design records archived under `docs/archive/`.
-- `packages/autopilot/` is **hosted** source (ADR-010), not an omm deliverable. Changes require `pnpm --filter @openclaw/autopilot build && pnpm --filter @openclaw/autopilot test && pnpm --filter @openclaw/autopilot pack`, then refresh the tgz in MatrixAssistant's `resources/autopilot/` — the tgz filename version is the cross-repo contract.
+- `packages/autopilot/` is **hosted** source (ADR-010), not an omm deliverable. After source changes run `pnpm --filter @openclaw/autopilot test`, then `./packages/autopilot/scripts/sync-to-ma.sh` to rebuild, refresh MA's tgz, install, and rebuild the claw-plugin copy the Gateway loads.
 - Use the active planning workflow for non-trivial doc work, structural changes, or anything spanning multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.
 - Treat these as high-risk and apply stronger review:
