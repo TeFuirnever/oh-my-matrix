@@ -10,3 +10,7 @@ website/.vitepress/dist/
 
 # pnpm pack 产物（构建产物，不入库；MA 引用各自仓内的副本）
 packages/*/*.tgz
+
+# 工具索引产物（codegraph / context engine），不入库
+.codegraph/
+.context/
