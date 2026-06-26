@@ -1,6 +1,6 @@
 # 设计文档：为 OpenClaw 打造 Dynamic Workflows
 
-> 版本：v15（业界对标调研 + 2 轮对抗审查 + 结构性修复计划）· 日期：2026-06-26
+> 版本：v15（业界对标调研 + 2 轮对抗审查 + 结构性修复）· 日期：2026-06-26
 > 审查链：3 人对抗 Claude 审查团 + Codex 两轮（含源码做实）+ v6 对抗审查 + E1-E4 技术预研 + Autopilot 实现。
 > OpenClaw 源码锚点：git HEAD `e9321608`，tag/version `v2026.5.28`。
 
@@ -156,7 +156,7 @@ TypeScript 编译通过（无新增报错）。
 
 ### 待办
 
-无。路线 A 本地验证 + 路线 B 正式集成均已完成。
+路线 A 本地验证 + 路线 B 正式集成 + v12-v15 优化均已完成（见 §9 版本演进 + §11 v15 详情）。剩余事项见 §11.8 阶段 B（均为触发条件驱动，非阻塞）。
 
 ## 7. 工作量对比（最终）
 
@@ -189,7 +189,7 @@ TypeScript 编译通过（无新增报错）。
 | **v12** | **Darwin 5 轮优化**：progressive disclosure 重构（575→404 行核心+208 行 references）、3 人对抗审查修复 20+ issues、组合模式示例（discover→fan-out→verify）、引用路径分组。Darwin 评分 ~61→84.4/100，HL-4 触顶。| 优化态 |
 | **v13** | **MA 实测闭环 + 执行模型修正**：实测发现 agent 跳过 `prose compile`/`prose run` 直接 `sessions_spawn`；溯源 OpenProse SKILL.md 确认"You ARE the VM"——`prose run` 不是 CLI 是 skill activation。重写 Step 3-4-5 为双模式（OpenProse primary + fallback direct）；frontmatter 加 dual-mode 描述+中文触发词；重组节顺序（Pattern selection → Core patterns → Composing → Repair loop）。Darwin 评分 88.7/100，首个 full_test 轮次。 | 优化态 |
 | **v14** | **MA 二轮实测 + 证据驱动修复**：4 条测试提示实测（fan-out 审计/bounded fallback/负例/破坏性 git），发现两个问题：(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行——根因是 OpenProse 接管后绕过 dynamic-workflows 的检查点流程；(2) 安全类问题不触发 skill——根因是 skill 加载机制对非 workflow-creation 查询不敏感。修复：新增"Reuse path"拦截段（强制展示已有 .prose 并征得确认）、扩展触发词（"并行 agent"+安全查询）、更新 test expectations 标注 skill 触发限制。复测确认：agent 不再盲目执行已有 .prose，改为展示已有结果。554 行核心。 | 优化态 |
-| **v15** | **业界对标 + 对抗审查 + 结构性修复计划**：3 路科学家调研（OpenProse 80+ 能力 / OpenClaw 扩展机制 / Claude Code 可迁移模式）+ 2 轮 3 人 opus 对抗审查团。关键发现及决策见下§11。计划：A1 Reuse Path CHECKPOINT 格式升级（非新增）+ A2 启动 banner（仅 mode）+ A3 按模式拆分执行期进度 + A4 templates/ 模板目录 + A5 追加质量模式 9-11 到 patterns-advanced.md。 | **当前（计划态）** |
+| **v15** | **业界对标 + 对抗审查 + 结构性修复**：3 路科学家调研（OpenProse 80+ 能力 / OpenClaw 扩展机制 / Claude Code 可迁移模式）+ 2 轮 3 人 opus 对抗审查团。A1-A5 已实施：Reuse Path 🔴 CHECKPOINT 升级 + Step 2 删 reuse 从句 + 启动 banner（仅 mode）+ 按模式拆分执行期进度 + templates/ 目录（3 模板）+ 质量模式 9-11 追加。SKILL.md 578 行。MA 实测：对强模型有效，弱模型（MiniMax/glm）仍跳 CHECKPOINT——prompt 级方案天花板，运行时 hook 见 §11.8 B1（触发条件已满足，待业务决策）。| **当前（实施态）** |
 
 ## 10. 关键参考文件
 
@@ -871,7 +871,7 @@ N 个独立评委各自评分同一输出，然后一个仲裁 session 解决分
 
 | # | 能力 | 来源 | 触发条件 | 前置依赖 | 预估工作量 |
 |---|------|------|---------|---------|-----------|
-| B1 | Skill-level hooks（破坏性 git 拦截） | OpenClaw | v15 MA 实测后如果 prompt 级黑名单仍被绕过 | 确认 oh-my-manus hooks 模式在 OpenClaw 当前版本稳定 | 1 个 hook 脚本 + frontmatter 声明 |
+| B1 | Skill-level hooks（破坏性 git 拦截） | OpenClaw | ⚠️ **触发条件已满足**（2026-06-26 MA 实测确认弱模型绕过 prompt 级黑名单 + CHECKPOINT），待业务决策是否实施 | 确认 oh-my-manus hooks 模式在 OpenClaw 当前版本稳定 | 1 个 hook 脚本 + frontmatter 声明 |
 | B2 | 结构化 agent 输出约定 | Claude Code | pipeline 模式实测发现下游解析不可靠时 | 无 | SKILL.md +10 行 |
 | B3 | Budget-aware 设计段 | Claude Code | 用户报告工作流成本过高或超时时 | 无 | SKILL.md 或 reference +15 行 |
 | B4 | `{baseDir}` 路径插值 | OpenClaw | templates 在非标准 cwd 下解析失败时 | A4 templates 上线 | SKILL.md 路径替换 |
