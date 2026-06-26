@@ -102,14 +102,20 @@ and history rewrites (`git rebase`, `git filter-branch`) unless the workflow
 configuration explicitly sets `destructive_git.allow: true` and cwd is contained
 inside the workflow workspace. If that config is absent or ambiguous, block.
 
+After completing preflight, announce the workflow to the user:
+
+  **Dynamic Workflow** | Mode: [OpenProse / Direct / Plan-only]
+
+Then proceed to check for existing .prose files (Reuse path) or Step 1.
+
 ### Reuse path: existing .prose found
 
 If the project already has a `.prose` file that matches the task, do NOT
-skip to execution. You must still:
+skip to execution.
 
+**🔴 CHECKPOINT · 🛑 STOP**:
 1. Read and display the full `.prose` program to the user
-2. Ask: "Found existing workflow `<filename>` — review it and confirm
-   before I compile and run?"
+2. Ask: "Found existing workflow `<filename>` — shall I validate and run it?"
 3. Wait for user confirmation before proceeding to Step 3 (Validate)
 
 Never say "it already exists, running directly" — the user must see and
@@ -141,6 +147,10 @@ session "Synthesize final answer"
   context: result
 ```
 
+For ready-to-use starting points, read a template from `templates/`
+(fan-out-reduce, adversarial-verify, pipeline) and use it as the
+Step 2 skeleton. Replace all commented customization points.
+
 Key rules:
 
 - **Indentation is significant** (Python-like) — use 2 spaces per level.
@@ -168,13 +178,10 @@ Key rules:
 - Pass user-provided task text through `context:`. Use interpolation only for
   trusted labels or values created by earlier workflow steps.
 
-**🔴 CHECKPOINT · 🛑 STOP**: Show the .prose to the user before proceeding
-to compilation. This applies whether you generated a new program or found
-an existing `.prose` file — always display the full program and ask:
-"Here is the workflow — shall I compile and run it?" If the user requests
-changes, incorporate feedback. If the user rejects, ask which pattern or
-approach they prefer. Never skip this checkpoint by saying "it already
-exists, running directly."
+**🔴 CHECKPOINT · 🛑 STOP**: Show the generated .prose to the user before
+proceeding to compilation. Ask: "Here is the workflow — shall I compile
+and run it?" If the user requests changes, incorporate feedback. If the
+user rejects, ask which pattern or approach they prefer.
 
 ### Step 3: Validate
 
@@ -197,6 +204,20 @@ Use host OpenProse execution (`prose run <file>`, `/prose run`, or equivalent).
 OpenProse is the runtime: it maps each `session` statement to subagent work,
 handles `parallel:` barriers, and tracks execution in `.prose/runs/` or the
 configured state backend.
+
+During execution, keep the user informed:
+
+- **OpenProse mode**: After `prose run` returns, immediately summarize
+  which branches succeeded, which failed, and key metrics before
+  proceeding to synthesis.
+- **Direct fallback**: Announce each session as you spawn it and report
+  its result when it returns ("auditor-python done: score 10/10,
+  waiting for 2 more branches...").
+- For workflows with 6+ sessions in either mode: give a one-line summary
+  after the first group of results arrives.
+
+Do not wait until synthesis is complete to say anything — partial progress
+is better than silence.
 
 If OpenProse is not available and the plan is small enough for direct fallback,
 execute directly: read the `.prose` file, spawn at most 5 independent sessions,
@@ -314,6 +335,9 @@ parallel (on-fail: "continue"):            # Resilient: ignore failures
 | Want the best of multiple attempts | tournament | Pairwise judging is more reliable than scoring |
 | Quantity → quality cheaper than precision | generate-and-filter | Overproduction + filtering beats careful generation |
 | Iterative quality improvement | duel-loop | Adversarial feedback converges on quality |
+| Need calibrated quality score, not just a winner | judge-panel | Independent scoring avoids anchoring bias |
+| Verify output covers all requirements | completeness-critic | Post-hoc gap detection catches synthesis blind spots |
+| Same target needs analysis from multiple disciplines | multi-lens-sweep | Specialized lenses find what generalists miss |
 
 ## Core patterns
 

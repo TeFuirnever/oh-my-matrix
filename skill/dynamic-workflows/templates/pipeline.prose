@@ -1,0 +1,19 @@
+# [Describe what this pipeline does — one line]
+# Customize: replace session prompts with your domain logic
+
+input items: "The collection to process"
+
+let screened = items | filter:
+  session "Is this item worth processing? Answer yes or no only."
+    context: item
+
+let enriched = screened | map:
+  session "Expand and analyze this item in detail."
+    context: item
+
+let winner = enriched | reduce(best, current):
+  session "Which is stronger? Pick one and explain why."
+    context: [best, current]
+
+session "Present the winner with rationale"
+  context: winner
