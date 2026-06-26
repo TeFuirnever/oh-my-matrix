@@ -1,5 +1,7 @@
 # ADR-004: Three-Mode State Machine with Shared Validation
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > **Status update (2026-06-16):** This ADR originally defined a **three-mode** state machine (`ralph` / `autopilot` / `team`). As of [ADR-008](008-delegation-to-host.md), the `ralph` and `autopilot` modes have been **deleted and delegated to the host** (MA's `@openclaw/autopilot` plugin). omm now ships a **single-mode** state machine: `team`.
 >
 > The text below is preserved as the historical record of the original decision. The shared-validation design (single dispatcher, terminal enforcement, default injection) is **retained** for the surviving `team` mode. All references to `ralph` and `autopilot` phase sets, counters, and validators now describe removed code — see ADR-008 for the convergence rationale and the current single-mode contract in [Workflow State Contract](../contracts/workflow-state-contract.md).

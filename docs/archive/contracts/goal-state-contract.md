@@ -1,5 +1,7 @@
 # Goal State Contract
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > **Status: Superseded by [ADR-008](../adr/008-delegation-to-host.md) (2026-06-16) — goal capability delegated to MA autopilot `goal_manager`, not implemented in omm.**
 >
 > The contract below describes a design that was planned ([ADR-007](../adr/007-goal-mode.md)) but **never shipped** in omm. Goal tracking is now delegated to the host's `@openclaw/autopilot` plugin. This document is retained as a historical reference for the filesystem-canonical goal model omm considered; the `omm_goal_*` tools and `{stateRoot}/goal/` directory do not exist in the current codebase.

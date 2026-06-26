@@ -1,5 +1,7 @@
 # omm-MA 数字员工桥接 — 实现计划
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > **Status:** APPROVED (ralplan consensus — Critic approved v3)
 > **Date:** 2026-05-25
 > **Source:** deep-interview → ralplan consensus (Planner → Architect → Critic → 2 iterations)

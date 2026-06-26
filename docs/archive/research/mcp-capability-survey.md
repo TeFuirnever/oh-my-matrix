@@ -1,5 +1,7 @@
 # MCP Capability Survey — OpenClaw + MatrixAssistant Runtime
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > Research artifact for plan ralplan-omm-next-best-practices Phase 2
 > Date: 2026-05-08
 > Scope: Determine which MCP capabilities (Resources, Prompts, Progress notifications) are supported across the OpenClaw runtime + MatrixAssistant client stack, and recommend a path for omm to expose richer telemetry/data through standard MCP channels.

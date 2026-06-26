@@ -1,150 +1,62 @@
 # omm Architecture Overview
 
-> oh-my-matrix (omm) v0.4.2 — OpenClaw-native orchestration extension suite（OpenClaw 原生编排扩展套件）
+> 🔄 **方向更新 (0.7.0)** — v0.x 的 `team` 编排实现已移除（见 [`archive/`](archive/)）。当前方向：**Dynamic Workflows**——对标 Claude Code dynamic workflows，通过 AI 自动生成 `.prose` 编排程序并经 OpenProse 执行，实现多 agent 自主编排。见 [ADR-009](adr/009-dynamic-workflows-via-openprose.md) 与 [设计文档](design/dynamic-workflows-design.md)。
 
 ## Project Positioning
 
-omm provides team workflow orchestration (plus the digital-employee bridge) for any OpenClaw-compatible host. Autonomous-loop and goal capabilities are delegated to the host — see [ADR-008](adr/008-delegation-to-host.md).
-It is modeled after [oh-my-codex](https://github.com/anthropics/oh-my-codex) but redesigned as a **pure plugin** — no standalone CLI, no Rust native modules, zero runtime dependencies.
+oh-my-matrix (omm) 为 OpenClaw 及衍生项目提供 **AI 自主多 agent 编排能力（Dynamic Workflows）**。AI agent 根据用户的自然语言任务，自动生成 `.prose` 编排程序（含并行扇出、对抗验证、管道处理、迭代搜索等模式），经 OpenProse（OpenClaw bundled plugin）执行，扇出数十到数百个 subagent，只回最终结果。
 
-| Dimension          | oh-my-codex                    | omm                                      |
-| ------------------ | ------------------------------ | ---------------------------------------- |
-| Runtime            | Standalone CLI (`omx`)         | OpenClaw plugin loaded by Gateway        |
-| Team parallelism   | Self-built tmux + git worktree | Delegates to host team skill（委托宿主） |
-| MCP implementation | `@modelcontextprotocol/sdk`    | Hand-written JSON-RPC（零依赖）          |
-| Distribution       | npm binary + 4 Rust crates     | Single tarball, JS-only                  |
+核心交付物是一个 **SKILL.md 包**（`skill/dynamic-workflows/`），教 agent 何时/如何生成 `.prose` 工作流。运行时由 OpenProse 提供——不重复建设。
 
-See [ADR-001](adr/001-pure-plugin-no-cli.md), [ADR-002](adr/002-team-delegation-to-host.md), [ADR-003](adr/003-zero-dependency-mcp.md) for rationale.
+| 维度 | oh-my-codex | omm |
+|------|-------------|-----|
+| 运行形态 | 独立 CLI (`omx`) | OpenClaw 插件，由 Gateway 加载 |
+| 团队并行 | 自建 tmux + git worktree | 委托宿主 team 原语 |
+| MCP 实现 | `@modelcontextprotocol/sdk` | 手写 JSON-RPC（零依赖） |
+| 分发 | npm binary + 4 个 Rust crate | 单一 tarball，纯 JS |
 
-## Module Decomposition
+设计依据见 [ADR-002](adr/002-team-delegation-to-host.md)、[ADR-008](adr/008-delegation-to-host.md)（委托哲学，脊柱保留）。
 
-```
-omm-packages/
-├── omm-plugin/     OpenClaw plugin — tools, hooks, state validation
-├── omm-mcp/        Stdio JSON-RPC MCP server for workflow state + prompts
-└── omm-skills/     SKILL.md for the team workflow (plus agent-prompts persona library)
-```
+## 核心架构概念
 
-### omm-plugin（插件核心）
+### 纯插件，无 CLI
 
-The plugin entry point `register(api)` conforms to the OpenClaw Plugin ABI:
+omm 通过 OpenClaw Plugin ABI 暴露**可选工具**（`optional: true`）与**生命周期 hooks**。宿主在没有 omm 时仍正常工作——omm 是增强，不是依赖。（历史依据：[`archive/adr/001-pure-plugin-no-cli.md`](archive/adr/001-pure-plugin-no-cli.md)。）
 
-- **6 tools** registered via `api.registerTool()` (all `optional: true`): `omm_state_write`, `omm_state_read`, `omm_employee_list`, `omm_employee_dispatch`, `omm_employee_result`, `omm_employee_result_batch`
-- **14 lifecycle hooks** registered via `api.on()`: `session_start`, `session_end`, `before_tool_call`, `after_tool_call`, `llm_input`, `llm_output`, `agent_end`, `subagent_spawning`, `subagent_spawned`, `subagent_ended`, `gateway_start`, `gateway_stop`, `before_compaction`, `after_compaction`
-- All tools are `{ optional: true }` — the host functions without omm
+### 单一工作流模式：`team`
 
-Key modules:
-
-| Module                    | Responsibility                                                        |
-| ------------------------- | --------------------------------------------------------------------- |
-| `omm-register.ts`         | Plugin entry point; wires tools and hooks to the OpenClaw API         |
-| `omm-state-validation.ts` | State validation（单模式状态验证）for the team workflow |
-| `omm-config.ts`           | Resolves state root directory; defaults to `~/.openclaw/omm`          |
-| `omm-state.ts`            | Smoke record writer for session lifecycle events                      |
-| `omm-tools/omm-state.ts`  | State read/write/list tools with atomic persistence                   |
-| `omm-tools/omm-employee.ts` | MA digital-employee bridge (list/dispatch/result) via state-file relay |
-| _(removed)_               | Goal tracking delegated to MA `@openclaw/autopilot` `goal_manager` ([ADR-008](adr/008-delegation-to-host.md)) |
-
-### omm-mcp（MCP 服务器）
-
-A standalone stdio JSON-RPC server implements MCP protocol 2024-11-05:
-
-- `omm-mcp` exposes workflow state tools (`read`, `write`, `list`), Resources, and Prompts.
-
-`omm-mcp` inlines a simplified copy of the validation logic from `omm-state-validation.ts` to maintain zero cross-package dependencies.
-
-See [ADR-003](adr/003-zero-dependency-mcp.md) and [MCP Protocol Contract](contracts/mcp-protocol-contract.md).
-
-### omm-skills（技能定义）
-
-One skill is shipped in the suite tarball: `omm-team`. All other skill directories (ping, cancel, ralph, autopilot, ralplan, deep-interview, ultrawork, ultraqa, docs, ui, git, research, refactor) were removed — autonomous execution is delegated to the host's `@openclaw/autopilot` ([ADR-008](adr/008-delegation-to-host.md)).
-
-**Shipped（1）:**
-
-| Skill           | Type                    | Purpose                                                                                 |
-| --------------- | ----------------------- | --------------------------------------------------------------------------------------- |
-| `omm-team`      | Model-driven workflow   | PLANNING → DECOMPOSING → DELEGATING → EXECUTING → SYNTHESIZING → VERIFYING ↔ FIXING → COMPLETE/FAILED  |
-
-See [ADR-004](adr/004-three-mode-state-machine.md) and [Workflow State Contract](contracts/workflow-state-contract.md).
-
-## Data Flow
-
-### State Write Path（状态写入路径）
+`dynamic-workflows` skill 教 agent 生成包含以下生命周期的 `.prose` 程序，经 OpenProse 执行：
 
 ```
-Tool call (omm_state_write)
-  → Input validation (key required, value is object)
-  → Mode-aware validation (validateStateWrite)
-    → Route by mode: value.mode ?? key
-    → Known modes: enforce phase set, counter invariants, terminal rules
-    → Unknown keys: pass through with timestamp
-  → Atomic persistence (writeFile tmp → rename)
-  → Response to caller
+parallel agents → pipeline stages → conditional routing → synthesis → result
 ```
 
-### Dual-Access Model（双通道访问）
+OpenProse 支持 `parallel:` 真并行（含 race/any-N/on-fail 策略）、`for`/`repeat`/`block` 递归循环、`if **AI condition**:` 条件分支、`| filter/map/reduce/pmap` 管道、`try/catch` 错误处理。8 种编排模式（fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop）全部可表达。
 
-The same workflow state directory (`{stateRoot}/state/`) is accessible via two paths:
+### 双通道状态访问
 
-1. **In-process**: OpenClaw plugin tools — used during normal skill execution
-2. **Out-of-process**: MCP server over stdio — used by external MCP clients
+同一工作流状态目录可通过两条路径访问：
 
-Both paths apply validation before writing. The state MCP server inlines equivalent validation logic. Memory and trace data are exposed by dedicated MCP servers under the same configured OMM root.
+1. **进程内**：OpenClaw 插件工具——正常 skill 执行时使用。
+2. **进程外**：MCP server over stdio——外部 MCP 客户端使用。
 
-See [State Contract](contracts/state-contract.md).
+两条路径写入前都经校验。（历史依据：[`archive/contracts/state-contract.md`](archive/contracts/state-contract.md)。）
 
-## Host Boundary（宿主边界）
+### 委托给宿主
 
-### What omm owns
+omm 不自建自主循环 / 目标 / 并行原语，而是委托宿主：
 
-- State persistence and validation
-- Workflow skill definitions (SKILL.md lifecycle instructions)
-- Build and compliance toolchain
+- **OpenClaw Gateway**：插件加载、工具分派、skill 执行引擎
+- **团队并行**：`TeamCreate`/`TaskCreate`/`SendMessage`
+- **自主循环与目标**：宿主的 `@openclaw/autopilot`
 
-### What the host provides
+（见 [ADR-002](adr/002-team-delegation-to-host.md)、[ADR-008](adr/008-delegation-to-host.md)。）
 
-- **OpenClaw Gateway**: Plugin loading, tool dispatch, skill execution engine
-- **Team parallelism**: `TeamCreate`/`TaskCreate`/`SendMessage` for parallel workers
-- **Skill runtime**: Model invocation, SKILL.md interpretation, frontmatter processing
-- **Consumer integration**: Tarball unpacking, config injection at startup
+## 后续方向
 
-### Consumer Integration（消费者集成）
+- live-DAG UI（复用 MA `WorkflowGraph` 套件可视化 .prose 执行进度）
+- `budget` 真实 token 缩放、嵌套工作流
+- 对抗配方端到端验证（tournament/adversarial-verify 等模式的真实规模测试）
+- `api.runtime.subagent` 直接派发作为 OpenProse 之外的补充路径（E3 已验证可行）
 
-The primary consumer (MatrixAssistant) integrates omm via:
-
-1. `omm-scripts/omm-build-suite.mjs` produces `omm-suite-<version>.tgz` with SHA-256 manifest
-2. `omm-scripts/omm-verify-bundle.mjs` verifies tarball integrity against the manifest
-3. `omm-scripts/omm-openclaw-seed.mjs` injects omm plugin config into `~/.openclaw/openclaw.json`
-4. OpenClaw Gateway discovers the plugin and skills automatically
-5. `omm-scripts/omm-ma-seed.mjs` registers the three stdio MCP servers in MA's MCP registry; see [`contracts/ma-integration-snippets.md`](contracts/ma-integration-snippets.md)
-
-## Extension Points（扩展点）
-
-| Extension            | How                                                                                      |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| Add a new tool       | Create handler in `omm-tools/`, register in `omm-register.ts`, add to consumer whitelist |
-| Add a new skill      | Create `omm-skills/<name>/SKILL.md`, add it to `SHIPPED_SKILLS` in `omm-build-suite.mjs` |
-| Add a new state mode | Add validator function in `omm-state-validation.ts`, add to `VALIDATORS` map             |
-| Add a new employee tool | Handler in `omm-tools/omm-employee.ts`, register in `omm-register.ts` (state-file relay) |
-| Add a lifecycle hook | Register via `api.on()` in `omm-register.ts`                                             |
-
-## Build and Compliance（构建与合规）
-
-| Script                      | Purpose                                         |
-| --------------------------- | ----------------------------------------------- |
-| `omm-build-suite.mjs`       | Stage + tarball with SHA-256 manifest           |
-| `omm-scan-names.mjs`        | Hash-based forbidden name denylist scan         |
-| `omm-verify-bundle.mjs`     | Tarball integrity verification against manifest |
-| `omm-verify-provenance.mjs` | Provenance metadata validation                  |
-| `omm-smoke-mcp.mjs`         | MCP wire-contract smoke test                    |
-| `omm-ma-seed.mjs`           | MatrixAssistant MCP registry seeder             |
-| `omm-openclaw-seed.mjs`     | OpenClaw plugin registry seeder                 |
-
-CI pipeline (`.gitlab-ci.yml`): install → build → test → lint → scan-names → verify-provenance → verify-bundle
-
-## Test Strategy
-
-- Framework: `node:test` (zero dependencies)
-- Script tests under `omm-scripts/*.test.mjs` plus compiled package tests
-- 299 tests covering plugin tools/state/employee-bridge, workflow lifecycle, MCP state/memory/trace, Resources/Prompts, seeders, and bundle/package checks
-- Full suite: `pnpm test`
+历史 v0.x 实现设计记录见 [`archive/`](archive/)。

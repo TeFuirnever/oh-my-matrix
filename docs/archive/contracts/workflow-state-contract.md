@@ -1,5 +1,7 @@
 # Workflow State Contract（工作流状态机合同）
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > **Status update (2026-06-16):** omm converged to a single workflow mode (`team`) per [ADR-008](../adr/008-delegation-to-host.md). The `ralph` and `autopilot` modes below are **removed** (delegated to the host's `@openclaw/autopilot`), and the `linked_ralph` cross-mode linkage no longer exists. The `team` section is the only current contract; `ralph`/`autopilot` sections are retained as historical reference only.
 >
 > Defines phase sets, transition rules, terminal states, and counter invariants for the team workflow mode.

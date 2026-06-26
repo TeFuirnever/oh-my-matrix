@@ -1,5 +1,7 @@
 # ADR-007: Goal Mode — Multi-Instance Filesystem-Canonical State
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 > **Status: Superseded by [ADR-008](008-delegation-to-host.md) (2026-06-16).**
 >
 > The goal-tracking capability described in this ADR is **not implemented in omm**. Goal tracking is delegated to the host (MatrixAssistant) via the `@openclaw/autopilot` plugin's built-in `goal_manager`, which provides multi-instance goal state, subgoal decomposition, evidence gates, and audit persistence. The design below is retained as a historical reference for the filesystem-canonical approach omm considered; re-implementing it in omm is not currently planned. See [goal-state-contract.md](../contracts/goal-state-contract.md) for the matching superseded contract.

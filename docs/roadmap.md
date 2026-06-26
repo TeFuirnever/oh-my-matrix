@@ -1,12 +1,14 @@
 # omm Development Roadmap
 
-> Current: v0.5.0 — Phase 1–4 automated release surface shipped; MA integration testing in progress.
+> 🔄 **方向更新 (0.7.0)** — `team` 编排方向已被 **Dynamic Workflows** 取代（[ADR-009](adr/009-dynamic-workflows-via-openprose.md)）。当前方向：AI 自动生成 `.prose` 编排程序 + OpenProse 执行。下面的 Phase 1–4 是 v0.x 的**历史记录**。
 >
-> **2026-06-16 update ([ADR-008](adr/008-delegation-to-host.md)):** ralph / autopilot / goal deleted and delegated to the host's `@openclaw/autopilot` plugin; omm converged to single-mode `team`. The Phase 1–4 records below are historical.
+> **2026-06-18 update ([ADR-009](adr/009-dynamic-workflows-via-openprose.md)):** Dynamic Workflows skill package shipped — AI generates .prose programs, OpenProse executes. See [design doc](design/dynamic-workflows-design.md).
 
-## Current State Summary
+## v0.x Final State（历史快照）
 
-omm ships the core workflow engine and consumer integration helpers:
+> 以下是 v0.x 实现移除前的最终状态快照，仅供追溯；当前仓库无代码。
+
+omm **曾**交付核心工作流引擎与消费者集成工具：
 
 - **6 tools** registered via OpenClaw Plugin ABI (incl. MA employee-bridge: list/dispatch/result/result_batch)
 - **1 packaged skill** (core: team) — all other skills removed (ralph/autopilot/goal delegated to host `@openclaw/autopilot`; ping/cancel removed as non-essential; artifact skills deleted per [ADR-008](adr/008-delegation-to-host.md))
@@ -15,7 +17,7 @@ omm ships the core workflow engine and consumer integration helpers:
 - **264 tests** passing, CI pipeline operational
 - **Compliance and consumer-seed toolchain** (scan-names, generate/verify inlines, verify-bundle, verify-provenance, smoke-mcp, MA/OpenClaw seeders)
 
-See [Architecture Overview](architecture.md) for module details.
+See [Architecture Overview](architecture.md) for the current (post-reset) architecture narrative.
 
 ---
 
@@ -57,7 +59,7 @@ See [Architecture Overview](architecture.md) for module details.
 
 - [x] Memory MCP: read/write/list/delete operations over stdio
 - [x] Trace MCP: record execution events, query by session/time range
-- [x] Both servers follow zero-dependency pattern ([ADR-003](adr/003-zero-dependency-mcp.md))
+- [x] Both servers follow zero-dependency pattern ([ADR-003](archive/adr/003-zero-dependency-mcp.md))
 - [x] Consumer integration updated (seed config, bundle manifest)
 
 **Estimated scope:** ~4-6 new files, ~400-600 lines
@@ -94,10 +96,10 @@ See [Architecture Overview](architecture.md) for module details.
 | ------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------ |
 | Agent prompt expansion (P0+P1)       | Port 11 oh-my-claudecode agents covering planning, tracing, review, debugging, exploration   | `oh-my-claudecode/agents/`                           | ✓ Done (2026-05-08) — 16 total agents (5 starter + 11 ported) |
 | 7-token strip-check in CI            | Prevent Claude-only semantic tokens from leaking into ported prompts                         | `omm-agent-prompts.test.ts`                          | ✓ Done (2026-05-08) — 376/376 tests pass                     |
-| MCP capability survey                | Determine which MCP capabilities (Resources/Prompts/Progress) the OpenClaw + MA stack supports | `docs/research/mcp-capability-survey.md`             | ✓ Done (2026-05-08) — R1 recommended                         |
-| MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/research/mcp-capability-survey.md` §4 R1 sketch | ✓ Done (2026-05-08) — `omm://state/<key>` + `omm://trace/<sessionId>` |
+| MCP capability survey                | Determine which MCP capabilities (Resources/Prompts/Progress) the OpenClaw + MA stack supports | `docs/archive/research/mcp-capability-survey.md`             | ✓ Done (2026-05-08) — R1 recommended                         |
+| MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/archive/research/mcp-capability-survey.md` §4 R1 sketch | ✓ Done (2026-05-08) — `omm://state/<key>` + `omm://trace/<sessionId>` |
 | MCP Prompts advertisement            | Expose agent prompts via `prompts/list` + `prompts/get`                                      | MCP spec 2025-06-18                                  | ✓ Done (2026-05-08) — `omm://prompts/<name>`                          |
-| Progress notifications verification  | Confirm whether MA client routes `notifications/progress`                                    | follow-up research                                   | ✓ Done (2026-05-08) — DEFER (MA self-audit P6 marks unsupported; see `docs/research/mcp-progress-notification-survey.md`) |
+| Progress notifications verification  | Confirm whether MA client routes `notifications/progress`                                    | follow-up research                                   | ✓ Done (2026-05-08) — DEFER (MA self-audit P6 marks unsupported; see `docs/archive/research/mcp-progress-notification-survey.md`) |
 | omm-docs skill                       | Documentation generation pipeline (research → draft → verify); activates writer + document-specialist | omm-skills new entry                          | ✓ Done (2026-05-08) — `omm-packages/omm-skills/omm-docs/SKILL.md`; bundled by suite builder |
 | omm-ui skill                         | UI artifact generation pipeline (discover → generate → verify); activates designer; produces components / specs / theme tokens | omm-skills new entry                  | ✓ Done (2026-05-08) — `omm-packages/omm-skills/omm-ui/SKILL.md`; bundled by suite builder |
 | P2 agent porting                     | Port git-master, scientist, code-simplifier with target skill anchors                        | `oh-my-claudecode/agents/`                           | ✓ Done (2026-05-13) — 19 total agents (5 starter + 14 ported); `omm-git`, `omm-research`, `omm-refactor` |
@@ -109,7 +111,7 @@ See [Architecture Overview](architecture.md) for module details.
 - [x] Research artifact recommends a path for MCP UI integration with evidence
 - [x] MCP Resources advertised by ≥ 1 omm MCP server
 - [x] MCP Prompts advertised by omm-mcp
-- [x] Automated MA-consumer wire-contract roundtrip passes — evidence: `.omc/state/ma-roundtrip-evidence.json` (generated by `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer`); drop-in MA registry snippets: `docs/contracts/ma-integration-snippets.md`
+- [x] Automated MA-consumer wire-contract roundtrip passes — evidence: `.omc/state/ma-roundtrip-evidence.json` (generated by `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer`); drop-in MA registry snippets: `docs/archive/contracts/ma-integration-snippets.md`
 - [x] Human-side confirmation: omm MCP servers seeded into `~/.openclaw/openclaw.json` via `omm-ma-seed.mjs --write`, MA restarted, three `omm-*` servers visible in MA's MCP catalog UI
 
 ---
@@ -120,9 +122,9 @@ These are deliberately excluded based on architectural decisions:
 
 | Feature                   | Reason                                           | ADR                                           |
 | ------------------------- | ------------------------------------------------ | --------------------------------------------- |
-| Standalone CLI            | OpenClaw Gateway provides tool dispatch          | [ADR-001](adr/001-pure-plugin-no-cli.md)      |
+| Standalone CLI            | OpenClaw Gateway provides tool dispatch          | [ADR-001](archive/adr/001-pure-plugin-no-cli.md)      |
 | tmux/worktree parallelism | Host provides team primitives                    | [ADR-002](adr/002-team-delegation-to-host.md) |
 | HUD / status bar          | Host UI layer (Electron) provides equivalent     | N/A                                           |
 | Notification subsystem    | Host (MatrixAssistant) has its own notifications | N/A                                           |
-| Rust native crates        | Not needed for plugin-only architecture          | [ADR-001](adr/001-pure-plugin-no-cli.md)      |
+| Rust native crates        | Not needed for plugin-only architecture          | [ADR-001](archive/adr/001-pure-plugin-no-cli.md)      |
 | Code-intel MCP            | OpenClaw may provide LSP integration natively    | N/A                                           |

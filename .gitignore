@@ -5,3 +5,8 @@ coverage/
 .omc/
 .omx/
 website/.vitepress/dist/
+.DS_Store
+**/.DS_Store
+
+# pnpm pack 产物（构建产物，不入库；MA 引用各自仓内的副本）
+packages/*/*.tgz

@@ -1,125 +1,36 @@
 # Getting Started
 
-## Install the omm Bundle
+> 🔄 **实现已重置 (0.6.0)** — 本仓库现为文档/设计底座，无可运行代码。下面介绍如何浏览文档与本地预览文档站。
 
-omm is distributed as a single tarball. Unpack it into your host's resources directory:
+## 这是什么
+
+oh-my-matrix (omm) 探索 **OpenClaw 原生的工作流编排**：以纯插件形式为任何 OpenClaw 兼容宿主提供 `team` 协作编排，自主循环与目标能力委托宿主。
+
+此前 v0.x 的 OpenClaw 插件 / MCP 实现（`team` 状态机、employee-bridge、hooks、MCP servers）已于 0.6.0 全部移除，设计记录归档保留。
+
+## 浏览文档
+
+| 想了解 | 去哪看 |
+|--------|--------|
+| 方向与架构叙事 | [Architecture](/guide/architecture)、仓库 `docs/architecture.md` |
+| 路线图与历史阶段 | [Roadmap](/guide/roadmap)、仓库 `docs/roadmap.md` |
+| 领域语言与核心概念 | 仓库 `CONTEXT.md`（Workflow Mode / Phase / State / Counter / Hook …） |
+| 委托哲学（连续脊柱） | [ADR-002](/reference/adrs/002)、仓库 `docs/adr/002`、`docs/adr/008` |
+| v0.x 完整设计记录 | 仓库 `docs/archive/`（ADR / 契约 / 计划 / 调研 / 评审，已归档） |
+
+## 本地预览文档站
 
 ```bash
-tar -xzf omm-suite-0.3.0-alpha.2.tgz -C resources/
+pnpm install
+pnpm docs:dev      # 启动本地开发服务器（默认 http://localhost:5173）
+pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
+pnpm docs:preview  # 预览构建产物
 ```
 
-The bundle contains:
+仅需 Node.js 20+ 与 pnpm 10+；VitePress 是唯一依赖，无需 TypeScript / 构建工具链。
 
-- `omm-plugin/` — OpenClaw plugin (tools + lifecycle hooks)
-- `omm-mcp/` — State MCP server (stdio JSON-RPC)
-- `omm-mcp-memory/` — Memory MCP server
-- `omm-mcp-trace/` — Trace MCP server
-- `omm-skills/` — SKILL.md workflow definitions
+## 下一步
 
-## Register MCP Servers
-
-Add the three MCP servers to your OpenClaw `mcpServers` config:
-
-```json
-{
-  "mcpServers": {
-    "omm-state": {
-      "command": "node",
-      "args": ["resources/omm-mcp/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "~/.openclaw/omm" }
-    },
-    "omm-memory": {
-      "command": "node",
-      "args": ["resources/omm-mcp-memory/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "~/.openclaw/omm" }
-    },
-    "omm-trace": {
-      "command": "node",
-      "args": ["resources/omm-mcp-trace/dist/src/index.js"],
-      "env": { "OMM_STATE_ROOT": "~/.openclaw/omm" }
-    }
-  }
-}
-```
-
-## Three Workflow Modes
-
-### ralph — Iterative Execution Loop
-
-ralph runs a persistent plan→execute→verify→fix cycle with retry tracking. Use it for open-ended tasks that may need multiple attempts.
-
-Invoke via the `omm-ralph` skill or directly trigger the state machine:
-
-```
-Status: init → planning → executing → verifying ↔ fixing → complete | failed
-```
-
-### autopilot — Autonomous Multi-Step Pipeline
-
-autopilot decomposes a goal into numbered steps and executes them sequentially with per-step verification.
-
-```
-Status: analyzing → planning → executing → verifying ↔ retry → complete | blocked | failed
-```
-
-### team — Parallel Agent Delegation
-
-team delegates subtasks to parallel worker agents via the host's `TeamCreate`/`TaskCreate` primitives.
-
-```
-Phase: planning → decomposing → delegating → executing → verifying ↔ fixing → complete | failed
-```
-
-Only one mode may be `active: true` at a time. Attempting to activate a second mode while one is running returns `OMM_E_WORKFLOW_CONFLICT`.
-
-## First omm_state_write Call
-
-Write an initial ralph state to begin a workflow:
-
-```json
-{
-  "tool": "omm_state_write",
-  "arguments": {
-    "key": "ralph",
-    "value": {
-      "mode": "ralph",
-      "active": true,
-      "status": "init",
-      "task": "Refactor the auth module to use structured error codes"
-    }
-  }
-}
-```
-
-Expected response:
-
-```
-Written: /home/user/.openclaw/omm/state/ralph.json
-```
-
-omm injects defaults automatically: `iteration=0`, `max_iterations=10`, `fix_attempt=0`, `max_fix_attempts=3`, `startedAt=<now>`.
-
-Read the state back at any time:
-
-```json
-{
-  "tool": "omm_state_read",
-  "arguments": { "key": "ralph" }
-}
-```
-
-Cancel an active workflow:
-
-```json
-{
-  "tool": "omm_cancel",
-  "arguments": { "key": "ralph" }
-}
-```
-
-## Next Steps
-
-- [Architecture Overview](/guide/architecture) — module decomposition and data flow
-- [Reference: Tool Index](/reference/) — all plugin and MCP tools
-- [Reference: Error Codes](/reference/contracts/error-codes) — stable `OMM_E_*` identifiers
-- [ADR-004: Three-Mode State Machine](/reference/adrs/004) — design rationale
+- [Architecture](/guide/architecture) — 架构叙事与设计参考
+- [Roadmap](/guide/roadmap) — 路线图（Phase 1–4 为历史记录）
+- [Design Reference](/reference/) — 设计参考入口

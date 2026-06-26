@@ -1,5 +1,7 @@
 <!-- Updated: 2026-06-16 -->
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 # MA Integration Snippets — omm MCP Server
 
 > Drop-in JSON snippets for registering omm's MCP server into MatrixAssistant (MA) via OpenClaw's native MCP config format. MA reads `~/.openclaw/openclaw.json` and discovers servers under `mcp.servers`.

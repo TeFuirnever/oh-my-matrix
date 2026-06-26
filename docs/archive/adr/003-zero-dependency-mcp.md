@@ -1,5 +1,7 @@
 # ADR-003: Zero-Dependency Hand-Written MCP
 
+> 🗄 **归档 / Archived** — v0.x OpenClaw 插件/MCP 实现的设计记录。代码已于 0.6.0 移除；本仓库现为文档/设计底座。内部链接可能已失效。
+
 ## Context
 
 oh-my-codex uses `@modelcontextprotocol/sdk` for its 5 MCP servers. The SDK provides connection management, protocol validation, type safety, and transport abstractions. However, it adds a runtime dependency with its own dependency tree.
