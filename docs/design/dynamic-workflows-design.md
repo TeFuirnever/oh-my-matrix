@@ -383,16 +383,17 @@ hooks:
     - command: "bash scripts/session-catchup.py"
 ```
 
-**这证明 skill-level hooks 是可用的**。但有以下注意事项：
+~~**这证明 skill-level hooks 是可用的**~~。**⚠️ 证伪（2026-06-26 B1 实施前调研）**：oh-my-manus 自己在 `SKILL.md:231-234` 声明：
 
-- **未在 `creating-skills.md` 正式文档中记载**——仅由 shipping 代码证明
-- **稳定性不确定**——可能在 OpenClaw 版本更新时变化
-- **需配合 `scripts/` 子目录**使用
+> "What does NOT work in OpenClaw: Frontmatter hooks (PreToolUse, PostToolUse, Stop) — OpenClaw does not execute these hooks automatically; the AI follows SKILL.md body instructions instead."
 
-**对我们的价值**：
-- `PreToolUse` + matcher `"Bash"`：运行时拦截破坏性 git 命令（`git reset --hard` / `git clean -fdx` 等），不再依赖 prompt 级指令
-- `Stop` hook：工作流结束时自动保存状态或清理 `.prose/runs/`
-- `UserPromptSubmit`：注入当前工作流状态（如果有 active run）作为上下文
+且官方 frontmatter schema（`creating-skills.md:99-107`）**无 `hooks:` 字段**——仅 `name`/`description`/`metadata.openclaw.*`。oh-my-manus 的 hooks 块是为 Claude Code 消费者保留的，OpenClaw 静默忽略。之前的"先例"判断是盲点（只看 frontmatter 有 hooks 块，没读到 oh-my-manus 的自我否定）。
+
+**真正的工具拦截路径**（非 skill 层）：
+- OpenClaw typed plugin hook `api.on("before_tool_call", ...)`（`plugins/hooks.md`）——暴露 `event.toolName` + `event.params`，可 requireApproval/block/rewrite。需写 plugin entry（`definePluginEntry`），不在 SKILL.md
+- OpenClaw 内部 hooks（`automation/hooks.md`）只有粗粒度生命周期事件（`command:*`/`session:*`/`message:*`），**无 `PreToolUse` 等价物**
+
+**对我们的价值**：~~运行时拦截破坏性 git~~ → **skill 层无法实现**。真拦截需写 OpenClaw plugin（`before_tool_call`），ROI 不足（破坏性 git 在工作流是边缘情况）。接受 prompt 级黑名单（SKILL.md body 指令），弱模型绕过是 prompt-only 固有限制。
 
 #### 11.3.4 其他扩展点
 
@@ -871,7 +872,7 @@ N 个独立评委各自评分同一输出，然后一个仲裁 session 解决分
 
 | # | 能力 | 来源 | 触发条件 | 前置依赖 | 预估工作量 |
 |---|------|------|---------|---------|-----------|
-| B1 | Skill-level hooks（破坏性 git 拦截） | OpenClaw | ⚠️ **触发条件已满足**（2026-06-26 MA 实测确认弱模型绕过 prompt 级黑名单 + CHECKPOINT），待业务决策是否实施 | 确认 oh-my-manus hooks 模式在 OpenClaw 当前版本稳定 | 1 个 hook 脚本 + frontmatter 声明 |
+| B1 | ~~Skill-level hooks（破坏性 git 拦截）~~ | OpenClaw | ❌ **证伪**（2026-06-26）：oh-my-manus 自述 frontmatter `hooks:` 在 OpenClaw 不执行；官方 schema 无此字段。真拦截需写 OpenClaw plugin（`before_tool_call`），ROI 不足。**接受 prompt 级黑名单（C 路径），弱模型绕过是 prompt-only 固有限制** | — | 不实施 |
 | B2 | 结构化 agent 输出约定 | Claude Code | pipeline 模式实测发现下游解析不可靠时 | 无 | SKILL.md +10 行 |
 | B3 | Budget-aware 设计段 | Claude Code | 用户报告工作流成本过高或超时时 | 无 | SKILL.md 或 reference +15 行 |
 | B4 | `{baseDir}` 路径插值 | OpenClaw | templates 在非标准 cwd 下解析失败时 | A4 templates 上线 | SKILL.md 路径替换 |
