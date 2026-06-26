@@ -393,7 +393,11 @@ hooks:
 - OpenClaw typed plugin hook `api.on("before_tool_call", ...)`（`plugins/hooks.md`）——暴露 `event.toolName` + `event.params`，可 requireApproval/block/rewrite。需写 plugin entry（`definePluginEntry`），不在 SKILL.md
 - OpenClaw 内部 hooks（`automation/hooks.md`）只有粗粒度生命周期事件（`command:*`/`session:*`/`message:*`），**无 `PreToolUse` 等价物**
 
-**对我们的价值**：~~运行时拦截破坏性 git~~ → **skill 层无法实现**。真拦截需写 OpenClaw plugin（`before_tool_call`），ROI 不足（破坏性 git 在工作流是边缘情况）。接受 prompt 级黑名单（SKILL.md body 指令），弱模型绕过是 prompt-only 固有限制。
+**对我们的价值**：~~运行时拦截破坏性 git~~ → **skill 层无法实现**。真拦截需 OpenClaw plugin（`before_tool_call`）。
+
+> **✅ 反转（2026-06-27）**：原先判"ROI 不足、接受 prompt-only"建立在**错误前提**上——把"真拦截 = 从零写新 plugin"当成大工程。实际上 `packages/autopilot/`（ADR-010 托管）**已是一个带 `before_tool_call` + `decidePermission` + 硬 block + 审计的成熟 plugin**（633 测试）。边际成本是"给已有 handler 加一个 subagent 分支"，不是"从零造 plugin"。ROI 计算翻转。
+>
+> **已实施 Design 2（subagent 运行时守卫）**：autopilot 的 `before_tool_call` 检测 `:subagent:` session（OpenProse spawn 的 workflow 分支），以 `decidePermission(workflowAllowsDestructiveGit:false)` fail-closed 拦截 destructive git / credential_access / system_write。**完全运行时、不依赖 prompt、弱模型无法绕过**（检测基于 sessionKey 约定，不靠 agent 配合）。合法 destructive git 走既有 autopilot run + WORKFLOW.md `destructive_git.allow=true` 路径。详见 `.omc/plans/runtime-workflow-guard.md` 与 `packages/autopilot/index.ts` before_tool_call handler。
 
 #### 11.3.4 其他扩展点
 
@@ -872,7 +876,7 @@ N 个独立评委各自评分同一输出，然后一个仲裁 session 解决分
 
 | # | 能力 | 来源 | 触发条件 | 前置依赖 | 预估工作量 |
 |---|------|------|---------|---------|-----------|
-| B1 | ~~Skill-level hooks（破坏性 git 拦截）~~ | OpenClaw | ❌ **证伪**（2026-06-26）：oh-my-manus 自述 frontmatter `hooks:` 在 OpenClaw 不执行；官方 schema 无此字段。真拦截需写 OpenClaw plugin（`before_tool_call`），ROI 不足。**接受 prompt 级黑名单（C 路径），弱模型绕过是 prompt-only 固有限制** | — | 不实施 |
+| B1 | ~~Skill-level hooks（破坏性 git 拦截）~~ → **✅ 反转为 Design 2（subagent 运行时守卫）** | OpenClaw | ❌ skill-level frontmatter hooks 证伪（2026-06-26）：oh-my-manus 自述 OpenClaw 不执行 frontmatter `hooks:`。**但 2026-06-27 反转**：原"ROI 不足"前提错（误以为要从零写 plugin）；`packages/autopilot/` 已有 `before_tool_call`+`decidePermission`。实施 Design 2：检测 `:subagent:` session → `decidePermission(workflowAllowsDestructiveGit:false)` fail-closed 拦截 destructive git。运行时、不可绕过。合法 destructive git 走 autopilot run + WORKFLOW.md 配置路径 | autopilot plugin `before_tool_call` | **已实施（v2.1.0）** |
 | B2 | 结构化 agent 输出约定 | Claude Code | pipeline 模式实测发现下游解析不可靠时 | 无 | SKILL.md +10 行 |
 | B3 | Budget-aware 设计段 | Claude Code | 用户报告工作流成本过高或超时时 | 无 | SKILL.md 或 reference +15 行 |
 | B4 | `{baseDir}` 路径插值 | OpenClaw | templates 在非标准 cwd 下解析失败时 | A4 templates 上线 | SKILL.md 路径替换 |
