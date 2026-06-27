@@ -2,6 +2,17 @@
 
 ## Status
 
+> **⚠ KNOWN BUG (found 2026-06-27 by adversarial review, NOT STARTED):** The shipped
+> guard is **fail-open in production** — it reads `event.args` / `event.toolKind`, which
+> do not exist on the real OpenClaw event (the real shape is `params: Record` +
+> `toolKind: "code_mode_exec"` only). The component tests pass only because they feed a
+> fictional event shape the host never emits. The "verified / works" claims in this ADR
+> and in the §11.3.3 / §11.8 B1 design-doc rows **predate this finding and are wrong**.
+> Fix spec: [`docs/fixes/runtime-guard-event-shape.md`](../fixes/runtime-guard-event-shape.md).
+> This bug is PRE-EXISTING (from MA's autopilot, migrated in `be05e49`); ADR-011/012/013
+> inherited it. The decoupling itself (the architectural work this ADR records) is sound;
+> the guard's event-shape plumbing is what's broken.
+
 Accepted (2026-06-27). **Refines [ADR-012](012-dynamic-workflows-plugin-extraction.md)**
 — the runtime guard stays in `@openclaw/dynamic-workflows`, but the shared permission
 **primitives** move out into a dedicated neutral library. Resolves the plugin-to-plugin
