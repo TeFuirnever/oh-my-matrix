@@ -1,5 +1,5 @@
 /**
- * @omm/dynamic-workflows — OpenClaw plugin + shared permission library.
+ * @openclaw/dynamic-workflows — OpenClaw plugin + shared permission library.
  *
  * Two roles:
  * 1. PLUGIN ENTRY: `register(api)` registers a `before_tool_call` hook

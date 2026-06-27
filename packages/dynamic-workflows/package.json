@@ -1,5 +1,5 @@
 {
-  "name": "@omm/dynamic-workflows",
+  "name": "@openclaw/dynamic-workflows",
   "version": "0.1.0",
   "description": "Dynamic Workflows: runtime permission guard + shared permission primitives for OpenClaw workflow subagents",
   "main": "dist/index.js",

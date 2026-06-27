@@ -17,12 +17,12 @@ const goal_manager_1 = require("./src/goal-manager");
 const projection_1 = require("./src/projection");
 const types_1 = require("./src/types");
 const orchestrator_1 = require("./src/orchestrator");
-const dynamic_workflows_1 = require("@omm/dynamic-workflows");
+const dynamic_workflows_1 = require("@openclaw/dynamic-workflows");
 const workflow_config_1 = require("./src/workflow-config");
 const evidence_gate_1 = require("./src/evidence-gate");
 const command_runner_1 = require("./src/command-runner");
 const project_detector_1 = require("./src/project-detector");
-const dynamic_workflows_2 = require("@omm/dynamic-workflows");
+const dynamic_workflows_2 = require("@openclaw/dynamic-workflows");
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**

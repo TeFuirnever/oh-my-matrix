@@ -8,7 +8,7 @@
  *   T-3: stall-detector + orchestrator reducer with fake timers
  */
 import { describe, it, expect } from 'vitest';
-import { decidePermission } from '@omm/dynamic-workflows';
+import { decidePermission } from '@openclaw/dynamic-workflows';
 import { evaluateEvidence } from '../src/evidence-gate';
 import { runValidationCommands } from '../src/command-runner';
 import { checkStall } from '../src/stall-detector';

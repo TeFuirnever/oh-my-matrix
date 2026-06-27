@@ -51,7 +51,7 @@ short-circuits the lower-priority handlers.
 
 - `@openclaw/autopilot` keeps its run-scoped `before_tool_call` handler (priority 10),
   now importing `decidePermission` / `classifyCommand` / `appendAuditEntry` from
-  `@omm/dynamic-workflows`. Its `src/types.ts` re-exports `CommandClass` /
+  `@openclaw/dynamic-workflows`. Its `src/types.ts` re-exports `CommandClass` /
   `PermissionAuditEntry` so internal imports are unchanged.
 - The SKILL pack stays at `skill/dynamic-workflows/` (teaching material, distributed via
   MA's `resources/skills/default/` skill sync). It is NOT inside the plugin package —
@@ -89,7 +89,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 ## Consequences
 
 **Positive:**
-- Coherent workflow-plugin boundary; `@omm/dynamic-workflows` is the natural home for
+- Coherent workflow-plugin boundary; `@openclaw/dynamic-workflows` is the natural home for
   future workflow-runtime concerns.
 - Safety decoupled from autopilot's on/off (ADR-011 silent-degradation resolved).
 - Single source of truth for permission policy (both consumers import the same primitives).
@@ -103,7 +103,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 - ~998 LOC of tests relocated/rewritten (`permission-policy.test`,
   `audit-persister.test` moved; `permission-wiring.test` split — subagent describe moved
   to the new package's `subagent-guard.test`; `tier4` + `m2-types-projection` re-pointed
-  at `@omm/dynamic-workflows`).
+  at `@openclaw/dynamic-workflows`).
 - `audit-persister.ts` still writes to the `.autopilot/` subdir (cosmetic wart — both
   autopilot-run and subagent-guard audit share it, discriminated by `runId`). Renaming
   to a neutral subdir is a follow-up (would move existing audit files).
@@ -112,14 +112,14 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 
 ## Verification (2026-06-27)
 
-- `@omm/dynamic-workflows`: 113 tests pass (`permission-policy` 91, `audit-persister` 14,
+- `@openclaw/dynamic-workflows`: 113 tests pass (`permission-policy` 91, `audit-persister` 14,
   `subagent-guard` 8). Guard runtime-logs confirm priority-11 block on `:subagent:`
   destructive git + `enabled:false` loud-degradation.
 - `@openclaw/autopilot`: 528 tests pass | 4 skipped (was 637; −109 moved to
   dynamic-workflows: 91 + 14 + 4 subagent describe). Zero regression — autopilot-run
   policy + WORKFLOW.md escape hatch intact.
-- MA distribution: `sync-to-ma.sh` produced `omm-dynamic-workflows-0.1.0.tgz`,
-  MA installed `@omm/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
+- MA distribution: `sync-to-ma.sh` produced `openclaw-dynamic-workflows-0.1.0.tgz`,
+  MA installed `@openclaw/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
   `resources/claw-plugin/dynamic-workflows`, `init-default-plugins.ts` registers it.
 
 ## Follow-ups
@@ -144,6 +144,6 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
   (ralplan consensus: Planner→B, Architect→middle path, Critic→APPROVE middle path; user
   directed Option B)
 - Implementation: `packages/dynamic-workflows/index.ts`, `packages/dynamic-workflows/src/`
-- Consumer refactor: `packages/autopilot/index.ts` (imports from `@omm/dynamic-workflows`)
+- Consumer refactor: `packages/autopilot/index.ts` (imports from `@openclaw/dynamic-workflows`)
 - MA distribution: `MatrixAssistant/scripts/build-dynamic-workflows-plugin.js`,
   `MatrixAssistant/electron/utils/init-default-plugins.ts`
