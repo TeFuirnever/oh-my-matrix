@@ -1,19 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.version = exports.name = exports.id = exports.getAuditFilePath = exports.loadRecentAuditEntries = exports.appendAuditEntry = exports.classifyCommand = exports.decidePermission = void 0;
+exports.version = exports.name = exports.id = void 0;
 exports._resetForTest = _resetForTest;
 exports.register = register;
-const permission_policy_1 = require("./src/permission-policy");
-const audit_persister_1 = require("./src/audit-persister");
+const permission_policy_1 = require("@openclaw/permission-policy");
 const logger_1 = require("./src/logger");
-// ─── Library re-exports (consumed by @openclaw/autopilot) ───────────────
-var permission_policy_2 = require("./src/permission-policy");
-Object.defineProperty(exports, "decidePermission", { enumerable: true, get: function () { return permission_policy_2.decidePermission; } });
-Object.defineProperty(exports, "classifyCommand", { enumerable: true, get: function () { return permission_policy_2.classifyCommand; } });
-var audit_persister_2 = require("./src/audit-persister");
-Object.defineProperty(exports, "appendAuditEntry", { enumerable: true, get: function () { return audit_persister_2.appendAuditEntry; } });
-Object.defineProperty(exports, "loadRecentAuditEntries", { enumerable: true, get: function () { return audit_persister_2.loadRecentAuditEntries; } });
-Object.defineProperty(exports, "getAuditFilePath", { enumerable: true, get: function () { return audit_persister_2.getAuditFilePath; } });
 exports.id = 'dynamic-workflows';
 exports.name = 'Dynamic Workflows Guard';
 exports.version = '0.1.0';
@@ -85,7 +76,7 @@ function register(api) {
         if (decision.outcome !== 'block')
             return; // allow (read_only / workspace_write / network)
         (0, logger_1.logWithContext)('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
-        (0, audit_persister_1.appendAuditEntry)({
+        (0, permission_policy_1.appendAuditEntry)({
             at: Date.now(),
             runId: `subagent:${sessionKey}`,
             toolName,

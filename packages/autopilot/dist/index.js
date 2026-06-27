@@ -17,12 +17,12 @@ const goal_manager_1 = require("./src/goal-manager");
 const projection_1 = require("./src/projection");
 const types_1 = require("./src/types");
 const orchestrator_1 = require("./src/orchestrator");
-const dynamic_workflows_1 = require("@openclaw/dynamic-workflows");
+const permission_policy_1 = require("@openclaw/permission-policy");
 const workflow_config_1 = require("./src/workflow-config");
 const evidence_gate_1 = require("./src/evidence-gate");
 const command_runner_1 = require("./src/command-runner");
 const project_detector_1 = require("./src/project-detector");
-const dynamic_workflows_2 = require("@openclaw/dynamic-workflows");
+const permission_policy_2 = require("@openclaw/permission-policy");
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**
@@ -537,7 +537,7 @@ function register(api) {
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
             ? ({ outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
-            : (0, dynamic_workflows_1.decidePermission)({
+            : (0, permission_policy_1.decidePermission)({
                 toolName,
                 toolKind,
                 command: Array.isArray(event.args) ? event.args : [],
@@ -547,7 +547,7 @@ function register(api) {
                 workflowAllowsDestructiveGit: state.workflow?.destructiveGit?.allow ?? false,
             });
         // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-        const commandClass = (0, dynamic_workflows_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
+        const commandClass = (0, permission_policy_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
         const auditEntry = {
             at: Date.now(),
             runId,
@@ -566,7 +566,7 @@ function register(api) {
             permissionAudit: nextAudit,
         });
         // Persist audit entry to disk (fail-silent)
-        (0, dynamic_workflows_2.appendAuditEntry)(auditEntry, state.workspace?.path ?? process.cwd());
+        (0, permission_policy_2.appendAuditEntry)(auditEntry, state.workspace?.path ?? process.cwd());
         if (decision.outcome === 'allow')
             return;
         // Block: hard veto — gateway honors hookResult.block directly (line 995 of
@@ -936,7 +936,7 @@ function register(api) {
                 // Merge in-memory entries with persisted entries; in-memory takes precedence
                 permissionAudit: state?.permissionAudit?.length
                     ? state.permissionAudit
-                    : (0, dynamic_workflows_2.loadRecentAuditEntries)(state?.workspace?.path ?? process.cwd(), 200),
+                    : (0, permission_policy_2.loadRecentAuditEntries)(state?.workspace?.path ?? process.cwd(), 200),
                 workflow: state?.workflow,
                 workflowConfigError: state?.workflowConfigError,
             });

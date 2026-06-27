@@ -1,27 +1,18 @@
 /**
- * @openclaw/dynamic-workflows — OpenClaw plugin + shared permission library.
+ * @openclaw/dynamic-workflows — OpenClaw plugin: subagent runtime guard.
  *
- * Two roles:
- * 1. PLUGIN ENTRY: `register(api)` registers a `before_tool_call` hook
- *    (priority 11) that fail-closed blocks destructive ops for `:subagent:`
- *    sessions (OpenProse-spawned workflow branches). Higher priority than
- *    autopilot (10) and matrixassistant-audit (9) so it runs first and block
- *    short-circuits the lower-priority handlers. Main sessions + autopilot
- *    runs keep their own behavior (the guard only fires on `:subagent:`).
- * 2. LIBRARY: re-exports the shared permission primitives (decidePermission,
- *    classifyCommand, audit) consumed by @openclaw/autopilot's run-scoped
- *    policy. Single source of truth for safety policy. See ADR-012.
+ * Registers `before_tool_call` (priority 11) that fail-closed blocks
+ * destructive ops for `:subagent:` sessions (OpenProse-spawned workflow
+ * branches). Higher priority than autopilot (10) and matrixassistant-audit
+ * (9) so it runs first and block short-circuits the lower-priority handlers.
+ * Main sessions + autopilot runs keep their own behavior.
+ *
+ * The permission primitives (decidePermission, classifyCommand, audit) now
+ * live in @openclaw/permission-policy (ADR-013); this plugin imports them.
  */
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
-import { decidePermission, classifyCommand } from './src/permission-policy';
-import { appendAuditEntry } from './src/audit-persister';
+import { decidePermission, classifyCommand, appendAuditEntry } from '@openclaw/permission-policy';
 import { logWithContext } from './src/logger';
-
-// ─── Library re-exports (consumed by @openclaw/autopilot) ───────────────
-export { decidePermission, classifyCommand } from './src/permission-policy';
-export type { PermissionDecisionInput, PermissionDecision } from './src/permission-policy';
-export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath } from './src/audit-persister';
-export type { CommandClass, PermissionAuditEntry } from './src/types';
 
 export const id = 'dynamic-workflows';
 export const name = 'Dynamic Workflows Guard';

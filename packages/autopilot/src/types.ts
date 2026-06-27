@@ -61,12 +61,12 @@ export function toBlockedReason(value: string, fallback: BlockedReason = 'valida
 
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
 
-// ─── Shared permission types (now in @openclaw/dynamic-workflows, ADR-012) ───
+// ─── Shared permission types (now in @openclaw/permission-policy, ADR-012) ───
 // decidePermission + classifyCommand + audit-persister moved to
-// @openclaw/dynamic-workflows; autopilot is now a CONSUMER of those primitives.
+// @openclaw/permission-policy; autopilot is now a CONSUMER of those primitives.
 // Imported locally (AutopilotState.permissionAudit uses PermissionAuditEntry)
 // and re-exported so existing `import type { ... } from './types'` resolves.
-import type { CommandClass, PermissionAuditEntry } from '@openclaw/dynamic-workflows';
+import type { CommandClass, PermissionAuditEntry } from '@openclaw/permission-policy';
 export type { CommandClass, PermissionAuditEntry };
 
 export interface WorkspaceRecord {

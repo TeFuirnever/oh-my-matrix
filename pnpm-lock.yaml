@@ -14,9 +14,9 @@ importers:
 
   packages/autopilot:
     devDependencies:
-      '@openclaw/dynamic-workflows':
+      '@openclaw/permission-policy':
         specifier: workspace:*
-        version: link:../dynamic-workflows
+        version: link:../permission-policy
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.15
@@ -32,12 +32,27 @@ importers:
 
   packages/dynamic-workflows:
     devDependencies:
+      '@openclaw/permission-policy':
+        specifier: workspace:*
+        version: link:../permission-policy
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.15
       openclaw:
         specifier: 2026.5.28
         version: 2026.5.28
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@22.19.15)
+
+  packages/permission-policy:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
       typescript:
         specifier: ^5.0.0
         version: 5.9.3

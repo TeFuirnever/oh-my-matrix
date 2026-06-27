@@ -32,11 +32,11 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.28",
-    "@openclaw/dynamic-workflows": "0.1.0"
+    "@openclaw/permission-policy": "0.1.0"
   },
   "devDependencies": {
     "openclaw": "2026.5.28",
-    "@openclaw/dynamic-workflows": "workspace:*",
+    "@openclaw/permission-policy": "workspace:*",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0"
