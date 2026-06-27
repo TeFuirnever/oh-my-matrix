@@ -17,12 +17,12 @@ const goal_manager_1 = require("./src/goal-manager");
 const projection_1 = require("./src/projection");
 const types_1 = require("./src/types");
 const orchestrator_1 = require("./src/orchestrator");
-const permission_policy_1 = require("./src/permission-policy");
+const dynamic_workflows_1 = require("@omm/dynamic-workflows");
 const workflow_config_1 = require("./src/workflow-config");
 const evidence_gate_1 = require("./src/evidence-gate");
 const command_runner_1 = require("./src/command-runner");
 const project_detector_1 = require("./src/project-detector");
-const audit_persister_1 = require("./src/audit-persister");
+const dynamic_workflows_2 = require("@omm/dynamic-workflows");
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**
@@ -220,16 +220,6 @@ function findRunBySession(sessionKey) {
         return undefined;
     const state = stateByRun.get(runId);
     return state ? [runId, state] : undefined;
-}
-/**
- * Detect whether a sessionKey belongs to a spawned subagent (e.g. an
- * OpenProse-spawned workflow branch) vs the main interactive session.
- * Mirrors openclaw's convention (src/sessions/session-key-utils.ts):
- * subagent keys carry a `:subagent:` segment, e.g. `agent:main:subagent:<id>`.
- * Inlined here because openclaw does not export this helper via the plugin SDK.
- */
-function isSubagentSessionKey(sessionKey) {
-    return sessionKey.includes(':subagent:');
 }
 /** Generate a unique run ID using crypto.randomUUID (exported for testing). */
 function _generateRunIdForTest() {
@@ -531,49 +521,6 @@ function register(api) {
         if (!sessionKey)
             return;
         const entry = findRunBySession(sessionKey);
-        // Runtime workflow guard (Design 2): subagent sessions (e.g. OpenProse-spawned
-        // workflow branches) are not autopilot runs and previously fell through the
-        // gate below with ZERO enforcement. Weak models bypass the dynamic-workflows
-        // SKILL prompt CHECKPOINT, so enforce fail-closed destructive-op blocking at
-        // runtime for every subagent regardless of model. decidePermission with
-        // workflowAllowsDestructiveGit=false blocks destructive_git / credential_access
-        // / system_write and allows read_only / workspace_write / network. Legitimate
-        // destructive git must route through an autopilot run (WORKFLOW.md
-        // destructive_git.allow=true) — the only path that sets the allow flag.
-        if ((!entry || !entry[1].enabled) && isSubagentSessionKey(sessionKey)) {
-            const toolName = event.toolName;
-            const toolKind = event.toolKind;
-            const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
-            const decision = isConfiguredHighRisk
-                ? { outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-                : (0, permission_policy_1.decidePermission)({
-                    toolName,
-                    toolKind,
-                    command: Array.isArray(event.args) ? event.args : [],
-                    cwd: event.cwd ?? process.cwd(),
-                    workflowAllowsDestructiveGit: false,
-                });
-            if (decision.outcome === 'block') {
-                const cwd = event.cwd ?? process.cwd();
-                (0, logger_1.logWithContext)('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
-                // Phase 4: persist to the permission audit trail (same mechanism as autopilot
-                // runs). runId discriminates subagent-guard entries from autopilot-run ones.
-                (0, audit_persister_1.appendAuditEntry)({
-                    at: Date.now(),
-                    runId: `subagent:${sessionKey}`,
-                    toolName,
-                    commandClass: (0, permission_policy_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind),
-                    outcome: 'block',
-                    reason: decision.reason,
-                    cwd,
-                }, cwd);
-                return {
-                    block: true,
-                    blockReason: decision.message,
-                };
-            }
-            return; // allow (read_only / workspace_write / network)
-        }
         if (!entry?.[1].enabled)
             return;
         const [runId, state] = entry;
@@ -590,7 +537,7 @@ function register(api) {
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
             ? ({ outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
-            : (0, permission_policy_1.decidePermission)({
+            : (0, dynamic_workflows_1.decidePermission)({
                 toolName,
                 toolKind,
                 command: Array.isArray(event.args) ? event.args : [],
@@ -600,7 +547,7 @@ function register(api) {
                 workflowAllowsDestructiveGit: state.workflow?.destructiveGit?.allow ?? false,
             });
         // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-        const commandClass = (0, permission_policy_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
+        const commandClass = (0, dynamic_workflows_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
         const auditEntry = {
             at: Date.now(),
             runId,
@@ -619,7 +566,7 @@ function register(api) {
             permissionAudit: nextAudit,
         });
         // Persist audit entry to disk (fail-silent)
-        (0, audit_persister_1.appendAuditEntry)(auditEntry, state.workspace?.path ?? process.cwd());
+        (0, dynamic_workflows_2.appendAuditEntry)(auditEntry, state.workspace?.path ?? process.cwd());
         if (decision.outcome === 'allow')
             return;
         // Block: hard veto — gateway honors hookResult.block directly (line 995 of
@@ -989,7 +936,7 @@ function register(api) {
                 // Merge in-memory entries with persisted entries; in-memory takes precedence
                 permissionAudit: state?.permissionAudit?.length
                     ? state.permissionAudit
-                    : (0, audit_persister_1.loadRecentAuditEntries)(state?.workspace?.path ?? process.cwd(), 200),
+                    : (0, dynamic_workflows_2.loadRecentAuditEntries)(state?.workspace?.path ?? process.cwd(), 200),
                 workflow: state?.workflow,
                 workflowConfigError: state?.workflowConfigError,
             });

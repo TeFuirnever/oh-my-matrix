@@ -21,12 +21,12 @@ import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
-import { classifyCommand, decidePermission } from './src/permission-policy';
+import { classifyCommand, decidePermission } from '@omm/dynamic-workflows';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
 import { runValidationCommands } from './src/command-runner';
 import { detectValidationCommands } from './src/project-detector';
-import { appendAuditEntry, loadRecentAuditEntries } from './src/audit-persister';
+import { appendAuditEntry, loadRecentAuditEntries } from '@omm/dynamic-workflows';
 import { statSync } from 'fs';
 import { isAbsolute } from 'path';
 
@@ -241,17 +241,6 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
   if (!runId) return undefined;
   const state = stateByRun.get(runId);
   return state ? [runId, state] : undefined;
-}
-
-/**
- * Detect whether a sessionKey belongs to a spawned subagent (e.g. an
- * OpenProse-spawned workflow branch) vs the main interactive session.
- * Mirrors openclaw's convention (src/sessions/session-key-utils.ts):
- * subagent keys carry a `:subagent:` segment, e.g. `agent:main:subagent:<id>`.
- * Inlined here because openclaw does not export this helper via the plugin SDK.
- */
-function isSubagentSessionKey(sessionKey: string): boolean {
-  return sessionKey.includes(':subagent:');
 }
 
 /** Generate a unique run ID using crypto.randomUUID (exported for testing). */
@@ -565,50 +554,6 @@ export function register(api: OpenClawPluginApi): void {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
-
-    // Runtime workflow guard (Design 2): subagent sessions (e.g. OpenProse-spawned
-    // workflow branches) are not autopilot runs and previously fell through the
-    // gate below with ZERO enforcement. Weak models bypass the dynamic-workflows
-    // SKILL prompt CHECKPOINT, so enforce fail-closed destructive-op blocking at
-    // runtime for every subagent regardless of model. decidePermission with
-    // workflowAllowsDestructiveGit=false blocks destructive_git / credential_access
-    // / system_write and allows read_only / workspace_write / network. Legitimate
-    // destructive git must route through an autopilot run (WORKFLOW.md
-    // destructive_git.allow=true) — the only path that sets the allow flag.
-    if ((!entry || !entry[1].enabled) && isSubagentSessionKey(sessionKey)) {
-      const toolName = event.toolName as string;
-      const toolKind = event.toolKind as string;
-      const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
-      const decision = isConfiguredHighRisk
-        ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-        : decidePermission({
-            toolName,
-            toolKind,
-            command: Array.isArray(event.args) ? event.args : [],
-            cwd: (event.cwd as string | undefined) ?? process.cwd(),
-            workflowAllowsDestructiveGit: false,
-          });
-      if (decision.outcome === 'block') {
-        const cwd = (event.cwd as string | undefined) ?? process.cwd();
-        logWithContext('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
-        // Phase 4: persist to the permission audit trail (same mechanism as autopilot
-        // runs). runId discriminates subagent-guard entries from autopilot-run ones.
-        appendAuditEntry({
-          at: Date.now(),
-          runId: `subagent:${sessionKey}`,
-          toolName,
-          commandClass: classifyCommand(toolName, Array.isArray(event.args) ? event.args : [], toolKind),
-          outcome: 'block',
-          reason: decision.reason,
-          cwd,
-        }, cwd);
-        return {
-          block: true,
-          blockReason: (decision as { outcome: 'block'; message: string }).message,
-        };
-      }
-      return; // allow (read_only / workspace_write / network)
-    }
 
     if (!entry?.[1].enabled) return;
 

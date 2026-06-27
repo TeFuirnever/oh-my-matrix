@@ -1,0 +1,32 @@
+{
+  "name": "@omm/dynamic-workflows",
+  "version": "0.1.0",
+  "description": "Dynamic Workflows: runtime permission guard + shared permission primitives for OpenClaw workflow subagents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "plugin": true,
+    "hooks": [
+      "before_tool_call"
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "pack": "pnpm pack"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.5.28"
+  },
+  "devDependencies": {
+    "openclaw": "2026.5.28",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

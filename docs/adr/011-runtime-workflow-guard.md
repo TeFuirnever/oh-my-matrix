@@ -2,6 +2,11 @@
 
 ## Status
 
+**Superseded by [ADR-012](012-dynamic-workflows-plugin-extraction.md) (2026-06-27)** —
+the runtime guard was extracted out of the autopilot plugin into a dedicated
+`@omm/dynamic-workflows` plugin. The in-plugin design recorded below is preserved
+as history.
+
 Accepted (2026-06-27). **Reverses the B1 conclusion recorded in
 [`docs/design/dynamic-workflows-design.md`](../design/dynamic-workflows-design.md) §11.8**
 (previously "disproven / ROI insufficient — accept prompt-only").

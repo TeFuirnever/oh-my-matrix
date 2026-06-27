@@ -102,12 +102,13 @@ and history rewrites (`git rebase`, `git filter-branch`) unless the workflow
 configuration explicitly sets `destructive_git.allow: true` and cwd is contained
 inside the workflow workspace. If that config is absent or ambiguous, block.
 
-This blacklist is also enforced at **runtime**: the autopilot plugin's
-`before_tool_call` hook hard-blocks destructive git, credential access, and
-system writes for any `:subagent:` session, so a model that skips this
-preflight is still blocked at the gateway. If a workflow legitimately needs
-destructive git, run that step in the **main session** with explicit user
-approval — workflow subagents cannot perform it.
+This blacklist is also enforced at **runtime**: the `@omm/dynamic-workflows`
+plugin's `before_tool_call` hook (priority 11, runs before autopilot + audit)
+hard-blocks destructive git, credential access, and system writes for any
+`:subagent:` session, so a model that skips this preflight is still blocked at
+the gateway. If a workflow legitimately needs destructive git, run that step in
+the **main session** with explicit user approval — workflow subagents cannot
+perform it.
 
 After completing preflight, announce the workflow to the user:
 

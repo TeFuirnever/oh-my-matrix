@@ -10,7 +10,8 @@ export declare function isValidBlockedReason(value: string): value is BlockedRea
 /** H-2: Safe BlockedReason coercion — returns the value if valid, otherwise falls back. */
 export declare function toBlockedReason(value: string, fallback?: BlockedReason): BlockedReason;
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
-export type CommandClass = 'read_only' | 'workspace_write' | 'validation' | 'safe_git' | 'worktree_create' | 'workspace_cleanup' | 'destructive_git' | 'network' | 'credential_access' | 'system_write' | 'unknown';
+import type { CommandClass, PermissionAuditEntry } from '@omm/dynamic-workflows';
+export type { CommandClass, PermissionAuditEntry };
 export interface WorkspaceRecord {
     root: string;
     path: string;
@@ -41,16 +42,6 @@ export interface EvidenceSummary {
     commands: EvidenceCommandResult[];
     completedAt?: number;
     failureReason?: string;
-}
-export interface PermissionAuditEntry {
-    at: number;
-    runId: string;
-    toolName: string;
-    commandClass: CommandClass;
-    outcome: 'allow' | 'require_approval' | 'block';
-    reason: string;
-    cwd?: string;
-    commandSummary?: string;
 }
 export interface ValidationCommand {
     id: string;

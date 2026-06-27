@@ -61,18 +61,13 @@ export function toBlockedReason(value: string, fallback: BlockedReason = 'valida
 
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
 
-export type CommandClass =
-  | 'read_only'
-  | 'workspace_write'
-  | 'validation'
-  | 'safe_git'
-  | 'worktree_create'
-  | 'workspace_cleanup'
-  | 'destructive_git'
-  | 'network'
-  | 'credential_access'
-  | 'system_write'
-  | 'unknown';
+// ─── Shared permission types (now in @omm/dynamic-workflows, ADR-012) ───
+// decidePermission + classifyCommand + audit-persister moved to
+// @omm/dynamic-workflows; autopilot is now a CONSUMER of those primitives.
+// Imported locally (AutopilotState.permissionAudit uses PermissionAuditEntry)
+// and re-exported so existing `import type { ... } from './types'` resolves.
+import type { CommandClass, PermissionAuditEntry } from '@omm/dynamic-workflows';
+export type { CommandClass, PermissionAuditEntry };
 
 export interface WorkspaceRecord {
   root: string;
@@ -107,17 +102,6 @@ export interface EvidenceSummary {
   commands: EvidenceCommandResult[];
   completedAt?: number;
   failureReason?: string;
-}
-
-export interface PermissionAuditEntry {
-  at: number;
-  runId: string;
-  toolName: string;
-  commandClass: CommandClass;
-  outcome: 'allow' | 'require_approval' | 'block';
-  reason: string;
-  cwd?: string;
-  commandSummary?: string;
 }
 
 export interface ValidationCommand {

@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/autopilot",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,8 @@
     "pack": "pnpm pack"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.5.28"
+    "openclaw": ">=2026.5.28",
+    "@omm/dynamic-workflows": "0.1.0"
   },
   "devDependencies": {
     "openclaw": "2026.5.28",
