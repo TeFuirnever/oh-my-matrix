@@ -106,7 +106,7 @@ Do not claim a source change is active in MatrixAssistant/OpenClaw until that ho
 
 ## Current Gaps
 
-- Host deploy remains internal and should be documented as a reproducible runbook.
+- Host deploy: reproducible runbook scaffolded at [`docs/runbooks/host-deploy.md`](runbooks/host-deploy.md) — repo-side steps executable, host-internal steps marked `[TODO:host]` pending the MA team.
 - README/docs now represent autopilot as first-class, but release packaging still needs a public policy.
 - Permission policy needs a stronger shell model for redirect and quote-edge cases.
 - Workflow observability needs a UI contract for branch graph, blocked calls, and evidence state.
