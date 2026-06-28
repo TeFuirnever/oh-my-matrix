@@ -1,130 +1,88 @@
 # omm Development Roadmap
 
-> 🔄 **方向更新 (0.7.0)** — `team` 编排方向已被 **Dynamic Workflows** 取代（[ADR-009](adr/009-dynamic-workflows-via-openprose.md)）。当前方向：AI 自动生成 `.prose` 编排程序 + OpenProse 执行。下面的 Phase 1–4 是 v0.x 的**历史记录**。
->
-> **2026-06-18 update ([ADR-009](adr/009-dynamic-workflows-via-openprose.md)):** Dynamic Workflows skill package shipped — AI generates .prose programs, OpenProse executes. See [design doc](design/dynamic-workflows-design.md).
+This roadmap describes the current OpenClaw runtime stack direction. v0.x team/MCP work is archived under [`docs/archive/`](archive/) and is no longer the active implementation surface.
 
-## v0.x Final State（历史快照）
+## Current North Star
 
-> 以下是 v0.x 实现移除前的最终状态快照，仅供追溯；当前仓库无代码。
+Make OpenClaw capable of safe long-running and parallel autonomous work:
 
-omm **曾**交付核心工作流引擎与消费者集成工具：
+- **Autopilot** keeps one goal moving across turns, retries, stalls, evidence checks, and host UI projection.
+- **Dynamic Workflows** fans work out across many subagents through `.prose` and OpenProse.
+- **Permission Policy** gives both paths the same runtime safety primitives.
 
-- **6 tools** registered via OpenClaw Plugin ABI (incl. MA employee-bridge: list/dispatch/result/result_batch)
-- **1 packaged skill** (core: team) — all other skills removed (ralph/autopilot/goal delegated to host `@openclaw/autopilot`; ping/cancel removed as non-essential; artifact skills deleted per [ADR-008](adr/008-delegation-to-host.md))
-- **1 MCP server** for state access (omm-mcp; memory and trace removed as non-essential)
-- **State validation** for the team mode (single-mode, post-ADR-008) with `synthesizing` phase and `subtasks` schema (v0.5)
-- **264 tests** passing, CI pipeline operational
-- **Compliance and consumer-seed toolchain** (scan-names, generate/verify inlines, verify-bundle, verify-provenance, smoke-mcp, MA/OpenClaw seeders)
+## P0: Public Truth Alignment
 
-See [Architecture Overview](architecture.md) for the current (post-reset) architecture narrative.
+| Deliverable | Why | Status |
+|---|---|---|
+| README positions Autopilot as a first-class module | Existing README underrepresented the largest active package | Done 2026-06-28 |
+| Architecture docs show all three modules | Prevents future drift toward “Dynamic Workflows only” | Done 2026-06-28 |
+| Website getting-started matches current packages | Old site said the repo was docs-only | Done 2026-06-28 |
+| Asset credits include hand-drawn hero and architecture diagram prompts | Generated images must be reproducible and licensed | Done 2026-06-28 |
 
----
+Exit criteria:
 
-## Phase 1: Workflow Runtime（工作流运行时）
+- README, `CONTEXT.md`, `docs/architecture.md`, `website/index.md`, and getting-started agree on module boundaries.
+- No public doc claims package release or adoption evidence that does not exist.
+- `pnpm docs:build` passes.
 
-**Goal:** Make ralph/autopilot/team workflows production-usable with persistence, mutual exclusion, and pipeline orchestration.
+## P1: Host Deploy Runbook
 
-**Priority:** High — blocks workflow usability
+| Deliverable | Why | Status |
+|---|---|---|
+| Internal host-deploy steps documented | Source tests do not prove the host loaded new dist | Planned |
+| Deployed-dist smoke checklist | Runtime guard and autopilot hooks can fail by event-shape drift | Planned |
+| Package refresh contract for MatrixAssistant/OpenClaw | Keeps vendored/bundled plugin copies auditable | Planned |
 
-| Deliverable                           | Description                                                                                                    | Reference                                      | Status              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------- |
-| Workflow transition guard（互斥守卫） | Enforce single active workflow mode at a time; reject `active=true` writes when another mode is already active | oh-my-codex `workflow-transition-reconcile.ts` | ✓ Done (2026-04-26) |
-| Ralph persistence                     | Progress ledger（进度账本）and PRD management; enable resume across sessions                                   | oh-my-codex `ralph/persistence.ts`             | ✓ Done (2026-04-26) |
-| Pipeline stage definitions            | Define autopilot stage sequence (analyze → plan → execute → verify); enable structured multi-step execution    | oh-my-codex `pipeline/orchestrator.ts`         | ✓ Done (2026-04-26) |
+Exit criteria:
 
-**Exit criteria:**
+- A maintainer can rebuild `autopilot`, `dynamic-workflows`, and `permission-policy`, refresh the host copy, restart the gateway, and prove the loaded dist matches source.
 
-- [x] Only one of ralph/autopilot/team can be `active=true` at any time
-- [x] Ralph can resume from persisted state after session restart
-- [x] Autopilot executes a multi-step plan with per-step verification
-- [x] All existing tests continue to pass + new tests for transition guard
+## P2: Autopilot Release Readiness
 
-**Estimated scope:** ~5-8 new files, ~500-800 lines
+| Deliverable | Why | Status |
+|---|---|---|
+| Public package policy | Packages are private today; users need clear install story | Planned |
+| `WORKFLOW.md` examples | Autopilot config exists but needs copy-pasteable examples | Planned |
+| Projection contract docs | Host UI needs stable fields and failure semantics | Planned |
+| Evidence gate examples | Users need to understand required vs optional validation | Planned |
 
----
+Exit criteria:
 
-## Phase 2: Extended MCP（扩展 MCP 服务器）
+- Autopilot has a documented integration path, config examples, and host UI contract.
+- `pnpm --filter @openclaw/autopilot test` remains green.
 
-**Goal:** Add memory and trace MCP servers for richer workflow context.
+## P3: Dynamic Workflows Observability
 
-**Priority:** Medium — enhances workflow quality but not blocking
+| Deliverable | Why | Status |
+|---|---|---|
+| Workflow graph contract | Large fan-out runs need visible branch state | Planned |
+| Blocked-call reporting | Guard blocks should be understandable, not mysterious | Planned |
+| Pattern examples gallery | The 8 workflow modes need realistic examples | Planned |
 
-| Deliverable       | Description                                                                  | Reference              | Status              |
-| ----------------- | ---------------------------------------------------------------------------- | ---------------------- | ------------------- |
-| Memory MCP server | Persistent key-value memory store（持久化记忆存储）for cross-session context | oh-my-codex memory MCP | ✓ Done (2026-04-26) |
-| Trace MCP server  | Execution trace recording and querying（执行轨迹记录）                       | oh-my-codex trace MCP  | ✓ Done (2026-04-26) |
+Exit criteria:
 
-**Exit criteria:**
+- A host can render `.prose` execution progress, branch outputs, blocked calls, and final synthesis status.
 
-- [x] Memory MCP: read/write/list/delete operations over stdio
-- [x] Trace MCP: record execution events, query by session/time range
-- [x] Both servers follow zero-dependency pattern ([ADR-003](archive/adr/003-zero-dependency-mcp.md))
-- [x] Consumer integration updated (seed config, bundle manifest)
+## P4: Permission Policy Hardening
 
-**Estimated scope:** ~4-6 new files, ~400-600 lines
+| Deliverable | Why | Status |
+|---|---|---|
+| Shell redirect model | Current tokenize-based parser does not model `> file` writes | Planned |
+| Quote-aware operator splitting | Reduces fail-closed false positives | Planned |
+| Framework tool allow/deny registry | Non-shell tools need explicit safety classification | Planned |
+| Audit schema docs | Security analysis needs stable event fields | Planned |
 
----
+Exit criteria:
 
-## Phase 3: Polish and Extensibility（完善与扩展性）
+- Known limitations in [`docs/fixes/runtime-guard-event-shape.md`](fixes/runtime-guard-event-shape.md) are either fixed or explicitly accepted with tests.
 
-**Goal:** Improve developer experience, add extensibility hooks, expand test coverage.
+## Historical v0.x Snapshot
 
-**Priority:** Low — quality-of-life improvements
+The old roadmap phases for ralph/team/MCP/hooks/agent prompt libraries are historical. They remain useful for design archaeology only:
 
-| Deliverable            | Description                                                    | Reference                          | Status                                                                                                |
-| ---------------------- | -------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Hook plugin system     | Dynamic hook loading from `.omm/hooks/*.mjs`（动态钩子加载）   | oh-my-codex hook loader/dispatcher | ✓ Done (2026-04-26)                                                                                   |
-| Agent prompt library   | Reusable role prompts (planner, architect, executor, verifier) | oh-my-codex 33 agent prompt files  | ✓ Done (2026-04-26)                                                                                   |
-| Expanded test coverage | Integration tests, MCP server tests, edge case coverage        | Target 80%+ coverage               | ✓ Done (2026-04-26) — 96.83% statements / 98.27% functions / 91.07% branches via `pnpm test:coverage` |
+- [`docs/archive/adr/`](archive/adr/)
+- [`docs/archive/contracts/`](archive/contracts/)
+- [`docs/archive/plans/`](archive/plans/)
+- [`docs/archive/reviews/`](archive/reviews/)
 
-**Exit criteria:**
-
-- [x] Custom hooks can be loaded and dispatched at session lifecycle points
-- [x] At least 5 agent prompts available for common workflow roles
-- [x] Test coverage ≥ 80% across all packages
-
----
-
-## Phase 4: Agent Library Expansion + MCP Capability Surface（智能体库扩展与 MCP 能力面）
-
-**Goal:** Broaden agent persona coverage to match the core development lifecycle, and expose richer omm telemetry through standard MCP channels (Resources, Prompts, Progress) for downstream UI consumers (MatrixAssistant).
-
-**Priority:** Medium — unlocks UI integration and lifecycle coverage
-
-| Deliverable                          | Description                                                                                  | Reference                                            | Status                                                       |
-| ------------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------ |
-| Agent prompt expansion (P0+P1)       | Port 11 oh-my-claudecode agents covering planning, tracing, review, debugging, exploration   | `oh-my-claudecode/agents/`                           | ✓ Done (2026-05-08) — 16 total agents (5 starter + 11 ported) |
-| 7-token strip-check in CI            | Prevent Claude-only semantic tokens from leaking into ported prompts                         | `omm-agent-prompts.test.ts`                          | ✓ Done (2026-05-08) — 376/376 tests pass                     |
-| MCP capability survey                | Determine which MCP capabilities (Resources/Prompts/Progress) the OpenClaw + MA stack supports | `docs/archive/research/mcp-capability-survey.md`             | ✓ Done (2026-05-08) — R1 recommended                         |
-| MCP Resources advertisement          | Upgrade omm-mcp + omm-mcp-trace to advertise `resources/list` + `resources/read`              | `docs/archive/research/mcp-capability-survey.md` §4 R1 sketch | ✓ Done (2026-05-08) — `omm://state/<key>` + `omm://trace/<sessionId>` |
-| MCP Prompts advertisement            | Expose agent prompts via `prompts/list` + `prompts/get`                                      | MCP spec 2025-06-18                                  | ✓ Done (2026-05-08) — `omm://prompts/<name>`                          |
-| Progress notifications verification  | Confirm whether MA client routes `notifications/progress`                                    | follow-up research                                   | ✓ Done (2026-05-08) — DEFER (MA self-audit P6 marks unsupported; see `docs/archive/research/mcp-progress-notification-survey.md`) |
-| omm-docs skill                       | Documentation generation pipeline (research → draft → verify); activates writer + document-specialist | omm-skills new entry                          | ✓ Done (2026-05-08) — v0.x skill bundle (since removed — see docs/archive/); bundled by suite builder |
-| omm-ui skill                         | UI artifact generation pipeline (discover → generate → verify); activates designer; produces components / specs / theme tokens | omm-skills new entry                  | ✓ Done (2026-05-08) — v0.x skill bundle (since removed — see docs/archive/); bundled by suite builder |
-| P2 agent porting                     | Port git-master, scientist, code-simplifier with target skill anchors                        | `oh-my-claudecode/agents/`                           | ✓ Done (2026-05-13) — 19 total agents (5 starter + 14 ported); `omm-git`, `omm-research`, `omm-refactor` |
-
-**Exit criteria:**
-
-- [x] Agent inventory ≥ 15 with REAL or PLACEHOLDER skill anchors documented
-- [x] CI strip-check enforces no Claude-only token regressions
-- [x] Research artifact recommends a path for MCP UI integration with evidence
-- [x] MCP Resources advertised by ≥ 1 omm MCP server
-- [x] MCP Prompts advertised by omm-mcp
-- [x] Automated MA-consumer wire-contract roundtrip passes — evidence: `.omc/state/ma-roundtrip-evidence.json` (generated by `node omm-scripts/omm-smoke-mcp.mjs --as-ma-consumer`); drop-in MA registry snippets: `docs/archive/contracts/ma-integration-snippets.md`
-- [x] Human-side confirmation: omm MCP servers seeded into `~/.openclaw/openclaw.json` via `omm-ma-seed.mjs --write`, MA restarted, three `omm-*` servers visible in MA's MCP catalog UI
-
----
-
-## Non-Goals（明确不做）
-
-These are deliberately excluded based on architectural decisions:
-
-| Feature                   | Reason                                           | ADR                                           |
-| ------------------------- | ------------------------------------------------ | --------------------------------------------- |
-| Standalone CLI            | OpenClaw Gateway provides tool dispatch          | [ADR-001](archive/adr/001-pure-plugin-no-cli.md)      |
-| tmux/worktree parallelism | Host provides team primitives                    | [ADR-002](adr/002-team-delegation-to-host.md) |
-| HUD / status bar          | Host UI layer (Electron) provides equivalent     | N/A                                           |
-| Notification subsystem    | Host (MatrixAssistant) has its own notifications | N/A                                           |
-| Rust native crates        | Not needed for plugin-only architecture          | [ADR-001](archive/adr/001-pure-plugin-no-cli.md)      |
-| Code-intel MCP            | OpenClaw may provide LSP integration natively    | N/A                                           |
+Do not update archived records to fit the current story. Add a new ADR or active roadmap item instead.

@@ -1,45 +1,54 @@
 # Security Policy
 
-## Supported Versions
+## Supported Scope
 
-| Version | Supported |
-| ------- | --------- |
-| 0.3.x   | Yes       |
-| < 0.3   | No        |
+This repository is WIP. Security support applies to the current `master` branch only.
+
+Covered:
+
+- `packages/autopilot/`
+- `packages/dynamic-workflows/`
+- `packages/permission-policy/`
+- `skill/dynamic-workflows/`
+- packaging/deployment docs that affect host runtime safety
+
+Archived v0.x records under `docs/archive/` are historical and not supported as live software.
 
 ## Reporting a Vulnerability
 
-**Do not file public issues for security vulnerabilities.**
+Do not file public issues for security vulnerabilities.
 
-Please report security vulnerabilities by emailing **504897664@qq.com** or
-using GitHub's private vulnerability reporting feature. We will acknowledge
-receipt within 48 hours and provide a timeline for a fix.
+Report privately by email to **504897664@qq.com** or through GitHub private vulnerability reporting if enabled. Include:
 
-## Security Practices
+- affected package/path
+- reproduction steps
+- expected impact
+- whether the issue affects source tests, packaged dist, or deployed host behavior
 
-oh-my-matrix implements the following security measures:
+Expected response target: acknowledgement within 48 hours.
 
-- **Path-traversal defense**: All state/memory/trace keys are validated against
-  a strict allowlist pattern (`^[a-z0-9][a-z0-9_-]{0,63}$/i`)
-- **Atomic writes**: State files use tmp+rename to prevent partial writes
-- **Cross-process locking**: `O_EXCL`-based file locks prevent concurrent write
-  races across plugin and MCP server processes (ADR-005)
-- **Workflow exclusivity**: Only one workflow mode (ralph/autopilot/team) can be
-  active simultaneously
-- **Input size limits**: MCP servers enforce a 1 MiB hard cap per JSON-RPC
-  request line
-- **Trace rotation**: Sessions over 8 MiB are rotated with a 40 MiB ceiling
-- **Zero runtime dependencies**: MCP servers have no npm dependencies (ADR-003),
-  minimizing supply-chain attack surface
+## Current Security Model
 
-## Dependency Auditing
+omm treats workflow subagents as untrusted.
+
+- `@openclaw/dynamic-workflows` registers `before_tool_call` priority 11 for `:subagent:` sessions.
+- `@openclaw/permission-policy` classifies commands and returns permission decisions.
+- Subagent sessions use fail-closed defaults.
+- Audit entries are persisted under `.autopilot/`.
+
+Blocked classes include destructive git, workspace cleanup, credential access, system writes, shell substitution, process substitution, and wrapper exec.
+
+## Known Limitations
+
+The current command handling is tokenize-based, not a full shell parser. Known limitations include redirect writes, unknown non-shell framework tools, and quoted operator false positives.
+
+See [`docs/fixes/runtime-guard-event-shape.md`](docs/fixes/runtime-guard-event-shape.md) for the current limitation record.
+
+## Maintainer Checks
 
 ```bash
+pnpm --filter @openclaw/autopilot test
+pnpm --filter @openclaw/dynamic-workflows test
+pnpm --filter @openclaw/permission-policy test
 pnpm audit
-pnpm omm:verify-provenance
 ```
-
-## Scope
-
-This policy covers the omm plugin, all MCP servers (omm-mcp, omm-mcp-memory,
-omm-mcp-trace), and the build/verification toolchain.

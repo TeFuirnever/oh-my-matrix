@@ -2,42 +2,71 @@
 
 > Single-context repo. All domain vocabulary lives here.
 
-> **方向更新 (0.7.0)** — `team` 编排方向已被 **Dynamic Workflows** 取代（[ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md)）。v0.x 实现已移除，见 [`docs/archive/`](docs/archive/)。
-
 ## 方向
 
-oh-my-matrix 为 OpenClaw 及衍生项目提供 **AI 自主多 agent 编排能力（Dynamic Workflows）**：
+oh-my-matrix 为 OpenClaw 及衍生宿主提供 **autonomous agent runtime stack**。当前不是单一 Dynamic Workflows 项目，而是三模块协作：
 
-- **AI 自动生成 `.prose` 编排程序** —— agent 根据自然语言任务，选择合适的编排模式（fan-out/pipeline/adversarial-verify/tournament 等 8 种），生成 `.prose` 程序。
-- **OpenProse 执行** —— `.prose` 程序经 OpenProse（OpenClaw bundled plugin）执行，扇出 subagent，中间结果不进用户上下文，只回最终结果。
-- **Skill 包交付** —— 核心交付物是 `skill/dynamic-workflows/SKILL.md`，教 agent 何时/如何编排。运行时由 OpenProse 提供。
-- **与 autopilot 并存互补** —— autopilot=连续自主循环；dynamic-workflows=多 agent 扇出/DAG/交叉验证。
-- **纯插件形态** —— 无独立 CLI、无原生模块；通过 OpenClaw 插件 API 或 MCP 消费。
+- **Autopilot**: 长程任务连续执行。负责目标、状态、重试、stall 检测、证据门、projection 与 `WORKFLOW.md` 配置。
+- **Dynamic Workflows**: 多 agent 编排。agent 根据自然语言生成 `.prose` 程序，经 OpenProse 执行 fan-out / pipeline / adversarial verification。
+- **Permission Policy**: 运行时边界。为 autopilot 和 workflow subagent 共用 command classification、permission decision、audit persistence。
+
+v0.x 的 `team` / MCP / plugin 实现已移除，设计记录保留在 [`docs/archive/`](docs/archive/)。当前活跃源码位于 [`packages/`](packages/) 与 [`skill/dynamic-workflows/`](skill/dynamic-workflows/)。
 
 ## 核心概念
 
+### Autopilot
+
+OpenClaw-native continuous execution plugin。它让一个长程任务跨 turn 继续运行，并在工具错误、stall、证据缺失、权限拒绝、token 预算等情况下进入可解释状态，而不是静默漂移。
+
+当前源码包：[`packages/autopilot/`](packages/autopilot/)，package name 为 `@openclaw/autopilot`。
+
 ### Dynamic Workflow
 
-AI agent 根据用户自然语言任务自动生成的 `.prose` 编排程序。包含 agent 定义、并行/管道/循环/条件控制流、上下文传递，经 OpenProse 执行。对标 Claude Code dynamic workflows。
+AI agent 根据用户自然语言任务生成的 `.prose` 编排程序。包含 agent 定义、并行/管道/循环/条件控制流、上下文传递，经 OpenProse 执行。
+
+适用场景：大范围审计、并行调研、跨模型/跨角色验证、候选方案筛选、递归搜索。
 
 ### .prose 程序
 
-OpenProse 的编排 DSL。markdown-first 语法，2 空格缩进，支持 `session`（工作单元）、`agent`（角色定义）、`parallel:`（并行）、`| filter/map/reduce/pmap`（管道）、`block`（可复用子程序）、`if **AI condition**:`（AI 条件分支）。
+OpenProse 的编排 DSL。markdown-first 语法，2 空格缩进，支持 `session`、`agent`、`parallel:`、`filter/map/reduce/pmap`、`block`、AI 条件分支等。
 
-### 编排模式
+### Dynamic Workflows skill
 
-8 种核心模式：fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop。大多数任务匹配一种或两种的组合。
-
-### Skill
-
-SKILL.md 文件，由 OpenClaw 的 AgentSkills 系统消费。omm 当前交付 `dynamic-workflows` skill（AI 自主生成 .prose 多 agent 编排）。
+[`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md) 是给 agent 的操作手册。它规定何时使用 workflow、如何选择 8 种模式、如何验证 `.prose`、如何在 OpenProse 不可用时降级。
 
 ### OpenProse
 
-OpenClaw bundled plugin，提供 .prose 的编译（`prose compile`）和执行（`prose run`）。agent 激活 OpenProse skill 后成为 VM：每个 `session` 语句映射到 `sessions_spawn`，`parallel:` 块并发执行，状态持久化到 `.prose/runs/`。
+OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期间，中间分支结果留在 workflow state 中，最终只把 synthesis 返回给用户上下文。
+
+### Permission Policy
+
+[`@openclaw/permission-policy`](packages/permission-policy/) 是共享安全原语库。它被 autopilot 和 dynamic workflows 共同消费，负责：
+
+- command / tool classification
+- permission decision
+- real `before_tool_call` event extraction
+- audit JSONL persistence
+
+### Runtime Guard
+
+[`@openclaw/dynamic-workflows`](packages/dynamic-workflows/) 注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed。它不是 prompt 约束，而是 gateway hook 级别的运行时边界。
+
+### Host Deploy
+
+本仓库保存源码和测试。OpenClaw/MatrixAssistant 这类宿主加载的是打包后的 plugin dist。源码变更后必须走宿主内部部署刷新流程，不能只以仓库测试通过作为“线上已生效”的证据。
 
 ## 设计原则
 
-- **ADR-009（Dynamic Workflows via OpenProse）**：不自建运行时；教 agent 生成 .prose，由 OpenProse 执行。见 [`docs/adr/009-dynamic-workflows-via-openprose.md`](docs/adr/009-dynamic-workflows-via-openprose.md)。
-- **ADR-002 / ADR-008（委托哲学）**：团队并行与自主循环交给宿主。保留在 [`docs/adr/`](docs/adr/) 作为历史脊柱。
-- 历史实现型 ADR 归档于 [`docs/archive/adr/`](docs/archive/adr/)。
+- **Autopilot 是一等模块**: README、architecture、roadmap 不能再把它写成历史委托或 partial 角落项。
+- **Workflows 负责并行，Autopilot 负责持续**: fan-out 与 long-running loop 是互补能力，不互相替代。
+- **Permission policy 是共享平台层**: 安全边界不应复制在每个 plugin 中。
+- **运行时证据优先于叙事**: 公开文档只写源码、测试和 live evidence 能支撑的能力。
+- **历史不重写**: `docs/archive/` 保留旧 v0.x 设计记录，内部链接可能 stale by design。
+
+## ADR 索引
+
+- [ADR-009: Dynamic Workflows via OpenProse](docs/adr/009-dynamic-workflows-via-openprose.md)
+- [ADR-010: Autopilot Source Hosting](docs/adr/010-autopilot-source-hosting.md)
+- [ADR-011: Runtime Workflow Guard](docs/adr/011-runtime-workflow-guard.md)
+- [ADR-012: Dynamic Workflows Plugin Extraction](docs/adr/012-dynamic-workflows-plugin-extraction.md)
+- [ADR-013: Permission Policy Library](docs/adr/013-permission-policy-library.md)

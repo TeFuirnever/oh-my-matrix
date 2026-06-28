@@ -1,71 +1,112 @@
 # omm Architecture Overview
 
-> 🔄 **方向更新 (0.7.0)** — v0.x 的 `team` 编排实现已移除（见 [`archive/`](archive/)）。当前方向：**Dynamic Workflows**——对标 Claude Code dynamic workflows，通过 AI 自动生成 `.prose` 编排程序并经 OpenProse 执行，实现多 agent 自主编排。见 [ADR-009](adr/009-dynamic-workflows-via-openprose.md) 与 [设计文档](design/dynamic-workflows-design.md)。
+oh-my-matrix (omm) 是 OpenClaw 宿主的 autonomous agent runtime stack。当前架构由三个一等模块组成：
 
-## Project Positioning
+1. `@openclaw/autopilot`: 长程连续执行。
+2. `dynamic-workflows` skill + `@openclaw/dynamic-workflows`: 多 agent `.prose` 编排与 subagent guard。
+3. `@openclaw/permission-policy`: 共享运行时权限原语。
 
-oh-my-matrix (omm) 为 OpenClaw 及衍生项目提供 **AI 自主多 agent 编排能力（Dynamic Workflows）**。AI agent 根据用户的自然语言任务，自动生成 `.prose` 编排程序（含并行扇出、对抗验证、管道处理、迭代搜索等模式），经 OpenProse（OpenClaw bundled plugin）执行，扇出数十到数百个 subagent，只回最终结果。
+v0.x 的 team / MCP / plugin 实现已经移除，历史记录在 [`archive/`](archive/)。本文件只描述当前方向。
 
-核心交付物是一个 **SKILL.md 包**（`skill/dynamic-workflows/`），教 agent 何时/如何生成 `.prose` 工作流。运行时由 OpenProse 提供——不重复建设。
+## System Shape
 
-| 维度 | oh-my-codex | omm |
-|------|-------------|-----|
-| 运行形态 | 独立 CLI (`omx`) | OpenClaw 插件，由 Gateway 加载 |
-| 团队并行 | 自建 tmux + git worktree | 委托宿主 team 原语 |
-| MCP 实现 | `@modelcontextprotocol/sdk` | 手写 JSON-RPC（零依赖） |
-| 分发 | npm binary + 4 个 Rust crate | 单一 tarball，纯 JS |
+```mermaid
+flowchart TB
+  U[User goal] --> G[OpenClaw Gateway]
 
-设计依据见 [ADR-002](adr/002-team-delegation-to-host.md)、[ADR-008](adr/008-delegation-to-host.md)（委托哲学，脊柱保留）。
+  G --> A[@openclaw/autopilot]
+  G --> S[dynamic-workflows skill]
 
-## 核心架构概念
+  S --> P[OpenProse .prose runtime]
+  P --> W[parallel workflow subagents]
 
-### 纯插件，无 CLI
+  A --> PP[@openclaw/permission-policy]
+  W --> DG[@openclaw/dynamic-workflows guard]
+  DG --> PP
 
-omm 通过 OpenClaw Plugin ABI 暴露**可选工具**（`optional: true`）与**生命周期 hooks**。宿主在没有 omm 时仍正常工作——omm 是增强，不是依赖。（历史依据：[`archive/adr/001-pure-plugin-no-cli.md`](archive/adr/001-pure-plugin-no-cli.md)。）
-
-### 单一工作流模式：`team`
-
-`dynamic-workflows` skill 教 agent 生成包含以下生命周期的 `.prose` 程序，经 OpenProse 执行：
-
+  PP --> AUDIT[permission audit]
+  A --> E[evidence gate + projection]
+  W --> R[branch results]
+  E --> OUT[verified output]
+  R --> OUT
 ```
-parallel agents → pipeline stages → conditional routing → synthesis → result
-```
 
-OpenProse 支持 `parallel:` 真并行（含 race/any-N/on-fail 策略）、`for`/`repeat`/`block` 递归循环、`if **AI condition**:` 条件分支、`| filter/map/reduce/pmap` 管道、`try/catch` 错误处理。8 种编排模式（fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop）全部可表达。
+## Module Responsibilities
 
-### 双通道状态访问
+### Autopilot
 
-同一工作流状态目录可通过两条路径访问：
+`packages/autopilot/` hosts `@openclaw/autopilot`, an OpenClaw-native continuous execution plugin.
 
-1. **进程内**：OpenClaw 插件工具——正常 skill 执行时使用。
-2. **进程外**：MCP server over stdio——外部 MCP 客户端使用。
+It owns:
 
-两条路径写入前都经校验。（历史依据：[`archive/contracts/state-contract.md`](archive/contracts/state-contract.md)。）
+- run state: `idle` / `running` / `paused` / `done`
+- orchestration state: `claimed` / `running` / `retry_queued` / `blocked` / `done`
+- goal snapshot / restore
+- retry queue and stall detection
+- evidence collection and validation results
+- compact projection for host UI
+- `WORKFLOW.md` autopilot config parsing
+- token budget and tool-error controls
 
-### 委托给宿主
+The plugin registers 11 OpenClaw hooks declared in `packages/autopilot/package.json`.
 
-omm 不自建自主循环 / 目标 / 并行原语，而是委托宿主：
+### Dynamic Workflows
 
-- **OpenClaw Gateway**：插件加载、工具分派、skill 执行引擎
-- **团队并行**：`TeamCreate`/`TaskCreate`/`SendMessage`
-- **自主循环与目标**：宿主的 `@openclaw/autopilot`
+`skill/dynamic-workflows/SKILL.md` teaches the agent to generate `.prose` programs and execute them through OpenProse. The runtime goal is high-scale parallelism with low user-context pollution: branch work happens inside workflow state, final synthesis returns to the user.
 
-（见 [ADR-002](adr/002-team-delegation-to-host.md)、[ADR-008](adr/008-delegation-to-host.md)。）
+`packages/dynamic-workflows/` is the runtime guard plugin for workflow subagents. It registers `before_tool_call` at priority 11, before autopilot and audit handlers, so dangerous subagent calls are stopped at the gateway.
 
-## 运行时安全（subagent guard）
+### Permission Policy
 
-OpenProse 扇出的 subagent 在 OpenClaw gateway 的 `before_tool_call`（priority 11）受运行时守卫保护，fail-closed 拦截 destructive 操作：
+`packages/permission-policy/` is a pure library. It exists because autopilot and dynamic-workflows need the same command classification, permission decisions, real event extraction, and audit persistence.
 
-- **所在**：`@openclaw/dynamic-workflows` plugin（guard）+ `@openclaw/permission-policy`（原语库）；autopilot 与 dynamic-workflows 互不依赖（ADR-011→012→013）。
-- **威胁模型**：subagent 不可信（可能被 prompt 诱导）；主 session agent 是第一道防线，guard 是 defense-in-depth。
-- **拦截**：读真实事件 `params.command`，按 shell 操作符（`&&`/`&`/`|`/`;`/换行）拆段逐段分类；`destructive git`（reset --hard / force-push / clean）、文件清除（`rm` / `find -delete`）、credential / system-write、shell substitution（`$(...)`）、wrapper-exec（`npx` / `pnpm exec`）在 `:subagent:` 会话 hard-block。
-- **已知局限**：tokenize-based（非 shell parser）——redirect 写 `>file`、未知非 shell 框架工具、引号内 split。详见 [docs/fixes/runtime-guard-event-shape.md](fixes/runtime-guard-event-shape.md) 与 [设计文档 §11.3.3](design/dynamic-workflows-design.md)。
+The split prevents duplicated safety logic and lets future OpenClaw plugins reuse the same primitives.
 
-## 后续方向
+## Runtime Flow
 
-- live-DAG UI（复用 MA `WorkflowGraph` 套件可视化 .prose 执行进度）
-- `budget` 真实 token 缩放、嵌套工作流
-- 对抗配方端到端验证（tournament/adversarial-verify 等模式的真实规模测试）
-- `api.runtime.subagent` 直接派发作为 OpenProse 之外的补充路径（E3 已验证可行）
+### Continuous Execution
 
-历史 v0.x 实现设计记录见 [`archive/`](archive/)。
+1. User activates an autopilot run with a goal.
+2. Autopilot claims workspace/run state.
+3. Hooks observe agent turns, tool calls, LLM output, compaction, session lifecycle, and finalize decisions.
+4. Retry/stall/evidence logic decides whether to continue, pause, resume, or complete.
+5. Projection exposes compact status to the host.
+
+### Multi-Agent Workflow
+
+1. Agent decides the task needs workflow scale.
+2. Dynamic Workflows skill generates a `.prose` program using one or more of the 8 orchestration patterns.
+3. OpenProse compiles and executes the program.
+4. Subagents fan out through OpenClaw sessions.
+5. `@openclaw/dynamic-workflows` guards each `:subagent:` tool call.
+6. Final synthesis separates verified findings from failed or uncertain branches.
+
+## Safety Model
+
+The model assumes workflow subagents are untrusted. They can be wrong, over-eager, or prompt-injected. Therefore:
+
+- main session can ask for approval and make high-context decisions
+- workflow subagents run under fail-closed permission defaults
+- destructive git, workspace cleanup, credential access, system writes, shell substitution, and wrapper exec are blocked for subagents
+- audit logs are written under `.autopilot/`
+
+Known limitation: command parsing is tokenize-based, not a full shell parser. See [`fixes/runtime-guard-event-shape.md`](fixes/runtime-guard-event-shape.md).
+
+## Distribution Reality
+
+The workspace packages are private and source-hosted here. Host consumption still requires a packaging/deploy step outside this repository:
+
+1. build affected packages
+2. pack or copy dist
+3. refresh the host bundled-plugin copy
+4. restart the host gateway
+5. run deployed-dist smoke checks
+
+Do not claim a source change is active in MatrixAssistant/OpenClaw until that host deploy path has been verified.
+
+## Current Gaps
+
+- Host deploy remains internal and should be documented as a reproducible runbook.
+- README/docs now represent autopilot as first-class, but release packaging still needs a public policy.
+- Permission policy needs a stronger shell model for redirect and quote-edge cases.
+- Workflow observability needs a UI contract for branch graph, blocked calls, and evidence state.

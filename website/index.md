@@ -3,33 +3,35 @@ layout: home
 
 hero:
   name: "oh-my-matrix"
-  text: "OpenClaw Dynamic Workflows"
-  tagline: AI 自主多 agent 编排 · subagent 运行时安全守卫。为 OpenClaw 宿主提供 .prose 工作流生成 + before_tool_call fail-closed 守卫。
+  text: "OpenClaw Agent Runtime Stack"
+  tagline: Autopilot 连续执行 · Dynamic Workflows 多 agent 编排 · Permission Policy 运行时边界。
+  image:
+    src: /hero.png
+    alt: hand-drawn oh-my-matrix runtime stack
   actions:
     - theme: brand
+      text: Getting Started
+      link: /guide/getting-started
+    - theme: alt
       text: Architecture
       link: /guide/architecture
-    - theme: alt
-      text: Roadmap
-      link: /guide/roadmap
 
 features:
-  - title: Dynamic Workflows（8 编排模式）
-    details: AI 自动生成 .prose 程序（fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop），经 OpenProse 扇出多 agent 并行执行，只回最终结果。
-  - title: Subagent 运行时守卫
-    details: before_tool_call（priority 11）fail-closed 拦截 destructive git / 文件清除 / credential / shell substitution / wrapper-exec；不可信 subagent 会话 defaultDeny。
-  - title: 委托给宿主
-    details: 不自建自主循环 / 并行原语；ralph / autopilot / goal 委托宿主 @openclaw/autopilot，运行时由 OpenProse（bundled）提供。
-  - title: 纯 skill 包 + @openclaw/* 库
-    details: 核心交付是 SKILL.md 包 + 中性 permission-policy 库；无独立 CLI、无原生模块，作为 OpenClaw 集成增强存在。
+  - title: Autopilot
+    details: OpenClaw-native continuous execution。目标、重试、stall 检测、证据门、projection、WORKFLOW.md 配置。
+  - title: Dynamic Workflows
+    details: AI 生成 .prose 编排程序，经 OpenProse 执行 fan-out / pipeline / adversarial verification 等 8 种模式。
+  - title: Permission Policy
+    details: 共享 command classification、permission decision、audit persistence；subagent guard fail-closed。
+  - title: Honest Open Source Surface
+    details: 不包装未验证的 release、star 或 adoption。源码、测试、ADR、已知限制公开放在仓库里。
 ---
 
 ## 关于本站
 
-> 🔄 **方向更新 (0.7.x)** — v0.x 的 team 编排 / MCP / 插件实现已移除（见仓库 `docs/archive/`）。当前方向：**Dynamic Workflows**——AI 自主生成 .prose 编排 + OpenProse 执行 + subagent 运行时守卫。
+oh-my-matrix 是 OpenClaw 宿主集成栈，不是独立终端 CLI。它把长程连续执行、多 agent 并行编排和运行时安全边界拆成可测试模块。
 
-本站承载 oh-my-matrix 的方向、架构叙事、领域语言与历史决策。
-
-- 浏览 **[Architecture](/guide/architecture)** 与 **[Roadmap](/guide/roadmap)** 了解方向。
-- 运行时守卫修复历史（placebo → 真守卫，2026-06-28 live e2e 闭环）见仓库 `docs/fixes/`。
-- 完整 v0.x 设计记录（ADR / 契约 / 评审）见仓库 `docs/archive/`。
+- 先读 **[Getting Started](/guide/getting-started)**。
+- 架构边界见 **[Architecture](/guide/architecture)**。
+- 当前路线图见 **[Roadmap](/guide/roadmap)**。
+- 历史 v0.x 设计记录在仓库 `docs/archive/`。

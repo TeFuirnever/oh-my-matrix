@@ -1,36 +1,45 @@
 # Getting Started
 
-> 🔄 **实现已重置 (0.6.0)** — 本仓库现为文档/设计底座，无可运行代码。下面介绍如何浏览文档与本地预览文档站。
+oh-my-matrix 面向 OpenClaw 宿主集成者。当前核心不是“只读文档仓库”，而是一个 private workspace packages + skill 的源码仓库。
 
-## 这是什么
+## 你会用到什么
 
-oh-my-matrix (omm) 探索 **OpenClaw 原生的工作流编排**：以纯插件形式为任何 OpenClaw 兼容宿主提供 `team` 协作编排，自主循环与目标能力委托宿主。
+| 目标 | 入口 |
+|---|---|
+| 长程连续执行 | `packages/autopilot/` |
+| 多 agent workflow 编排 | `skill/dynamic-workflows/` |
+| workflow subagent guard | `packages/dynamic-workflows/` |
+| 共享权限原语 | `packages/permission-policy/` |
+| 架构背景 | `docs/architecture.md` |
+| ADR | `docs/adr/` |
 
-此前 v0.x 的 OpenClaw 插件 / MCP 实现（`team` 状态机、employee-bridge、hooks、MCP servers）已于 0.6.0 全部移除，设计记录归档保留。
-
-## 浏览文档
-
-| 想了解 | 去哪看 |
-|--------|--------|
-| 方向与架构叙事 | [Architecture](/guide/architecture)、仓库 `docs/architecture.md` |
-| 路线图与历史阶段 | [Roadmap](/guide/roadmap)、仓库 `docs/roadmap.md` |
-| 领域语言与核心概念 | 仓库 `CONTEXT.md`（Workflow Mode / Phase / State / Counter / Hook …） |
-| 委托哲学（连续脊柱） | [ADR-002](/reference/adrs/002)、仓库 `docs/adr/002`、`docs/adr/008` |
-| v0.x 完整设计记录 | 仓库 `docs/archive/`（ADR / 契约 / 计划 / 调研 / 评审，已归档） |
-
-## 本地预览文档站
+## 本地检查
 
 ```bash
 pnpm install
-pnpm docs:dev      # 启动本地开发服务器（默认 http://localhost:5173）
-pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
-pnpm docs:preview  # 预览构建产物
+
+pnpm --filter @openclaw/autopilot test
+pnpm --filter @openclaw/dynamic-workflows test
+pnpm --filter @openclaw/permission-policy test
+
+pnpm docs:dev
+pnpm docs:build
 ```
 
-仅需 Node.js 20+ 与 pnpm 10+；VitePress 是唯一依赖，无需 TypeScript / 构建工具链。
+## 集成现实
+
+仓库源码通过测试不等于宿主已经加载。对 `packages/*` 的改动还需要宿主侧部署：
+
+1. build package
+2. pack 或复制 dist
+3. 刷新 host bundled-plugin copy
+4. restart OpenClaw gateway / MatrixAssistant
+5. 跑 deployed-dist smoke check
+
+如果你只是在阅读或贡献 docs，`pnpm docs:build` 就足够。
 
 ## 下一步
 
-- [Architecture](/guide/architecture) — 架构叙事与设计参考
-- [Roadmap](/guide/roadmap) — 路线图（Phase 1–4 为历史记录）
-- [Design Reference](/reference/) — 设计参考入口
+- [Architecture](/guide/architecture): 当前三模块架构
+- [Roadmap](/guide/roadmap): 当前优先级
+- [Design Reference](/reference/): ADR 与历史参考入口
