@@ -14,3 +14,6 @@ packages/*/*.tgz
 # 工具索引产物（codegraph / context engine），不入库
 .codegraph/
 .context/
+
+# permission-policy audit 产物（测试/运行时 appendAuditEntry 写入 cwd），不入库
+.autopilot/
