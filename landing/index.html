@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>oh-my-matrix — OpenClaw Agent Runtime Stack</title>
+  <meta name="description" content="把 OpenClaw 变成可持续工作的 autonomous agent runtime:Autopilot 连续执行 · Dynamic Workflows 多 agent 编排 · Permission Policy 运行时边界。面向 OpenClaw 宿主与集成者。" />
+  <meta name="theme-color" content="#f5f0e6" />
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="oh-my-matrix — OpenClaw Agent Runtime Stack" />
+  <meta property="og:description" content="Autopilot · Dynamic Workflows · Permission Policy — a hand-drawn, honest agent runtime stack for OpenClaw hosts." />
+  <meta property="og:image" content="./assets/hero.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="oh-my-matrix — OpenClaw Agent Runtime Stack" />
+  <meta name="twitter:description" content="Autopilot · Dynamic Workflows · Permission Policy." />
+  <meta name="twitter:image" content="./assets/hero.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Kalam:wght@400;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+
+<!-- ============================ NAV ============================ -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="oh-my-matrix home">
+      <svg class="logo-dot" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="3" y="6" width="26" height="22" rx="4" fill="#f5f0e6" stroke="#2d3436" stroke-width="2"/>
+        <rect x="3" y="6" width="26" height="5" rx="4" fill="#ede4d3" stroke="#2d3436" stroke-width="2"/>
+        <circle cx="7" cy="8.5" r="1.1" fill="#fb7185"/><circle cx="10.5" cy="8.5" r="1.1" fill="#fbbf24"/><circle cx="14" cy="8.5" r="1.1" fill="#2ecc71"/>
+        <path d="M8 18 L12 22 L8 26" fill="none" stroke="#3498db" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15 26 L24 26" fill="none" stroke="#3498db" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-text">oh-my-matrix<small>AGENT RUNTIME STACK</small></span>
+    </a>
+    <nav class="nav-links" aria-label="primary">
+      <a href="#abilities" data-i18n="nav.abilities">能力</a>
+      <a href="#demo" data-i18n="nav.demo">演示</a>
+      <a href="#boundary" data-i18n="nav.boundary">边界</a>
+      <a href="#roadmap" data-i18n="nav.roadmap">路线图</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang-toggle" role="group" aria-label="language">
+        <button type="button" data-lang="zh" aria-pressed="true">中</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+      <a class="gh-pill" href="https://github.com/TeFuirnever/oh-my-matrix" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="gh-label">GitHub</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="hero-badge reveal"><span class="dot"></span><span data-i18n="hero.badge">WIP · 当前无公开 release · 源码/测试/ADR 公开</span></span>
+      <h1 class="reveal d1"><span data-i18n="hero.title.a">把 OpenClaw 变成</span><br><span data-i18n="hero.title.b">可持续工作的 </span><em class="accent" data-i18n="hero.title.c">agent runtime</em></h1>
+      <p class="tagline reveal d2" data-i18n="hero.tagline">Autopilot 连续执行 · Dynamic Workflows 多 agent 编排 · Permission Policy 运行时安全边界。面向 OpenClaw 宿主与集成者。</p>
+      <div class="hero-cta reveal d3">
+        <a class="btn btn--primary" href="/oh-my-matrix/docs/guide/getting-started" data-i18n="hero.cta.start">开始使用 →</a>
+        <a class="btn btn--ghost" href="https://github.com/TeFuirnever/oh-my-matrix" target="_blank" rel="noopener" data-i18n="hero.cta.repo">查看源码</a>
+      </div>
+      <p class="hero-meta reveal d3">MIT · pnpm workspace · <b data-i18n="hero.meta">根仓库 v0.7.2 · 三块可测试能力</b></p>
+    </div>
+
+    <div class="hero-art reveal d2">
+      <div class="terminal-stage">
+        <!-- rough.js draws the wobbly frame into this SVG -->
+        <svg class="terminal-frame-svg" id="terminal-frame" aria-hidden="true"></svg>
+        <div class="terminal" role="region" aria-label="autopilot session demo">
+          <div class="term-bar"><i></i><i></i><i></i></div>
+          <div class="term-title">omm · autopilot</div>
+          <div class="terminal-body" id="terminal-body">
+            <!-- lines are appended/typed by hero.js; static fallback below for no-JS -->
+            <noscript><div class="line"><span class="prompt">$ omm autopilot</span> "refactor auth module"</div>
+            <div class="line"><span class="arrow">→</span> goal parsed · projection active</div>
+            <div class="line"><span class="arrow">→</span> exploring codebase (2 agents)</div>
+            <div class="line"><span class="arrow">→</span> drafting <em>.prose</em> workflow · evidence gate ON</div>
+            <div class="line"><span class="arrow">→</span> fan-out: 3 subagents · permission-policy: 0 blocked</div>
+            <div class="line"><span class="ok">✓</span> verified · 0 unverified claims</div></noscript>
+          </div>
+        </div>
+        <!-- hand-drawn whiteboard doodle: arrow + sparkles (visual only) -->
+        <svg class="doodle float" style="top:-30px;right:-18px;width:130px;height:96px;--r:-6deg" viewBox="0 0 130 96" aria-hidden="true">
+          <g fill="none" stroke="#3498db" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M118 16 C 92 22, 70 14, 52 34"/>
+            <path d="M52 34 L 64 30 M52 34 L 58 46"/>
+          </g>
+          <g stroke="#e6a23c" stroke-width="2.2" stroke-linecap="round">
+            <path d="M22 70 L 22 82 M16 76 L 28 76"/>
+            <path d="M104 64 L 104 74 M99 69 L 109 69"/>
+          </g>
+        </svg>
+      </div>
+    </div>  </div>
+  <!-- hand-drawn margin annotation pointing toward the live terminal -->
+  <svg class="doodle float" style="top:120px;left:45%;width:150px;height:120px;--r:4deg" viewBox="0 0 150 120" aria-hidden="true">
+    <g fill="none" stroke="#8b7355" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 18 C 48 30, 70 18, 104 64"/>
+      <path d="M104 64 L 92 56 M104 64 L 98 78"/>
+    </g>
+    <g stroke="#e6a23c" stroke-width="2.4" stroke-linecap="round">
+      <path d="M128 30 L 128 46 M120 38 L 136 38"/>
+      <path d="M44 96 L 44 108 M38 102 L 50 102"/>
+    </g>
+  </svg>
+</section>
+
+<!-- ============================ THREE MODULES ============================ -->
+<section id="abilities">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-i18n="abilities.eyebrow">三块能力</span>
+      <h2 class="title"><span data-i18n="abilities.title.a">模块化的 </span><em data-i18n="abilities.title.b">agent runtime stack</em></h2>
+      <p class="lede" data-i18n="abilities.lede">不是终端用户 CLI,也不是独立 SaaS。给 OpenClaw 宿主加载、打包、验证的三块可测试能力。</p>
+    </div>
+    <div class="cards">
+
+      <article class="card card--blue reveal d1">
+        <svg class="card-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="24" cy="24" r="15" stroke="#3498db" stroke-width="3"/><path d="M24 13 L24 24 L32 28" stroke="#3498db" stroke-width="3" stroke-linecap="round"/><path d="M24 9 L24 13 M24 35 L24 39 M9 24 L13 24 M35 24 L39 24" stroke="#3498db" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span class="module-tag" data-i18n="abilities.c1.tag">CONTINUOUS EXECUTION</span>
+        <h3 data-i18n="abilities.c1.title">Autopilot</h3>
+        <p data-i18n="abilities.c1.body">长程任务连续执行,带目标、重试、stall 检测、证据门和面向宿主 UI 的状态投影。</p>
+        <ul>
+          <li data-i18n="abilities.c1.l1">目标驱动循环 · 重试 + stall 检测</li>
+          <li data-i18n="abilities.c1.l2">证据门 (evidence gate) 前置验证</li>
+          <li data-i18n="abilities.c1.l3">projection:compact status / evidence / retry</li>
+          <li data-i18n="abilities.c1.l4">WORKFLOW.md front matter 配置</li>
+        </ul>
+      </article>
+
+      <article class="card card--green reveal d2">
+        <svg class="card-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 9 L24 39" stroke="#2ecc71" stroke-width="3" stroke-linecap="round"/><path d="M24 18 L16 14 M24 18 L32 14 M24 26 L15 22 M24 26 L33 22" stroke="#2ecc71" stroke-width="2.8" stroke-linecap="round"/><circle cx="16" cy="14" r="2.6" fill="#2ecc71"/><circle cx="32" cy="14" r="2.6" fill="#2ecc71"/><circle cx="15" cy="22" r="2.6" fill="#2ecc71"/><circle cx="33" cy="22" r="2.6" fill="#2ecc71"/></svg>
+        <span class="module-tag" data-i18n="abilities.c2.tag">MULTI-AGENT ORCHESTRATION</span>
+        <h3 data-i18n="abilities.c2.title">Dynamic Workflows</h3>
+        <p data-i18n="abilities.c2.body">AI 根据自然语言生成 <code>.prose</code> 编排程序,经 OpenProse 执行。</p>
+        <ul>
+          <li data-i18n="abilities.c2.l1">fan-out-reduce · pipeline</li>
+          <li data-i18n="abilities.c2.l2">adversarial-verify · loop-until-dry</li>
+          <li data-i18n="abilities.c2.l3">routing · tournament</li>
+          <li data-i18n="abilities.c2.l4">generate-and-filter · duel-loop (8 模式)</li>
+        </ul>
+      </article>
+
+      <article class="card card--amber reveal d3">
+        <svg class="card-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 7 L39 13 V25 C39 33 32 39 24 41 C16 39 9 33 9 25 V13 Z" stroke="#e6a23c" stroke-width="3" stroke-linejoin="round" fill="rgba(230,162,60,.12)"/><path d="M17 24 L22 29 L32 18" stroke="#e6a23c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="module-tag" data-i18n="abilities.c3.tag">RUNTIME BOUNDARY</span>
+        <h3 data-i18n="abilities.c3.title">Permission Policy</h3>
+        <p data-i18n="abilities.c3.body">autopilot 与 workflow subagent 共享的安全层。defaultDeny,分类 + 审计持久化。</p>
+        <ul>
+          <li data-i18n="abilities.c3.l1">拦截 destructive git / workspace cleanup</li>
+          <li data-i18n="abilities.c3.l2">credential / system write 拦截</li>
+          <li data-i18n="abilities.c3.l3">shell &amp; process substitution 拦截</li>
+          <li data-i18n="abilities.c3.l4">wrapper exec (npx / pnpm exec)</li>
+        </ul>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LIVE FLOW DEMO (dark) ============================ -->
+<section id="demo" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-i18n="demo.eyebrow">实时流程</span>
+      <h2 class="title"><span data-i18n="demo.title.a">一个任务,</span><em data-i18n="demo.title.b">fan-out</em><span data-i18n="demo.title.c"> 成并行 agent</span></h2>
+      <p class="lede" data-i18n="demo.lede">Dynamic Workflows 把任务拆成并行 subagent,经过 adversarial verification 和 evidence 门,合并成可信结果。下面是 <code>.prose</code> 执行的手绘示意。</p>
+    </div>
+    <div class="flow-stage reveal d1">
+      <canvas id="flow-canvas" aria-label="prose workflow fan-out animation"></canvas>
+      <div class="flow-legend">
+        <span><i style="background:#2ecc71"></i><span data-i18n="demo.legend.sub">subagent</span></span>
+        <span><i style="background:#22d3ee"></i><span data-i18n="demo.legend.verify">adversarial verify</span></span>
+        <span><i style="background:#e6a23c"></i><span data-i18n="demo.legend.gate">evidence gate</span></span>
+        <span><i style="background:#60a5fa"></i><span data-i18n="demo.legend.merged">merged output</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ PERMISSION BOUNDARY ============================ -->
+<section id="boundary">
+  <div class="wrap gate-grid">
+    <div class="reveal">
+      <svg class="shield-art" viewBox="0 0 240 260" fill="none" aria-hidden="true">
+        <defs><filter id="rshield"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/></filter></defs>
+        <g filter="url(#rshield)" stroke="#2d3436" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M120 24 L208 56 V128 C208 188 168 224 120 240 C72 224 32 188 32 128 V56 Z" fill="#efe7d6"/>
+          <path d="M120 60 L120 200" stroke="#e6a23c" stroke-width="2.4" stroke-dasharray="7 7"/>
+          <path d="M76 96 L100 120 L76 144" stroke="#e6a23c" stroke-width="4" fill="none"/>
+          <path d="M104 144 L156 144" stroke="#e6a23c" stroke-width="4"/>
+        </g>
+        <text x="120" y="160" text-anchor="middle" font-family="Kalam, cursive" font-size="26" font-weight="700" fill="#2d3436" filter="url(#rshield)" data-i18n="boundary.shield">defaultDeny</text>
+      </svg>
+    </div>
+    <div class="reveal d1">
+      <span class="eyebrow" data-i18n="boundary.eyebrow">运行时边界</span>
+      <h2 class="title"><span data-i18n="boundary.title.a">subagent 没有免费通行证。</span></h2>
+      <p class="lede" data-i18n="boundary.lede">这些是当前会被拦下的真实操作。分类、决策、审计持久化。</p>
+      <ul class="blocklist">
+        <li class="struck"><span class="mark">✗</span><code>git reset --hard</code> · force push · history rewrite</li>
+        <li class="struck"><span class="mark">✗</span><code>rm</code> · <code>rmdir</code> · <code>find -delete</code></li>
+        <li class="struck"><span class="mark">✗</span><span data-i18n="boundary.b3">credential / system 写入</span></li>
+        <li class="struck"><span class="mark">✗</span><code>&amp;</code> / <code>$()</code> · <span data-i18n="boundary.b4">shell 与 process substitution</span></li>
+        <li class="struck"><span class="mark">✗</span><code>npx</code> · <code>pnpm exec</code> · <span data-i18n="boundary.b5">wrapper exec</span></li>
+      </ul>
+      <div class="note-callout">
+        <strong data-i18n="boundary.note.t">已知限制,诚实公开:</strong>
+        <span data-i18n="boundary.note.b">tokenize-based,不是完整 shell parser。redirect 写文件、未知非 shell 框架工具、引号内 operator 误伤,记录在 </span><a href="https://github.com/TeFuirnever/oh-my-matrix/blob/master/docs/fixes/runtime-guard-event-shape.md" target="_blank" rel="noopener">docs/fixes</a><span data-i18n="boundary.note.c">。不藏。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HONEST OPEN SOURCE ============================ -->
+<section id="honest">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-i18n="honest.eyebrow">诚实的开源面</span>
+      <h2 class="title"><span data-i18n="honest.title.a">不包装未验证的 </span><em data-i18n="honest.title.b">release / star / adoption</em></h2>
+      <p class="lede" data-i18n="honest.lede">当前是 WIP。下面这些是真的且公开,那些还在内部 —— 都摆出来。</p>
+    </div>
+    <div class="honest-grid">
+      <div class="honest-card reveal d1">
+        <h3><span class="tag-ok">✓</span> <span data-i18n="honest.ok.t">公开且真实</span></h3>
+        <ul>
+          <li><b data-i18n="honest.ok.l1">源码</b> — <span data-i18n="honest.ok.l1b">packages/autopilot 等托管源码</span></li>
+          <li><b data-i18n="honest.ok.l2">测试</b> — <code>pnpm test</code> <span data-i18n="honest.ok.l2b">可复现</span></li>
+          <li><b data-i18n="honest.ok.l3">ADR</b> — <span data-i18n="honest.ok.l3b">docs/adr 架构决策记录</span></li>
+          <li><b data-i18n="honest.ok.l4">已知限制</b> — <span data-i18n="honest.ok.l4b">docs/fixes 公开</span></li>
+          <li><b data-i18n="honest.ok.l5">CHANGELOG</b> — <span data-i18n="honest.ok.l5b">变更可追溯</span></li>
+        </ul>
+      </div>
+      <div class="honest-card reveal d2">
+        <h3><span class="tag-wip">⏳</span> <span data-i18n="honest.wip.t">仍是 WIP / 内部</span></h3>
+        <ul>
+          <li><b data-i18n="honest.wip.l1">@openclaw/*</b> — <span data-i18n="honest.wip.l1b">private workspace packages</span></li>
+          <li><b data-i18n="honest.wip.l2">host deploy</b> — <span data-i18n="honest.wip.l2b">需内部 refresh / vendoring</span></li>
+          <li><b data-i18n="honest.wip.l3">workflow 可视化</b> — <span data-i18n="honest.wip.l3b">宿主 UI 契约未定</span></li>
+          <li><b data-i18n="honest.wip.l4">公开发布清单</b> — <span data-i18n="honest.wip.l4b">哪些 package 可发布,待明确</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ROADMAP ============================ -->
+<section id="roadmap" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-i18n="roadmap.eyebrow">路线图</span>
+      <h2 class="title"><span data-i18n="roadmap.title.a">近期 </span><em data-i18n="roadmap.title.b">优先级</em></h2>
+      <p class="lede" data-i18n="roadmap.lede">把内部能力变成可公开、可复现、可验证的工程交付。</p>
+    </div>
+    <div class="timeline reveal d1">
+      <div class="item"><h4 data-i18n="roadmap.r1.t">Autopilot 一等公开叙事</h4><p data-i18n="roadmap.r1.b">README / docs / website 与源码能力对齐。</p></div>
+      <div class="item"><h4 data-i18n="roadmap.r2.t">Host deploy 可复现化</h4><p data-i18n="roadmap.r2.b">refresh / pack / install / smoke check 记录成可执行 runbook。</p></div>
+      <div class="item"><h4 data-i18n="roadmap.r3.t">Workflow visual observability</h4><p data-i18n="roadmap.r3.b">.prose fan-out / evidence / blocked calls 宿主 UI 可视化契约。</p></div>
+      <div class="item"><h4 data-i18n="roadmap.r4.t">Permission policy hardening</h4><p data-i18n="roadmap.r4.b">从 tokenize-based 向更完整的 shell model 演进。</p></div>
+      <div class="item"><h4 data-i18n="roadmap.r5.t">Release readiness</h4><p data-i18n="roadmap.r5.b">明确哪些 packages 可以公开发布,哪些仍是 host-internal。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FINAL CTA ============================ -->
+<section class="cta-band">
+  <div class="wrap">
+    <div class="cta-card reveal">
+      <h2 data-i18n="cta.title">WIP。欢迎一起把它做扎实。</h2>
+      <p data-i18n="cta.body">从文档、测试、host integration runbook 和安全用例开始 —— 每一块都能上手。</p>
+      <div class="cta-row">
+        <a class="btn btn--primary" href="https://github.com/TeFuirnever/oh-my-matrix" target="_blank" rel="noopener" data-i18n="cta.b1">GitHub 仓库 →</a>
+        <a class="btn btn--ghost" href="/oh-my-matrix/docs/guide/getting-started" data-i18n="cta.b2">Getting Started</a>
+        <a class="btn btn--ghost" href="https://github.com/TeFuirnever/oh-my-matrix/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener" data-i18n="cta.b3">贡献指南</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================ FOOTER ============================ -->
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div>
+      <strong>oh-my-matrix</strong> — <span data-i18n="footer.tag">OpenClaw Agent Runtime Stack</span><br>
+      <span data-i18n="footer.sub">面向 OpenClaw 宿主与集成者 · 不是终端 CLI,不是 SaaS</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/TeFuirnever/oh-my-matrix" target="_blank" rel="noopener" data-i18n="footer.github">GitHub</a> ·
+      <a href="/oh-my-matrix/docs/" data-i18n="footer.docs">Docs</a> ·
+      <a href="https://github.com/TeFuirnever/oh-my-matrix/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a>
+    </div>
+    <div class="made" data-i18n="footer.made">hand-drawn with Kalam + rough.js</div>
+  </div>
+</footer>
+
+<!-- rough.js (Excalidraw engine) — draws hand-made shapes onto SVG/Canvas -->
+<script src="https://unpkg.com/roughjs@4.6.6/bundled/rough.js" defer></script>
+<script src="./assets/i18n.js" defer></script>
+<script src="./assets/reveal.js" defer></script>
+<script src="./assets/hero.js" defer></script>
+<script src="./assets/workflows.js" defer></script>
+
+</body>
+</html>
