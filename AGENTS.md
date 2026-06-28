@@ -30,12 +30,24 @@ Instructions for AI agents working. All content in English.
 
 **Core Principles:**
 
+- **Read Before You Write** — before modifying, read the files (not skim), find the project's existing pattern for the task, check imports (don't introduce a library the project doesn't use), and read the tests (they show expected behavior). If no pattern exists, say so and ask — never generate code alien to the codebase.
 - **Simplicity First** — minimal code impact, simplest possible change.
 - **No Laziness** — find root causes, no temporary fixes, senior developer standards.
 - **Surgical Changes Only** — every changed line should trace directly to the current task. Don't refactor adjacent code or "improve" formatting unless required.
 - **No Speculation** — do not add abstractions, configuration, or future-proofing that the request does not need.
+- **Dependencies Are Permanent** — don't add a dependency without a reason. First check the existing stack and stdlib; verify it's actively maintained and its size is justified. When you add one, say why. Never silently append to package.json.
 - **Verify Before Claiming Done** — evidence over assumptions.
 - **Know When to Stop** — if blocked for more than 2 attempts on the same issue, or if requirements remain ambiguous after clarification, escalate to the user instead of guessing.
+
+**Common failure modes — if you catch yourself doing these, stop:**
+
+- **Kitchen Sink** — asked for one feature, restructured half the codebase. Do the one thing.
+- **Wrong Abstraction** — generic solution to a single-case problem. Copy-paste twice before abstracting.
+- **Invisible Decision** — architectural choice (schema, API shape, auth strategy) made without flagging it. These are hard to reverse; surface them as decisions.
+- **Optimistic Path** — handles the happy path, ignores 500 / missing file / empty input. Cover the failure paths.
+- **Knowledge Hallucination** — using an API, parameter, or library feature you're not 100% sure exists. Check the source or docs; say if unsure.
+- **Style Drift** — your preferred style instead of the project's. Match the codebase, not your preferences.
+- **Runaway Refactor** — one fix cascades into many files. Stop, report, get buy-in before continuing.
 
 ## Workflow
 
