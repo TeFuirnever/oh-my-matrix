@@ -180,6 +180,32 @@ Host-level plugin load failure → no warning (register never runs). Consider a 
 
 The prior work failed because tests used a fictional event shape. The fix's correctness hinges on the **params-shape survey** (§ investigation) being empirical, not assumed. If unsure about a tool's params shape, LOG a real event from a running MA subagent rather than guessing. One captured real event > ten assumed shapes.
 
+## Known limitations (tokenize-based, post-review 2026-06-28)
+
+The guard parses `params.command` with a tokenizer + operator split, NOT a shell
+grammar. It blocks the major evasion paths (event-shape, git/find/force-push, `&`
+background, shell substitution `$(...)`/backticks/`<(...)`, wrapper exec `npx`/
+`pnpm exec`). Three residual gaps surfaced by Codex adversarial review are
+accepted as known limitations:
+
+- **Write redirect `>file`** (Codex High): `echo x > important.txt` overwrites a
+  file but classifies as read_only (echo). Not modeled. Fix would flag any `>`
+  not followed by `&` — but that false-positives on `>/dev/null` (common for
+  silencing output), so the cure is worse. fd-redirect `2>&1` IS handled
+  (lookbehind, no false-positive block).
+- **defaultDeny gap for unknown non-shell tools** (Codex High): `decidePermissionForEvent`
+  intentionally passes non-shell tools (read/write_file/sessions_*) through
+  allow-by-default (no defaultDeny) so subagents can produce work. Unknown
+  destructive-sounding framework tools (`delete_file`/`apply_patch`) are allow
+  unless allowlisted. Whitelist hardening is a P2 follow-up.
+- **Quote-internal split** (Codex Medium): `echo "a && b"` splits the `&&` inside
+  quotes → blocks on the bogus `b` segment. Fail-closed (conservative), not
+  silent. Not fixed because it over-blocks, never under-blocks.
+
+A perfect shell security boundary needs a real shell parser. This guard is
+defense-in-depth behind the main-session agent (which declines to dispatch
+destructive ops to subagents in practice).
+
 ## References
 
 - Adversarial review (2026-06-27): the full finding list (event.args, toolKind, classifier evasion, subagent detection, silent degradation, dist-in-git, etc.).
