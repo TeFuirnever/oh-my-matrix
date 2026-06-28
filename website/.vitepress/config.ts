@@ -1,12 +1,14 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
+  // docs live under /docs/ on Pages; the hand-drawn landing owns the site root.
+  base: "/oh-my-matrix/docs/",
   title: "oh-my-matrix",
   description: "OpenClaw-native orchestration — documentation & design repository",
   ignoreDeadLinks: true,
   themeConfig: {
     nav: [
-      { text: "Home", link: "/" },
+      { text: "Home", link: "https://tefuirnever.github.io/oh-my-matrix/" },
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Reference", link: "/reference/" },
     ],

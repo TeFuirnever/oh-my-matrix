@@ -36,10 +36,18 @@ jobs:
       - name: Build docs
         run: pnpm docs:build
 
+      - name: Assemble Pages artifact
+        run: |
+          # landing owns the site root; VitePress docs live under /docs/
+          mkdir -p site
+          cp -r landing/. site/
+          mkdir -p site/docs
+          cp -r website/.vitepress/dist/. site/docs/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: website/.vitepress/dist
+          path: site
 
   deploy:
     environment:
