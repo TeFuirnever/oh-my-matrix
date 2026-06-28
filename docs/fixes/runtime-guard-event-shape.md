@@ -10,7 +10,7 @@
 
 > **Status: DONE — implemented + deployed + verified 2026-06-28.** Surfaced by
 > adversarial review 2026-06-27 (was a placebo — context below). Verify: 3 packages
-> green (permission-policy 109 / dynamic-workflows 11 / autopilot 528) + deployed-dist
+> green (permission-policy 111 / dynamic-workflows 12 / autopilot 520) + deployed-dist
 > `verify-guard` driving the real event shape (destructive / `cd && git reset --hard` /
 > `rm -rf` blocked; `git status` / main-session allowed). **MA must restart to load**
 > (the running process still has the pre-fix module cached).
@@ -184,8 +184,7 @@ The prior work failed because tests used a fictional event shape. The fix's corr
 
 The guard parses `params.command` with a tokenizer + operator split, NOT a shell
 grammar. It blocks the major evasion paths (event-shape, git/find/force-push, `&`
-background, shell substitution `$(...)`/backticks/`<(...)`, wrapper exec `npx`/
-`pnpm exec`). Three residual gaps surfaced by Codex adversarial review are
+background, shell substitution `$(...)`/backticks/`<(...)`, wrapper exec `npx`; `pnpm exec` falls through to `defaultDeny`). Three residual gaps surfaced by Codex adversarial review are
 accepted as known limitations:
 
 - **Write redirect `>file`** (Codex High): `echo x > important.txt` overwrites a

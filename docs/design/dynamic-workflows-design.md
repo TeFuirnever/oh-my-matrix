@@ -396,7 +396,7 @@ hooks:
 
 **对我们的价值**：~~运行时拦截破坏性 git~~ → **skill 层无法实现**。真拦截需 OpenClaw plugin（`before_tool_call`）。
 
-> **✅ 反转（2026-06-27）**：原先判"ROI 不足、接受 prompt-only"建立在**错误前提**上——把"真拦截 = 从零写新 plugin"当成大工程。实际上 `packages/autopilot/`（ADR-010 托管）**已是一个带 `before_tool_call` + `decidePermission` + 硬 block + 审计的成熟 plugin**（633 测试）。边际成本是"给已有 handler 加一个 subagent 分支"，不是"从零造 plugin"。ROI 计算翻转。
+> **✅ 反转（2026-06-27）**：原先判"ROI 不足、接受 prompt-only"建立在**错误前提**上——把"真拦截 = 从零写新 plugin"当成大工程。实际上 `packages/autopilot/`（ADR-010 托管）**已是一个带 `before_tool_call` + `decidePermission` + 硬 block + 审计的成熟 plugin**（520 测试）。边际成本是"给已有 handler 加一个 subagent 分支"，不是"从零造 plugin"。ROI 计算翻转。
 >
 > **已实施 + 演进（ADR-011→012→013）——✅ fail-open bug 已修（2026-06-28）**：运行时守卫住在独立的 `@openclaw/dynamic-workflows` plugin（`before_tool_call` priority 11），原语在中性 `@openclaw/permission-policy` 库，autopilot 与 dynamic-workflows 互不依赖。守卫读真实事件 `params.command`（按 `&&`/`&`/`|`/`;`/换行 拆段逐段分类），subagent 会话 defaultDeny fail-closed，evasion（force-push / amend / `$(...)` substitution / `npx` wrapper-exec）封堵；编译期事件形状契约防漂移；部署 dist 直驱验证（`scripts/verify-guard.cjs`）。残留 tokenize-based 已知局限（redirect 写 / defaultDeny non-shell / quote split）见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。详见 ADR-011/012/013。
 
@@ -901,7 +901,7 @@ v15 实施后须逐项验证：
 | V8 | 模板 model 行注释 | `grep 'Replace' templates/*.prose` | 每个模板的 model 行都有注释 |
 | V9 | 模板无字符串内占位符 | `grep '\[.*\]' templates/*.prose` | 无 `[bracket]` 在 prompt 字符串内 |
 | V10 | 模板 context 卫生 | `grep 'context:' templates/*.prose` | 所有用户数据走 context |
-| V11 | patterns-advanced.md 模式数 | `grep -c '^###' references/patterns-advanced.md` | = 8（原 5 + 新 3） |
+| V11 | patterns-advanced.md 模式数 | `grep -cE '^##+' references/patterns-advanced.md` | = 8（5×H2 模式 4-8 + 3×H3 模式 9-11） |
 | V12 | Pattern selection table 行数 | `grep -c '|' SKILL.md`（table 区域） | 11 行（原 8 + 新 3） |
 | V13 | MA 副本一致 | `diff` skill/ vs MA resources/ | IDENTICAL |
 | V14 | MA 实测：Reuse Path 停下 | 跑 test prompt 1（项目已有 error_audit.prose） | Agent 在 🔴 CHECKPOINT 停下展示 .prose |
