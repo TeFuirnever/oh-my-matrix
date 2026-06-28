@@ -87,11 +87,16 @@
     if (caret && caret.parentNode) caret.parentNode.removeChild(caret);
   }
 
+  async function waitWhileHidden() {
+    // pause the typewriter loop when the tab is hidden — saves battery on mobile
+    while (document.hidden) await sleep(300);
+  }
   async function loop() {
     drawFrame();
     if (reduced) { renderStatic(); return; }
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      await waitWhileHidden();
       await typeSession();
       await sleep(3200);
     }
