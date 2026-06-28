@@ -1,0 +1,1 @@
+{"version":3,"file":"event-shape.contract.js","sourceRoot":"","sources":["../../src/event-shape.contract.ts"],"names":[],"mappings":";;;AAeA,6DAA6D;AAChD,QAAA,gBAAgB,GAAkC;IAC7D,QAAQ,EAAE,MAAM;IAChB,MAAM,EAAE,EAAE,OAAO,EAAE,yBAAyB,EAAE,OAAO,EAAE,KAAK,EAAE;IAC9D,KAAK,EAAE,cAAc;IACrB,UAAU,EAAE,eAAe;CAC5B,CAAC"}
