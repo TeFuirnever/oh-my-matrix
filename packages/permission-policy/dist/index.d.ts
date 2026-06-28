@@ -8,7 +8,7 @@
  * Single source of truth for the destructive-op classification + audit trail.
  * See ADR-013.
  */
-export { decidePermission, classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell, mostDangerousClass, } from './src/permission-policy';
+export { decidePermission, classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell, } from './src/permission-policy';
 export type { PermissionDecisionInput, PermissionDecision, EventPermissionInput, ToolEventLike, } from './src/permission-policy';
 export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath } from './src/audit-persister';
 export type { CommandClass, PermissionAuditEntry } from './src/types';

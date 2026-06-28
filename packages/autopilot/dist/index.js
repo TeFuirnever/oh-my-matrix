@@ -536,7 +536,7 @@ function register(api) {
         // Real OpenClaw event: {toolName, params:{command?, workdir?}, runId, toolCallId}.
         // NO event.args / event.toolKind / event.cwd (verified live 2026-06-28). Command
         // lives in params.command; cwd in params.workdir.
-        const { segments, cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
+        const { cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
             ? ({ outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
@@ -548,7 +548,7 @@ function register(api) {
                 // trusted autopilot run-scoped: keep allow-by-default (no defaultDeny)
             });
         // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-        const commandClass = segments.length > 0 ? (0, permission_policy_1.mostDangerousClass)(toolName, segments) : (0, permission_policy_1.classifyCommand)(toolName);
+        const commandClass = decision.commandClass ?? (0, permission_policy_1.classifyCommand)(toolName);
         const auditEntry = {
             at: Date.now(),
             runId,

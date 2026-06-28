@@ -59,7 +59,7 @@ function register(api) {
         // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
         // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
         // The command lives in params.command (shell string); cwd in params.workdir.
-        const { segments, cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
+        const { cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
         const cwd = eventCwd ?? process.cwd();
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
@@ -79,7 +79,7 @@ function register(api) {
             at: Date.now(),
             runId: `subagent:${sessionKey}`,
             toolName,
-            commandClass: segments.length > 0 ? (0, permission_policy_1.mostDangerousClass)(toolName, segments) : (0, permission_policy_1.classifyCommand)(toolName),
+            commandClass: decision.commandClass ?? (0, permission_policy_1.classifyCommand)(toolName),
             outcome: 'block',
             reason: decision.reason,
             cwd,

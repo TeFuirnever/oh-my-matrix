@@ -11,7 +11,7 @@
  * live in @openclaw/permission-policy (ADR-013); this plugin imports them.
  */
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
-import { decidePermissionForEvent, classifyCommand, appendAuditEntry, extractCommandSegments, mostDangerousClass } from '@openclaw/permission-policy';
+import { decidePermissionForEvent, classifyCommand, appendAuditEntry, extractCommandSegments } from '@openclaw/permission-policy';
 import { logWithContext } from './src/logger';
 
 export const id = 'dynamic-workflows';
@@ -82,7 +82,7 @@ export function register(api: OpenClawPluginApi): void {
     // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
     // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
     // The command lives in params.command (shell string); cwd in params.workdir.
-    const { segments, cwd: eventCwd } = extractCommandSegments(event);
+    const { cwd: eventCwd } = extractCommandSegments(event);
     const cwd = eventCwd ?? process.cwd();
 
     const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
@@ -105,7 +105,7 @@ export function register(api: OpenClawPluginApi): void {
         at: Date.now(),
         runId: `subagent:${sessionKey}`,
         toolName,
-        commandClass: segments.length > 0 ? mostDangerousClass(toolName, segments) : classifyCommand(toolName),
+        commandClass: decision.commandClass ?? classifyCommand(toolName),
         outcome: 'block',
         reason: decision.reason,
         cwd,

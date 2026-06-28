@@ -6,7 +6,6 @@ exports.extractCommandSegments = extractCommandSegments;
 exports.classifyCommand = classifyCommand;
 exports.decidePermission = decidePermission;
 exports.decidePermissionForEvent = decidePermissionForEvent;
-exports.mostDangerousClass = mostDangerousClass;
 /**
  * M2.4: Permission policy + Command Classifier
  *
@@ -288,8 +287,8 @@ function classifyCommand(tool, args = [], toolKind) {
  * Decide permission for a tool call based on classification.
  */
 function decidePermission(input) {
-    const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny } = input;
-    const cmdClass = classifyCommand(toolName, command, toolKind);
+    const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny, cmdClass: preClass } = input;
+    const cmdClass = preClass ?? classifyCommand(toolName, command, toolKind);
     // ─── Unconditional blocks ─────────────────────────────────
     if (cmdClass === 'credential_access') {
         return {
@@ -414,7 +413,7 @@ function decidePermissionForEvent(event, opts) {
         // shell segments below (that's where destructive commands ride). Without
         // this, defaultDeny would block write_file/apply_patch and subagents couldn't
         // produce anything.
-        return decidePermission({
+        const d = decidePermission({
             toolName: event.toolName,
             command: [],
             cwd,
@@ -422,10 +421,21 @@ function decidePermissionForEvent(event, opts) {
             workspaceRoot: opts.workspaceRoot,
             workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
         });
+        return { ...d, commandClass: classifyCommand(event.toolName, []) };
     }
-    // Shell command: any destructive/blockable segment blocks the whole call.
+    // Shell command: classify each segment ONCE, track the worst class for audit,
+    // and pass the class into decidePermission (cmdClass) so it skips its own
+    // classifyCommand call. Collapses the old separate mostDangerousClass pass.
     let allowReason = '';
+    let worstCls = 'unknown';
+    let worstRank = CLASS_DANGER_RANK.length - 1;
     for (const seg of segments) {
+        const cls = classifyCommand(event.toolName, seg);
+        const r = CLASS_DANGER_RANK.indexOf(cls);
+        if (r >= 0 && r < worstRank) {
+            worstCls = cls;
+            worstRank = r;
+        }
         const d = decidePermission({
             toolName: event.toolName,
             command: seg,
@@ -434,38 +444,20 @@ function decidePermissionForEvent(event, opts) {
             workspaceRoot: opts.workspaceRoot,
             workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
             defaultDeny: opts.defaultDeny,
+            cmdClass: cls,
         });
         if (d.outcome === 'block')
-            return d;
+            return { ...d, commandClass: cls };
         if (!allowReason)
             allowReason = d.reason;
     }
-    return { outcome: 'allow', reason: allowReason || `Allowed: ${event.toolName}`, audit: true };
+    return { outcome: 'allow', reason: allowReason || `Allowed: ${event.toolName}`, audit: true, commandClass: worstCls };
 }
-// Danger ranking (index 0 = most dangerous). Used to pick the worst class across
-// shell segments for audit accuracy.
+// Danger ranking (index 0 = most dangerous). Used by decidePermissionForEvent to
+// pick the worst class across shell segments for the audit commandClass field.
 const CLASS_DANGER_RANK = [
     'credential_access', 'system_write', 'destructive_git', 'workspace_cleanup',
     'network', 'workspace_write', 'worktree_create', 'safe_git', 'validation',
     'read_only', 'unknown',
 ];
-/**
- * Most dangerous CommandClass across shell segments — for audit accuracy.
- * decidePermissionForEvent already blocks on any dangerous segment; this reports
- * WHICH class for the audit trail. Picking segments[0] would mis-record
- * `cd X && git reset --hard` as read_only (the cd segment) instead of destructive_git.
- */
-function mostDangerousClass(toolName, segments) {
-    let worst = 'unknown';
-    let worstRank = CLASS_DANGER_RANK.length - 1;
-    for (const seg of segments) {
-        const c = classifyCommand(toolName, seg);
-        const r = CLASS_DANGER_RANK.indexOf(c);
-        if (r >= 0 && r < worstRank) {
-            worst = c;
-            worstRank = r;
-        }
-    }
-    return worst;
-}
 //# sourceMappingURL=permission-policy.js.map

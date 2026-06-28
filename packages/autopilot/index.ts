@@ -21,7 +21,7 @@ import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
-import { classifyCommand, decidePermissionForEvent, extractCommandSegments, mostDangerousClass } from '@openclaw/permission-policy';
+import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@openclaw/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
 import { runValidationCommands } from './src/command-runner';
@@ -572,7 +572,7 @@ export function register(api: OpenClawPluginApi): void {
     // Real OpenClaw event: {toolName, params:{command?, workdir?}, runId, toolCallId}.
     // NO event.args / event.toolKind / event.cwd (verified live 2026-06-28). Command
     // lives in params.command; cwd in params.workdir.
-    const { segments, cwd: eventCwd } = extractCommandSegments(event);
+    const { cwd: eventCwd } = extractCommandSegments(event);
     const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
     const decision = isConfiguredHighRisk
       ? ({ outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
@@ -585,7 +585,7 @@ export function register(api: OpenClawPluginApi): void {
         });
 
     // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-    const commandClass = segments.length > 0 ? mostDangerousClass(toolName, segments) : classifyCommand(toolName);
+    const commandClass = decision.commandClass ?? classifyCommand(toolName);
     const auditEntry: import('./src/types').PermissionAuditEntry = {
       at: Date.now(),
       runId,

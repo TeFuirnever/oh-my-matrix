@@ -16,7 +16,6 @@ export {
   decidePermissionForEvent,
   extractCommandSegments,
   tokenizeShell,
-  mostDangerousClass,
 } from './src/permission-policy';
 export type {
   PermissionDecisionInput,

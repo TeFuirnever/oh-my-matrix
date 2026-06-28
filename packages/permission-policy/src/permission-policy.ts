@@ -113,11 +113,15 @@ export interface PermissionDecisionInput {
   /** When true (untrusted/subagent sessions), unclassified commands are BLOCKED
    *  instead of allowed. Default false — trusted autopilot runs keep allow-by-default. */
   defaultDeny?: boolean;
+  /** Pre-classified CommandClass, to skip re-running classifyCommand when the
+   *  caller already classified the command (e.g. decidePermissionForEvent loops
+   *  segments and classifies each once). */
+  cmdClass?: CommandClass;
 }
 
 export type PermissionDecision =
-  | { outcome: 'allow'; reason: string; audit: true }
-  | { outcome: 'block'; reason: string; message: string };
+  | { outcome: 'allow'; reason: string; audit: true; commandClass?: CommandClass }
+  | { outcome: 'block'; reason: string; message: string; commandClass?: CommandClass };
 
 /**
  * Classify a command/tool call into a CommandClass category.
@@ -295,8 +299,8 @@ export function classifyCommand(
  * Decide permission for a tool call based on classification.
  */
 export function decidePermission(input: PermissionDecisionInput): PermissionDecision {
-  const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny } = input;
-  const cmdClass = classifyCommand(toolName, command, toolKind);
+  const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny, cmdClass: preClass } = input;
+  const cmdClass = preClass ?? classifyCommand(toolName, command, toolKind);
 
   // ─── Unconditional blocks ─────────────────────────────────
   if (cmdClass === 'credential_access') {
@@ -457,7 +461,7 @@ export function decidePermissionForEvent(
     // shell segments below (that's where destructive commands ride). Without
     // this, defaultDeny would block write_file/apply_patch and subagents couldn't
     // produce anything.
-    return decidePermission({
+    const d = decidePermission({
       toolName: event.toolName,
       command: [],
       cwd,
@@ -465,11 +469,19 @@ export function decidePermissionForEvent(
       workspaceRoot: opts.workspaceRoot,
       workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
     });
+    return { ...d, commandClass: classifyCommand(event.toolName, []) };
   }
 
-  // Shell command: any destructive/blockable segment blocks the whole call.
+  // Shell command: classify each segment ONCE, track the worst class for audit,
+  // and pass the class into decidePermission (cmdClass) so it skips its own
+  // classifyCommand call. Collapses the old separate mostDangerousClass pass.
   let allowReason = '';
+  let worstCls: CommandClass = 'unknown';
+  let worstRank = CLASS_DANGER_RANK.length - 1;
   for (const seg of segments) {
+    const cls = classifyCommand(event.toolName, seg);
+    const r = CLASS_DANGER_RANK.indexOf(cls);
+    if (r >= 0 && r < worstRank) { worstCls = cls; worstRank = r; }
     const d = decidePermission({
       toolName: event.toolName,
       command: seg,
@@ -478,34 +490,18 @@ export function decidePermissionForEvent(
       workspaceRoot: opts.workspaceRoot,
       workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
       defaultDeny: opts.defaultDeny,
+      cmdClass: cls,
     });
-    if (d.outcome === 'block') return d;
+    if (d.outcome === 'block') return { ...d, commandClass: cls };
     if (!allowReason) allowReason = d.reason;
   }
-  return { outcome: 'allow', reason: allowReason || `Allowed: ${event.toolName}`, audit: true };
+  return { outcome: 'allow', reason: allowReason || `Allowed: ${event.toolName}`, audit: true, commandClass: worstCls };
 }
 
-// Danger ranking (index 0 = most dangerous). Used to pick the worst class across
-// shell segments for audit accuracy.
+// Danger ranking (index 0 = most dangerous). Used by decidePermissionForEvent to
+// pick the worst class across shell segments for the audit commandClass field.
 const CLASS_DANGER_RANK: CommandClass[] = [
   'credential_access', 'system_write', 'destructive_git', 'workspace_cleanup',
   'network', 'workspace_write', 'worktree_create', 'safe_git', 'validation',
   'read_only', 'unknown',
 ];
-
-/**
- * Most dangerous CommandClass across shell segments — for audit accuracy.
- * decidePermissionForEvent already blocks on any dangerous segment; this reports
- * WHICH class for the audit trail. Picking segments[0] would mis-record
- * `cd X && git reset --hard` as read_only (the cd segment) instead of destructive_git.
- */
-export function mostDangerousClass(toolName: string, segments: string[][]): CommandClass {
-  let worst: CommandClass = 'unknown';
-  let worstRank = CLASS_DANGER_RANK.length - 1;
-  for (const seg of segments) {
-    const c = classifyCommand(toolName, seg);
-    const r = CLASS_DANGER_RANK.indexOf(c);
-    if (r >= 0 && r < worstRank) { worst = c; worstRank = r; }
-  }
-  return worst;
-}

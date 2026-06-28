@@ -7,26 +7,9 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCommand,
   decidePermission,
-  mostDangerousClass,
   extractCommandSegments,
 } from '../src/permission-policy';
 import type { PermissionDecisionInput } from '../src/permission-policy';
-
-describe('mostDangerousClass', () => {
-  it('picks destructive_git over cd read_only across && segments (audit accuracy)', () => {
-    // Real subagent shape: `cd /ws && git reset --hard` → [[cd,/ws],[git,reset,--hard,...]]
-    expect(mostDangerousClass('exec', [['cd', '/ws'], ['git', 'reset', '--hard', 'HEAD~1']])).toBe('destructive_git');
-  });
-  it('returns the only segment class when single', () => {
-    expect(mostDangerousClass('exec', [['git', 'status']])).toBe('safe_git');
-  });
-  it('returns unknown for empty segments', () => {
-    expect(mostDangerousClass('exec', [])).toBe('unknown');
-  });
-  it('picks credential_access as the most dangerous segment', () => {
-    expect(mostDangerousClass('exec', [['cd', '/x'], ['get-credential']])).toBe('credential_access');
-  });
-});
 
 describe('extractCommandSegments shell-feature detection (substitution evasion fix)', () => {
   it('flags command substitution / backticks / process substitution', () => {

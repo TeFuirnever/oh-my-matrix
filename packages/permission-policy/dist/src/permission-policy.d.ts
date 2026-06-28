@@ -52,15 +52,21 @@ export interface PermissionDecisionInput {
     /** When true (untrusted/subagent sessions), unclassified commands are BLOCKED
      *  instead of allowed. Default false — trusted autopilot runs keep allow-by-default. */
     defaultDeny?: boolean;
+    /** Pre-classified CommandClass, to skip re-running classifyCommand when the
+     *  caller already classified the command (e.g. decidePermissionForEvent loops
+     *  segments and classifies each once). */
+    cmdClass?: CommandClass;
 }
 export type PermissionDecision = {
     outcome: 'allow';
     reason: string;
     audit: true;
+    commandClass?: CommandClass;
 } | {
     outcome: 'block';
     reason: string;
     message: string;
+    commandClass?: CommandClass;
 };
 /**
  * Classify a command/tool call into a CommandClass category.
@@ -89,11 +95,4 @@ export interface EventPermissionInput {
     defaultDeny?: boolean;
 }
 export declare function decidePermissionForEvent(event: ToolEventLike, opts: EventPermissionInput): PermissionDecision;
-/**
- * Most dangerous CommandClass across shell segments — for audit accuracy.
- * decidePermissionForEvent already blocks on any dangerous segment; this reports
- * WHICH class for the audit trail. Picking segments[0] would mis-record
- * `cd X && git reset --hard` as read_only (the cd segment) instead of destructive_git.
- */
-export declare function mostDangerousClass(toolName: string, segments: string[][]): CommandClass;
 //# sourceMappingURL=permission-policy.d.ts.map
