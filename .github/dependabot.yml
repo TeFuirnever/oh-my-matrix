@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # GitHub Actions versions (checkout, setup-node, deploy-pages, etc.)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+
+  # npm dependencies (root + pnpm workspace)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+    groups:
+      # batch non-breaking minor/patch updates into one PR
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
