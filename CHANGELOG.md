@@ -2,6 +2,21 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [Unreleased]
+
+### Added
+- **Hand-drawn landing page** — bilingual (zh/en) marketing site at the GitHub Pages root (`landing/`), omo.dev-style with rough.js animations; VitePress docs moved under `/docs/`. Live at https://tefuirnever.github.io/oh-my-matrix/.
+- **Host deploy runbook skeleton** — [`docs/runbooks/host-deploy.md`](docs/runbooks/host-deploy.md): the build → pack/cp dist → refresh MA → restart gateway → deployed-dist smoke path. Repo-side steps executable; host-internal steps marked `[TODO:host]`.
+- **Dependabot + CODEOWNERS** — `.github/dependabot.yml` (npm + github-actions, weekly, minor/patch grouped) and `.github/CODEOWNERS`.
+
+### Changed
+- **Docs served under `/docs/`** — VitePress `base` set to `/oh-my-matrix/docs/`; Pages CI assembles `landing/` at the site root and VitePress output under `/docs/`.
+- **Pages + CI actions bumped to Node 24** — `checkout@v7`, `setup-node@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5`, `pnpm/action-setup@v6` (clears the Node 20 deprecation warning).
+
+### Repository / Security
+- **`master` branch protection** — requires the `test` CI check to pass, blocks force-push and deletions, enforces linear history; admin bypass retained for the solo maintainer.
+- **Dependabot security updates + secret scanning push protection enabled**; squash-only merges; auto-delete branch on merge.
+
 ## [0.7.2] — 2026-06-28
 
 **Runtime guard closed loop + open-source readiness.** The subagent runtime guard (a placebo in production) is fixed end-to-end with live e2e proof, and the repo is scrubbed for open-source release.

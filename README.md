@@ -144,7 +144,7 @@ pnpm --filter @openclaw/permission-policy test
 | 根仓库公开 release | 未发布 |
 | npm public package | 未发布，workspace packages 为 private |
 | CI | GitHub Actions 已配置 |
-| 文档站 | VitePress，见 [`website/`](website/) |
+| 在线站点 | https://tefuirnever.github.io/oh-my-matrix/ — 手绘 landing（根）+ 文档（`/docs/`，VitePress 源见 [`website/`](website/)）|
 | 安全策略 | [`SECURITY.md`](SECURITY.md) |
 | 贡献指南 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | 行为准则 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) |

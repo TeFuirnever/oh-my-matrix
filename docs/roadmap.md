@@ -29,7 +29,7 @@ Exit criteria:
 
 | Deliverable | Why | Status |
 |---|---|---|
-| Internal host-deploy steps documented | Source tests do not prove the host loaded new dist | Planned |
+| Internal host-deploy steps documented | Source tests do not prove the host loaded new dist | In progress 2026-06-29 — skeleton in [`runbooks/host-deploy.md`](runbooks/host-deploy.md); host-internal steps `[TODO:host]` |
 | Deployed-dist smoke checklist | Runtime guard and autopilot hooks can fail by event-shape drift | Planned |
 | Package refresh contract for MatrixAssistant/OpenClaw | Keeps vendored/bundled plugin copies auditable | Planned |
 
