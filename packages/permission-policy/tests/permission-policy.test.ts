@@ -27,6 +27,39 @@ describe('mostDangerousClass', () => {
   });
 });
 
+describe('classifyCommand git/find evasion hardening (spec §3)', () => {
+  it('force-push is destructive_git; plain push stays network', () => {
+    expect(classifyCommand('git', ['push', '--force'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['push', '-f'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['push', '--force-with-lease'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['push', 'origin', 'main'])).toBe('network');
+  });
+  it('commit --amend / rebase is destructive_git', () => {
+    expect(classifyCommand('git', ['commit', '--amend'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['rebase', 'main'])).toBe('destructive_git');
+  });
+  it('branch -D / tag -d / stash clear|drop is destructive_git', () => {
+    expect(classifyCommand('git', ['branch', '-D', 'x'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['tag', '-d', 'v1'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['stash', 'clear'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['stash', 'drop'])).toBe('destructive_git');
+  });
+  it('checkout discarding workdir is destructive_git; branch switch stays safe', () => {
+    expect(classifyCommand('git', ['checkout', '.'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['checkout', '--', 'f'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['checkout', 'main'])).toBe('safe_git');
+  });
+  it('find -delete/-exec is workspace_cleanup; plain find stays read_only', () => {
+    expect(classifyCommand('find', ['.', '-delete'])).toBe('workspace_cleanup');
+    expect(classifyCommand('find', ['.', '-exec', 'rm'])).toBe('workspace_cleanup');
+    expect(classifyCommand('find', ['.', '-name', 'x'])).toBe('read_only');
+  });
+  it('strips leading git -c/-C global flags before the subcommand', () => {
+    expect(classifyCommand('git', ['-c', 'x=y', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['-C', '/p', 'push', '--force'])).toBe('destructive_git');
+  });
+});
+
 // ─── Command Classifier ──────────────────────────────────────
 
 describe('classifyCommand', () => {
@@ -549,8 +582,8 @@ describe('R-2: classifyCommand — git add/commit are safe_git', () => {
     expect(classifyCommand('git', ['commit', '-m', 'feat: add thing'])).toBe('safe_git');
   });
 
-  it('classifies git commit --amend as safe_git', () => {
-    expect(classifyCommand('git', ['commit', '--amend', '--no-edit'])).toBe('safe_git');
+  it('classifies git commit --amend as destructive_git (history rewrite, spec §3)', () => {
+    expect(classifyCommand('git', ['commit', '--amend', '--no-edit'])).toBe('destructive_git');
   });
 
   it('allows git add', () => {

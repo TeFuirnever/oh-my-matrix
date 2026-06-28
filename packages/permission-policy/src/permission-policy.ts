@@ -177,24 +177,42 @@ export function classifyCommand(
 
   // ─── Git commands ────────────────────────────────────────
   if (toolLower === 'git' && args.length > 0) {
-    const sub = args[0];
+    // Strip leading global flags (-c key=val, -C path) before the subcommand,
+    // so `git -c x=y reset --hard` still classifies as destructive. Without this
+    // the global flag pushes the real subcommand past args[0] → 'unknown' → allow.
+    let idx = 0;
+    while (idx + 1 < args.length && (args[idx] === '-c' || args[idx] === '-C')) idx += 2;
+    const sub = args[idx];
 
     // worktree subcommands
     if (sub === 'worktree') {
-      if (args[1] === 'add') return 'worktree_create';
-      if (args[1] === 'remove') return 'workspace_cleanup';
+      if (args[idx + 1] === 'add') return 'worktree_create';
+      if (args[idx + 1] === 'remove') return 'workspace_cleanup';
     }
 
     // destructive git
     if (sub === 'reset' && args.includes('--hard')) return 'destructive_git';
     if (sub === 'clean') return 'destructive_git';
-    if (sub === 'checkout' && args.includes('--')) return 'destructive_git';
+    if (sub === 'checkout') {
+      if (args.includes('--')) return 'destructive_git'; // explicit discard separator
+      const target = args[idx + 1];
+      if (target === '.' || target === '*') return 'destructive_git'; // discard workdir changes
+    }
+    // force-push rewrites remote history (unrecoverable without remote reflog)
+    if (sub === 'push' && args.some(a => a === '--force' || a === '-f' || a === '--force-with-lease')) return 'destructive_git';
+    // local history rewrite
+    if (sub === 'commit' && args.includes('--amend')) return 'destructive_git';
+    if (sub === 'rebase') return 'destructive_git';
+    // ref deletion (recoverable via reflog locally, but destructive intent)
+    if (sub === 'branch' && args.some(a => a === '-D' || a === '-d' || a === '--delete')) return 'destructive_git';
+    if (sub === 'tag' && args.some(a => a === '-d' || a === '--delete')) return 'destructive_git';
+    if (sub === 'stash' && args.slice(idx + 1).some(a => a === 'clear' || a === 'drop')) return 'destructive_git';
 
-    // network git
+    // network git (non-force push still allowed)
     if (sub === 'push' || sub === 'fetch' || sub === 'pull' || sub === 'clone') return 'network';
 
-    // safe git
-    const safeGitSubs = ['status', 'diff', 'log', 'branch', 'show', 'rev-parse', 'remote', 'stash', 'tag', 'add', 'commit', 'reset'];
+    // safe git (checkout listed: branch-switch is safe; the discard cases above already returned)
+    const safeGitSubs = ['status', 'diff', 'log', 'branch', 'show', 'rev-parse', 'remote', 'stash', 'tag', 'add', 'commit', 'reset', 'checkout'];
     if (safeGitSubs.includes(sub)) return 'safe_git';
   }
 
@@ -224,6 +242,12 @@ export function classifyCommand(
   // ─── B-4: env <cmd> passes through to the actual command ────
   if (toolLower === 'env' && args.length > 0) {
     return classifyCommand(args[0], args.slice(1), toolKind);
+  }
+
+  // find with -delete/-exec/-ok is destructive (deletes files or runs an arbitrary
+  // command per match). Plain `find` (search) stays read_only below.
+  if (toolLower === 'find' && args.some(a => a === '-delete' || a === '-exec' || a === '-ok')) {
+    return 'workspace_cleanup';
   }
 
   // ─── Read-only tools ─────────────────────────────────────
