@@ -8,6 +8,7 @@ import {
   classifyCommand,
   decidePermission,
   mostDangerousClass,
+  extractCommandSegments,
 } from '../src/permission-policy';
 import type { PermissionDecisionInput } from '../src/permission-policy';
 
@@ -24,6 +25,18 @@ describe('mostDangerousClass', () => {
   });
   it('picks credential_access as the most dangerous segment', () => {
     expect(mostDangerousClass('exec', [['cd', '/x'], ['get-credential']])).toBe('credential_access');
+  });
+});
+
+describe('extractCommandSegments shell-feature detection (substitution evasion fix)', () => {
+  it('flags command substitution / backticks / process substitution', () => {
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo $(rm -rf /)' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo `rm`' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'cat <(rm -rf /)' } }).hasShellFeature).toBe(true);
+  });
+  it('does NOT flag fd-redirect (2>&1) or plain commands', () => {
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'git status 2>&1' } }).hasShellFeature).toBe(false);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'git status' } }).hasShellFeature).toBe(false);
   });
 });
 
@@ -60,6 +73,30 @@ describe('classifyCommand git/find evasion hardening (spec §3)', () => {
   });
 });
 
+describe('extractCommandSegments (shell split)', () => {
+  it('splits on && into per-command argv', () => {
+    const { segments } = extractCommandSegments({ toolName: 'exec', params: { command: 'cd /ws && git status' } });
+    expect(segments).toEqual([['cd', '/ws'], ['git', 'status']]);
+  });
+  it('splits on & (background) — evasion fix: echo hi & git reset --hard', () => {
+    const { segments } = extractCommandSegments({ toolName: 'exec', params: { command: 'echo hi & git reset --hard' } });
+    expect(segments.length).toBe(2);
+    expect(segments[1]).toEqual(['git', 'reset', '--hard']);
+  });
+  it('splits on newline', () => {
+    const { segments } = extractCommandSegments({ toolName: 'exec', params: { command: 'echo a\necho b' } });
+    expect(segments.length).toBe(2);
+  });
+  it('returns cwd from params.workdir', () => {
+    const { cwd } = extractCommandSegments({ toolName: 'exec', params: { command: 'git status', workdir: '/x' } });
+    expect(cwd).toBe('/x');
+  });
+  it('empty segments for non-shell tools (read/sessions_*)', () => {
+    const { segments } = extractCommandSegments({ toolName: 'read', params: { path: '/x' } });
+    expect(segments).toEqual([]);
+  });
+});
+
 // ─── Command Classifier ──────────────────────────────────────
 
 describe('classifyCommand', () => {
@@ -90,8 +127,10 @@ describe('classifyCommand', () => {
     expect(classifyCommand('pnpm', ['run', 'build'])).toBe('validation');
   });
 
-  it('classifies npx/npm test/lint as validation', () => {
-    expect(classifyCommand('npx', ['vitest', 'run'])).toBe('validation');
+  it('npx / <pkg>-exec wrap arbitrary commands → classify payload (wrapper-exec fix); npm test stays validation', () => {
+    expect(classifyCommand('npx', ['rm', '-rf', 'dist'])).toBe('workspace_cleanup');
+    expect(classifyCommand('pnpm', ['exec', 'rm', '-rf', 'dist'])).toBe('workspace_cleanup');
+    expect(classifyCommand('npm', ['exec', 'rm', '-rf', 'dist'])).toBe('workspace_cleanup');
     expect(classifyCommand('npm', ['test'])).toBe('validation');
   });
 

@@ -59,7 +59,14 @@ function tokenizeShell(command) {
         args.push(current);
     return args;
 }
-const SHELL_SPLIT_RE = /\s*(?:&&|\|\||\||;)\s*/;
+// Split on shell command separators. `&&`/`||` precede single `&`/`|` so they
+// match first. `&` (background) and `\n` are separators too — without them
+// `echo hi & git reset --hard` or `safe\ndangerous` would classify on the first
+// token only and let the destructive command slip through. The lookbehind/
+// lookahead on `&` EXCLUDES redirect forms like `2>&1` / `1>&2` (where `&`
+// follows `>`), which are NOT command separators — splitting those produced a
+// bogus `["1"]` segment that defaultDeny would block (false positive).
+const SHELL_SPLIT_RE = /\s*(?:&&|\|\||\||;|(?<!>)&(?!&)|\n)\s*/;
 /**
  * Extract argv segments + cwd from a REAL `before_tool_call` event.
  *
@@ -77,7 +84,12 @@ function extractCommandSegments(event) {
     const raw = params['command'];
     const workdir = typeof params['workdir'] === 'string' ? params['workdir'] : undefined;
     if (typeof raw !== 'string' || raw.trim() === '')
-        return { segments: [], cwd: workdir };
+        return { segments: [], cwd: workdir, hasShellFeature: false };
+    // Shell features tokenizeShell CANNOT parse safely — command substitution `$(...)`,
+    // backticks, process substitution `<(...)`/`>(...)`. These execute arbitrary code that
+    // classifyCommand never sees (e.g. `echo $(rm -rf /)` classifies as read-only echo).
+    // Callers in untrusted (subagent) mode must block when this is true.
+    const hasShellFeature = /\$\(|`|<\(|>\(/.test(raw);
     const segments = raw
         .split(SHELL_SPLIT_RE)
         .map((seg) => tokenizeShell(seg))
@@ -85,10 +97,10 @@ function extractCommandSegments(event) {
     if (!workdir) {
         for (const seg of segments) {
             if (seg[0]?.toLowerCase() === 'cd' && seg[1])
-                return { segments, cwd: seg[1] };
+                return { segments, cwd: seg[1], hasShellFeature };
         }
     }
-    return { segments, cwd: workdir };
+    return { segments, cwd: workdir, hasShellFeature };
 }
 /**
  * Classify a command/tool call into a CommandClass category.
@@ -216,10 +228,16 @@ function classifyCommand(tool, args = [], toolKind) {
             return 'network';
         if (sub === 'test' || sub === 'run')
             return 'validation';
+        // `exec` runs an ARBITRARY wrapped command — classify the payload, not 'validation'
+        if (sub === 'exec' && args.length > 1)
+            return classifyCommand(args[1], args.slice(2), toolKind);
         if (sub === 'exec')
             return 'validation';
         return 'unknown';
     }
+    // `npx <cmd>` runs an arbitrary command — classify the payload, not 'validation'
+    if (toolLower === 'npx' && args.length > 0)
+        return classifyCommand(args[0], args.slice(1), toolKind);
     if (toolLower === 'npx')
         return 'validation';
     // ─── Network tools ───────────────────────────────────────
@@ -377,8 +395,18 @@ function decidePermission(input) {
     };
 }
 function decidePermissionForEvent(event, opts) {
-    const { segments, cwd: workdir } = extractCommandSegments(event);
+    const { segments, cwd: workdir, hasShellFeature } = extractCommandSegments(event);
     const cwd = workdir ?? opts.cwd;
+    // Untrusted (subagent) mode: block shell features the tokenizer can't parse safely
+    // (command substitution / backticks / process substitution). These hide arbitrary
+    // commands from classifyCommand — `echo $(rm -rf /)` would otherwise allow as read-only.
+    if (hasShellFeature && opts.defaultDeny) {
+        return {
+            outcome: 'block',
+            reason: `Untrusted session blocked unparsable shell feature ($(), backticks, <()): ${event.toolName}`,
+            message: 'Shell substitution / process substitution is blocked in subagent sessions',
+        };
+    }
     if (segments.length === 0) {
         // Non-shell framework tool (read/write_file/sessions_*/process/update_plan):
         // classify by toolName ONLY. These are agent-API tools, not shell-injection

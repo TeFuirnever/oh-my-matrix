@@ -39,6 +39,7 @@ export declare function tokenizeShell(command: string): string[];
 export declare function extractCommandSegments(event: ToolEventLike): {
     segments: string[][];
     cwd: string | undefined;
+    hasShellFeature: boolean;
 };
 export interface PermissionDecisionInput {
     toolName: string;

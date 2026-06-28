@@ -111,6 +111,17 @@ describe('dynamic-workflows subagent guard', () => {
     expect(result).toBeUndefined();
   });
 
+  it('blocks destructive command hidden behind & (background-operator evasion)', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    // `echo harmless & git reset --hard` → shell runs echo in bg, reset --hard in fg.
+    // Pre-fix SHELL_SPLIT_RE didn't split on single &, so guard saw only `echo` → allow.
+    const result = (await h(
+      { toolName: 'exec', params: { command: 'echo harmless & git reset --hard HEAD~1' } },
+      { sessionKey: SUBAGENT_KEY },
+    )) as { block?: boolean };
+    expect(result.block).toBe(true);
+  });
+
   it('does NOT enforce on the main session (no :subagent: segment)', async () => {
     const h = mock.hooks.get('before_tool_call')!;
     const result = await h(
