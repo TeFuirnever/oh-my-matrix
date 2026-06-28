@@ -69,7 +69,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mock.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'get-credential', toolKind: 'credential_access', args: [] },
+        { toolName: 'get-credential', params: {} },
         { sessionKey: 'sess-perm-1' },
       ) as any;
 
@@ -84,7 +84,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mock.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'Read', toolKind: 'read_only', args: [] },
+        { toolName: 'read', params: { path: '/x' } },
         { sessionKey: 'sess-perm-2' },
       );
 
@@ -100,7 +100,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mock.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'write_file', toolKind: 'workspace_write', args: [] },
+        { toolName: 'write_file', params: {} },
         { sessionKey: 'sess-fy-ws' },
       );
 
@@ -138,7 +138,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mockFy.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard', 'HEAD~1'] },
+        { toolName: 'exec', params: { command: 'git reset --hard HEAD~1' } },
         { sessionKey: 'sess-fy-dg-allow' },
       );
 
@@ -153,7 +153,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mock.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard', 'HEAD~1'] },
+        { toolName: 'exec', params: { command: 'git reset --hard HEAD~1' } },
         { sessionKey: 'sess-fy-dg-block' },
       ) as any;
 
@@ -184,7 +184,7 @@ describe('permission-wiring: decidePermission() integration', () => {
       const beforeToolCall = mockWsOut.hooks.get('before_tool_call')!;
       // event.cwd is clearly outside process.cwd() → must be blocked
       const result = await beforeToolCall(
-        { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard', 'HEAD~1'], cwd: '/tmp/completely-different-path-not-in-workspace' },
+        { toolName: 'exec', params: { command: 'git reset --hard HEAD~1', workdir: '/tmp/completely-different-path-not-in-workspace' } },
         { sessionKey: 'sess-fy-outside' },
       ) as any;
 
@@ -215,7 +215,7 @@ describe('permission-wiring: decidePermission() integration', () => {
       const beforeToolCall = mockWsIn.hooks.get('before_tool_call')!;
       // event.cwd equals workspacePath exactly → must be allowed
       const result = await beforeToolCall(
-        { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard', 'HEAD~1'], cwd: process.cwd() },
+        { toolName: 'exec', params: { command: 'git reset --hard HEAD~1', workdir: process.cwd() } },
         { sessionKey: 'sess-fy-inside' },
       );
 
@@ -229,7 +229,7 @@ describe('permission-wiring: decidePermission() integration', () => {
 
       const beforeToolCall = mock.hooks.get('before_tool_call')!;
       const result = await beforeToolCall(
-        { toolName: 'get-credential', toolKind: 'credential_access', args: [] },
+        { toolName: 'get-credential', params: {} },
         { sessionKey: 'sess-fy-cred' },
       ) as any;
 

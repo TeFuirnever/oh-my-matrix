@@ -10,8 +10,20 @@
  */
 
 // ─── Permission policy ──────────────────────────────────────────────────
-export { decidePermission, classifyCommand } from './src/permission-policy';
-export type { PermissionDecisionInput, PermissionDecision } from './src/permission-policy';
+export {
+  decidePermission,
+  classifyCommand,
+  decidePermissionForEvent,
+  extractCommandSegments,
+  tokenizeShell,
+  mostDangerousClass,
+} from './src/permission-policy';
+export type {
+  PermissionDecisionInput,
+  PermissionDecision,
+  EventPermissionInput,
+  ToolEventLike,
+} from './src/permission-policy';
 
 // ─── Audit persistence ──────────────────────────────────────────────────
 export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath } from './src/audit-persister';

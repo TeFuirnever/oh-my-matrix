@@ -56,22 +56,21 @@ function register(api) {
         if (!isSubagentSessionKey(sessionKey))
             return;
         const toolName = event.toolName;
-        const toolKind = event.toolKind;
-        const args = Array.isArray(event.args) ? event.args : [];
-        const cwd = event.cwd ?? process.cwd();
+        // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
+        // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
+        // The command lives in params.command (shell string); cwd in params.workdir.
+        const { segments, cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
+        const cwd = eventCwd ?? process.cwd();
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
             ? { outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-            : (0, permission_policy_1.decidePermission)({
-                toolName,
-                toolKind,
-                command: args,
+            : (0, permission_policy_1.decidePermissionForEvent)(event, {
                 cwd,
-                // No workspace context for ad-hoc subagents → destructive-git
-                // containment check is skipped (permission-policy only checks
-                // workspace when workflowAllowsDestructiveGit=true), so destructive
-                // git falls straight to block. Fail-closed by design.
+                // No workspace context for ad-hoc subagents → destructive-git containment
+                // check is skipped (only runs when workflowAllowsDestructiveGit=true), so
+                // destructive git falls straight to block. Fail-closed by design.
                 workflowAllowsDestructiveGit: false,
+                defaultDeny: true, // subagent: unclassified SHELL commands are blocked
             });
         if (decision.outcome !== 'block')
             return; // allow (read_only / workspace_write / network)
@@ -80,7 +79,7 @@ function register(api) {
             at: Date.now(),
             runId: `subagent:${sessionKey}`,
             toolName,
-            commandClass: (0, permission_policy_1.classifyCommand)(toolName, args, toolKind),
+            commandClass: segments.length > 0 ? (0, permission_policy_1.mostDangerousClass)(toolName, segments) : (0, permission_policy_1.classifyCommand)(toolName),
             outcome: 'block',
             reason: decision.reason,
             cwd,

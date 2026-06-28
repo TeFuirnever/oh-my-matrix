@@ -1,8 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveReal = resolveReal;
+exports.tokenizeShell = tokenizeShell;
+exports.extractCommandSegments = extractCommandSegments;
 exports.classifyCommand = classifyCommand;
 exports.decidePermission = decidePermission;
+exports.decidePermissionForEvent = decidePermissionForEvent;
+exports.mostDangerousClass = mostDangerousClass;
 /**
  * M2.4: Permission policy + Command Classifier
  *
@@ -25,6 +29,66 @@ function resolveReal(p) {
     catch {
         return (0, path_1.resolve)(p);
     }
+}
+/**
+ * Split a shell command string into argv, respecting single/double quotes.
+ * Mirrors autopilot's parseCommandArgs. Does NOT expand $vars/globs —
+ * classification only needs the binary + flags.
+ */
+function tokenizeShell(command) {
+    const args = [];
+    let current = '';
+    let inDouble = false;
+    let inSingle = false;
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+        if (ch === '"' && !inSingle)
+            inDouble = !inDouble;
+        else if (ch === "'" && !inDouble)
+            inSingle = !inSingle;
+        else if (ch === ' ' && !inDouble && !inSingle) {
+            if (current) {
+                args.push(current);
+                current = '';
+            }
+        }
+        else
+            current += ch;
+    }
+    if (current)
+        args.push(current);
+    return args;
+}
+const SHELL_SPLIT_RE = /\s*(?:&&|\|\||\||;)\s*/;
+/**
+ * Extract argv segments + cwd from a REAL `before_tool_call` event.
+ *
+ * Real subagent shell calls look like `cd /ws && git status 2>&1` — one
+ * `params.command` string chained with shell operators. We split on those
+ * operators so each sub-command is classified independently (otherwise the
+ * leading `cd` masks a trailing `git reset --hard` → fail-open). cwd comes from
+ * `params.workdir` (host-authoritative); falls back to the first `cd <dir>`.
+ *
+ * Non-shell tools (read/process/update_plan/sessions_*) have no `params.command`
+ * → empty segments; the caller classifies by toolName alone.
+ */
+function extractCommandSegments(event) {
+    const params = event.params ?? {};
+    const raw = params['command'];
+    const workdir = typeof params['workdir'] === 'string' ? params['workdir'] : undefined;
+    if (typeof raw !== 'string' || raw.trim() === '')
+        return { segments: [], cwd: workdir };
+    const segments = raw
+        .split(SHELL_SPLIT_RE)
+        .map((seg) => tokenizeShell(seg))
+        .filter((seg) => seg.length > 0);
+    if (!workdir) {
+        for (const seg of segments) {
+            if (seg[0]?.toLowerCase() === 'cd' && seg[1])
+                return { segments, cwd: seg[1] };
+        }
+    }
+    return { segments, cwd: workdir };
 }
 /**
  * Classify a command/tool call into a CommandClass category.
@@ -156,6 +220,16 @@ function classifyCommand(tool, args = [], toolKind) {
         // Common agent tool names for reading files/content
         'read_file', 'read', 'view', 'get_file', 'open_file', 'list_files',
         'list_directory', 'glob', 'search_files',
+        // `cd` is a no-op shell builtin (changes shell cwd only) — safe even when
+        // chained before a destructive command; the destructive segment is classified
+        // separately by extractCommandSegments. (verified live 2026-06-28)
+        'cd',
+        // Agent-framework tools (verified in real subagent events 2026-06-28): these
+        // are workflow mechanics, not user commands — fan-out spawn/yield, planning,
+        // process poll/kill of the agent's own child sessions. Allow in subagent
+        // sessions so defaultDeny doesn't break the workflow machinery itself.
+        'process', 'update_plan', 'sessions_spawn', 'sessions_yield',
+        'sessions_get', 'sessions_list', 'todo_write',
     ];
     if (readOnlyTools.includes(toolLower))
         return 'read_only';
@@ -165,7 +239,7 @@ function classifyCommand(tool, args = [], toolKind) {
  * Decide permission for a tool call based on classification.
  */
 function decidePermission(input) {
-    const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit } = input;
+    const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny } = input;
     const cmdClass = classifyCommand(toolName, command, toolKind);
     // ─── Unconditional blocks ─────────────────────────────────
     if (cmdClass === 'credential_access') {
@@ -252,14 +326,87 @@ function decidePermission(input) {
         };
     }
     // ─── Unknown / unclassified ──────────────────────────────
-    // Blacklist strategy: dangerous operations are explicitly blocked above.
-    // Anything not recognized is allowed by default — a whitelist approach would
-    // block every new tool or wrapper the gateway introduces, causing "Approval
-    // timed out" errors that are indistinguishable from real failures.
+    if (defaultDeny) {
+        // Untrusted (subagent) sessions: fail CLOSED. Block anything not recognized.
+        // This inversion is what makes the subagent guard a real guard, not a placebo.
+        return {
+            outcome: 'block',
+            reason: `Untrusted session blocked unclassified command: ${toolName} ${command.join(' ')}`,
+            message: `Tool "${toolName}" is not on the allowlist for subagent sessions`,
+        };
+    }
+    // Trusted (autopilot main-session) runs: blacklist strategy — dangerous ops are
+    // explicitly blocked above; anything else is allowed. A whitelist would block
+    // every new tool the gateway introduces, causing "Approval timed out" errors
+    // indistinguishable from real failures.
     return {
         outcome: 'allow',
         reason: `Unclassified command allowed by default: ${toolName} ${command.join(' ')}`,
         audit: true,
     };
+}
+function decidePermissionForEvent(event, opts) {
+    const { segments, cwd: workdir } = extractCommandSegments(event);
+    const cwd = workdir ?? opts.cwd;
+    if (segments.length === 0) {
+        // Non-shell framework tool (read/write_file/sessions_*/process/update_plan):
+        // classify by toolName ONLY. These are agent-API tools, not shell-injection
+        // vectors, so they stay allow-by-default — defaultDeny applies only to the
+        // shell segments below (that's where destructive commands ride). Without
+        // this, defaultDeny would block write_file/apply_patch and subagents couldn't
+        // produce anything.
+        return decidePermission({
+            toolName: event.toolName,
+            command: [],
+            cwd,
+            workspacePath: opts.workspacePath,
+            workspaceRoot: opts.workspaceRoot,
+            workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
+        });
+    }
+    // Shell command: any destructive/blockable segment blocks the whole call.
+    let allowReason = '';
+    for (const seg of segments) {
+        const d = decidePermission({
+            toolName: event.toolName,
+            command: seg,
+            cwd,
+            workspacePath: opts.workspacePath,
+            workspaceRoot: opts.workspaceRoot,
+            workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
+            defaultDeny: opts.defaultDeny,
+        });
+        if (d.outcome === 'block')
+            return d;
+        if (!allowReason)
+            allowReason = d.reason;
+    }
+    return { outcome: 'allow', reason: allowReason || `Allowed: ${event.toolName}`, audit: true };
+}
+// Danger ranking (index 0 = most dangerous). Used to pick the worst class across
+// shell segments for audit accuracy.
+const CLASS_DANGER_RANK = [
+    'credential_access', 'system_write', 'destructive_git', 'workspace_cleanup',
+    'network', 'workspace_write', 'worktree_create', 'safe_git', 'validation',
+    'read_only', 'unknown',
+];
+/**
+ * Most dangerous CommandClass across shell segments — for audit accuracy.
+ * decidePermissionForEvent already blocks on any dangerous segment; this reports
+ * WHICH class for the audit trail. Picking segments[0] would mis-record
+ * `cd X && git reset --hard` as read_only (the cd segment) instead of destructive_git.
+ */
+function mostDangerousClass(toolName, segments) {
+    let worst = 'unknown';
+    let worstRank = CLASS_DANGER_RANK.length - 1;
+    for (const seg of segments) {
+        const c = classifyCommand(toolName, seg);
+        const r = CLASS_DANGER_RANK.indexOf(c);
+        if (r >= 0 && r < worstRank) {
+            worst = c;
+            worstRank = r;
+        }
+    }
+    return worst;
 }
 //# sourceMappingURL=permission-policy.js.map

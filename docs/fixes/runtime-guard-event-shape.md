@@ -1,6 +1,19 @@
 # Fix Spec: Runtime Guard Event-Shape Bug (fail-open in production)
 
-> **Status: NOT STARTED.** Surfaced by adversarial code review 2026-06-27.
+> ⛔ **HARD DISCIPLINE — read before writing ONE line of fix code.** Capture a real
+> `before_tool_call` event from a running MA subagent FIRST: temporarily log
+> `JSON.stringify(event)` at the top of the dynamic-workflows handler, run an OpenProse
+> workflow, let the subagent issue a safe `git status`. The entire bug was tests built on
+> an *assumed* event shape the host never emits — **that loop must not repeat**. Real shape
+> first → then [§ Investigation below](#investigation-the-fresh-session-must-do-first-before-writing-fix-code).
+> A green test against an invented shape is the *bug*, not the proof.
+
+> **Status: DONE — implemented + deployed + verified 2026-06-28.** Surfaced by
+> adversarial review 2026-06-27 (was a placebo — context below). Verify: 3 packages
+> green (permission-policy 109 / dynamic-workflows 11 / autopilot 528) + deployed-dist
+> `verify-guard` driving the real event shape (destructive / `cd && git reset --hard` /
+> `rm -rf` blocked; `git status` / main-session allowed). **MA must restart to load**
+> (the running process still has the pre-fix module cached).
 > The shipped runtime guard (ADR-011→012→013) is a **placebo in production** — it
 > reads event fields that do not exist on the real OpenClaw event, so it fails OPEN
 > (allows destructive ops) instead of closed. Tests pass only because they use a
@@ -54,6 +67,41 @@ Survey the real `params` shape across ALL tool types the guard will see in a sub
 5. **A real subagent tool call** — if possible, capture an actual `before_tool_call` event from a running MA subagent (log `JSON.stringify(event)` once) to confirm the shape empirically. This is the ground truth that the fictional tests lacked.
 
 Record the findings in this spec (append a "## Params-shape survey" section) before writing fix code.
+
+## Params-shape survey — VERIFIED (live capture 2026-06-28)
+
+20 real `before_tool_call` events captured from a running MA (subagent ran `git status`
+via `sessions_spawn` fan-out). **All assumptions below replaced by fact.**
+
+**Event top-level keys = `["toolName","params","runId","toolCallId"]` — that's it.**
+- ❌ no `args` → `index.ts:83` always `[]` (root cause, confirmed)
+- ❌ no `toolKind` → `index.ts:82` always `undefined` (drop it, confirmed)
+- ❌ no `cwd` → `index.ts:84` falls back to `process.cwd()` (wrong; real cwd is `params.workdir`)
+
+**`params` by toolName (all real):**
+| toolName | params | → extractCommand |
+|---|---|---|
+| `exec` | `{command:string, workdir?:string}` | tokenize `command`; cwd=`workdir` |
+| `read` | `{path}` | no argv — file read, allow |
+| `process` | `{action,sessionId,timeout?}` | no argv — process mgmt, allow |
+| `update_plan` | `{plan:[]}` | allow |
+| `sessions_spawn` | `{task,taskName,cwd,mode}` | fan-out spawner — allow (spawn ≠ destructive) |
+| `sessions_yield` | `{message}` | allow |
+
+**Subagent detection confirmed:** real key = `agent:main:subagent:<uuid>` → `isSubagentSessionKey`
+(`:subagent:` includes) **matches**. Test fixtures `subagent:branch-1`/`subagent:x` are fictional.
+
+**Real subagent `git status` event — use as the test fixture (not invented shapes):**
+```json
+{"toolName":"exec","params":{"command":"cd /Users/guanxueliang/Desktop/Matrix/TestProject && git status 2>&1","workdir":"/Users/guanxueliang/Desktop/Matrix/TestProject"},"runId":"b7fc1214-b67e-4317-9232-5b573e189d9a","toolCallId":"call_019f0bc72adf7c10883b0dad"}
+```
+
+**Tokenize must handle:** `&&` `||` `;` `|` `2>&1`; subagents prepend `cd <dir> &&` even when
+`workdir` is set → destructive-git cwd = `params.workdir` ?? first `cd` arg.
+
+**Fail-open confirmed in the wild:** this `exec` git status → guard reads `event.args`
+(undef→[]) → `classifyCommand('exec',[],undef)` → unclassified → **allow**. Correct for
+`git status`; a `git reset --hard` in the same shape → same allow = **the production bug**.
 
 ## Fix plan
 

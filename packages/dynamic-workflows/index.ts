@@ -11,7 +11,7 @@
  * live in @openclaw/permission-policy (ADR-013); this plugin imports them.
  */
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
-import { decidePermission, classifyCommand, appendAuditEntry } from '@openclaw/permission-policy';
+import { decidePermissionForEvent, classifyCommand, appendAuditEntry, extractCommandSegments, mostDangerousClass } from '@openclaw/permission-policy';
 import { logWithContext } from './src/logger';
 
 export const id = 'dynamic-workflows';
@@ -79,23 +79,22 @@ export function register(api: OpenClawPluginApi): void {
     if (!isSubagentSessionKey(sessionKey)) return;
 
     const toolName = event.toolName as string;
-    const toolKind = event.toolKind as string;
-    const args = Array.isArray(event.args) ? event.args : [];
-    const cwd = (event.cwd as string | undefined) ?? process.cwd();
+    // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
+    // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
+    // The command lives in params.command (shell string); cwd in params.workdir.
+    const { segments, cwd: eventCwd } = extractCommandSegments(event);
+    const cwd = eventCwd ?? process.cwd();
 
     const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
     const decision = isConfiguredHighRisk
       ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-      : decidePermission({
-          toolName,
-          toolKind,
-          command: args,
+      : decidePermissionForEvent(event, {
           cwd,
-          // No workspace context for ad-hoc subagents → destructive-git
-          // containment check is skipped (permission-policy only checks
-          // workspace when workflowAllowsDestructiveGit=true), so destructive
-          // git falls straight to block. Fail-closed by design.
+          // No workspace context for ad-hoc subagents → destructive-git containment
+          // check is skipped (only runs when workflowAllowsDestructiveGit=true), so
+          // destructive git falls straight to block. Fail-closed by design.
           workflowAllowsDestructiveGit: false,
+          defaultDeny: true, // subagent: unclassified SHELL commands are blocked
         });
 
     if (decision.outcome !== 'block') return; // allow (read_only / workspace_write / network)
@@ -106,7 +105,7 @@ export function register(api: OpenClawPluginApi): void {
         at: Date.now(),
         runId: `subagent:${sessionKey}`,
         toolName,
-        commandClass: classifyCommand(toolName, args, toolKind),
+        commandClass: segments.length > 0 ? mostDangerousClass(toolName, segments) : classifyCommand(toolName),
         outcome: 'block',
         reason: decision.reason,
         cwd,

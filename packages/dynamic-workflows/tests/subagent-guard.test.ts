@@ -2,11 +2,19 @@
  * Subagent guard integration tests for the dynamic-workflows plugin.
  *
  * The guard registers before_tool_call (priority 11) and fail-closed blocks
- * destructive ops for :subagent: sessions. These tests register the plugin
- * against a mock OpenClaw API and fire the hook directly.
+ * destructive ops for :subagent: sessions. Events use the REAL OpenClaw shape
+ * (verified live 2026-06-28): {toolName, params:{command?, workdir?}, runId,
+ * toolCallId} — NO args / toolKind / cwd at top level. The prior tests fed a
+ * fictional {toolKind:'destructive_git', args:[...]} shape the host never emits;
+ * those green lies are what let the fail-open bug ship. See
+ * docs/fixes/runtime-guard-event-shape.md.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { register, _resetForTest } from '../index';
+
+// Real subagent sessionKey format (captured live 2026-06-28).
+const SUBAGENT_KEY = 'agent:main:subagent:b9b3d8fc-ad1c-48d9-87de-b51db969e804';
+const WS = '/Users/guanxueliang/Desktop/Matrix/TestProject';
 
 function createMockApi(pluginConfig: Record<string, unknown> = {}) {
   const hooks = new Map<string, (...args: unknown[]) => unknown>();
@@ -35,61 +43,91 @@ describe('dynamic-workflows subagent guard', () => {
     expect(mock.hookOpts.get('before_tool_call')?.priority).toBe(11);
   });
 
-  it('blocks destructive_git for a :subagent: session', async () => {
+  it('blocks destructive git in a real exec event (the production bug)', async () => {
     const h = mock.hooks.get('before_tool_call')!;
     const result = (await h(
-      { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard', 'HEAD~1'] },
-      { sessionKey: 'agent:main:subagent:branch-1' },
+      { toolName: 'exec', params: { command: 'git reset --hard HEAD~1' } },
+      { sessionKey: SUBAGENT_KEY },
     )) as { block?: boolean; blockReason?: string };
     expect(result).toBeDefined();
     expect(result.block).toBe(true);
     expect(result.blockReason).toBeDefined();
   });
 
-  it('allows read-only tools for a :subagent: session', async () => {
-    const h = mock.hooks.get('before_tool_call')!;
-    const result = await h(
-      { toolName: 'Read', toolKind: 'read_only', args: [] },
-      { sessionKey: 'agent:main:subagent:branch-1' },
-    );
-    expect(result).toBeUndefined(); // undefined = pass
-  });
-
-  it('blocks credential_access for a :subagent: session', async () => {
+  it('blocks destructive git chained after cd via && (real subagent shape)', async () => {
     const h = mock.hooks.get('before_tool_call')!;
     const result = (await h(
-      { toolName: 'get-credential', toolKind: 'credential_access', args: [] },
-      { sessionKey: 'agent:main:subagent:branch-1' },
+      {
+        toolName: 'exec',
+        params: { command: `cd ${WS} && git reset --hard HEAD~1 2>&1`, workdir: WS },
+      },
+      { sessionKey: SUBAGENT_KEY },
     )) as { block?: boolean };
     expect(result.block).toBe(true);
   });
 
-  it('allows workspace_write for a :subagent: session (subagents must still work)', async () => {
+  it('allows git status chained after cd (no false positive from the && split)', async () => {
     const h = mock.hooks.get('before_tool_call')!;
     const result = await h(
-      { toolName: 'write_file', toolKind: 'workspace_write', args: [] },
-      { sessionKey: 'agent:main:subagent:branch-1' },
+      { toolName: 'exec', params: { command: `cd ${WS} && git status 2>&1`, workdir: WS } },
+      { sessionKey: SUBAGENT_KEY },
+    );
+    expect(result).toBeUndefined(); // undefined = pass/allow
+  });
+
+  it('defaultDeny blocks unknown shell commands for subagents (fail-closed)', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    const result = (await h(
+      { toolName: 'exec', params: { command: 'totally-unknown-binary --flag' } },
+      { sessionKey: SUBAGENT_KEY },
+    )) as { block?: boolean };
+    expect(result.block).toBe(true);
+  });
+
+  it('blocks credential_access toolName', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    const result = (await h(
+      { toolName: 'get-credential', params: {} },
+      { sessionKey: SUBAGENT_KEY },
+    )) as { block?: boolean };
+    expect(result.block).toBe(true);
+  });
+
+  it('allows non-shell framework tools (read) for a subagent', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    const result = await h(
+      { toolName: 'read', params: { path: '/x/SKILL.md' } },
+      { sessionKey: SUBAGENT_KEY },
     );
     expect(result).toBeUndefined();
   });
 
-  it('does NOT enforce on the main session (no :subagent:)', async () => {
+  it('allows sessions_spawn (workflow fan-out mechanics must not be blocked)', async () => {
     const h = mock.hooks.get('before_tool_call')!;
     const result = await h(
-      { toolName: 'git', toolKind: 'destructive_git', args: ['reset', '--hard'] },
+      { toolName: 'sessions_spawn', params: { task: 'do x', cwd: WS } },
+      { sessionKey: SUBAGENT_KEY },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it('does NOT enforce on the main session (no :subagent: segment)', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    const result = await h(
+      { toolName: 'exec', params: { command: 'git reset --hard' } },
       { sessionKey: 'agent:main:main' },
     );
     expect(result).toBeUndefined();
   });
 
-  it('respects highRiskTools config — blocks a configured tool even if read-only', async () => {
+  it('respects highRiskTools config — blocks a configured tool even if otherwise safe', async () => {
     _resetForTest();
     const m2 = createMockApi({ highRiskTools: ['dangerous_tool'] });
     register(m2.api as never);
     const h = m2.hooks.get('before_tool_call')!;
     const result = (await h(
-      { toolName: 'dangerous_tool', toolKind: 'read_only', args: [] },
-      { sessionKey: 'agent:main:subagent:x' },
+      { toolName: 'dangerous_tool', params: {} },
+      { sessionKey: SUBAGENT_KEY },
     )) as { block?: boolean };
     expect(result.block).toBe(true);
   });

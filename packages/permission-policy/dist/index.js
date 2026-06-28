@@ -10,11 +10,15 @@
  * See ADR-013.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAuditFilePath = exports.loadRecentAuditEntries = exports.appendAuditEntry = exports.classifyCommand = exports.decidePermission = void 0;
+exports.getAuditFilePath = exports.loadRecentAuditEntries = exports.appendAuditEntry = exports.mostDangerousClass = exports.tokenizeShell = exports.extractCommandSegments = exports.decidePermissionForEvent = exports.classifyCommand = exports.decidePermission = void 0;
 // ─── Permission policy ──────────────────────────────────────────────────
 var permission_policy_1 = require("./src/permission-policy");
 Object.defineProperty(exports, "decidePermission", { enumerable: true, get: function () { return permission_policy_1.decidePermission; } });
 Object.defineProperty(exports, "classifyCommand", { enumerable: true, get: function () { return permission_policy_1.classifyCommand; } });
+Object.defineProperty(exports, "decidePermissionForEvent", { enumerable: true, get: function () { return permission_policy_1.decidePermissionForEvent; } });
+Object.defineProperty(exports, "extractCommandSegments", { enumerable: true, get: function () { return permission_policy_1.extractCommandSegments; } });
+Object.defineProperty(exports, "tokenizeShell", { enumerable: true, get: function () { return permission_policy_1.tokenizeShell; } });
+Object.defineProperty(exports, "mostDangerousClass", { enumerable: true, get: function () { return permission_policy_1.mostDangerousClass; } });
 // ─── Audit persistence ──────────────────────────────────────────────────
 var audit_persister_1 = require("./src/audit-persister");
 Object.defineProperty(exports, "appendAuditEntry", { enumerable: true, get: function () { return audit_persister_1.appendAuditEntry; } });

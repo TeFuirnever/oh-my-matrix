@@ -21,7 +21,7 @@ import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
-import { classifyCommand, decidePermission } from '@openclaw/permission-policy';
+import { classifyCommand, decidePermissionForEvent, extractCommandSegments, mostDangerousClass } from '@openclaw/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
 import { runValidationCommands } from './src/command-runner';
@@ -559,7 +559,6 @@ export function register(api: OpenClawPluginApi): void {
 
     const [runId, state] = entry;
     const toolName = event.toolName as string;
-    const toolKind = event.toolKind as string;
 
     // B-1: dispatch tool_call activity so stall detector resets lastActivityAt.
     // Use withActivity as base for all subsequent setState calls to preserve lastActivityAt.
@@ -570,21 +569,23 @@ export function register(api: OpenClawPluginApi): void {
       now: Date.now(),
     });
 
+    // Real OpenClaw event: {toolName, params:{command?, workdir?}, runId, toolCallId}.
+    // NO event.args / event.toolKind / event.cwd (verified live 2026-06-28). Command
+    // lives in params.command; cwd in params.workdir.
+    const { segments, cwd: eventCwd } = extractCommandSegments(event);
     const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
     const decision = isConfiguredHighRisk
       ? ({ outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
-      : decidePermission({
-          toolName,
-          toolKind,
-          command: Array.isArray(event.args) ? event.args : [],
-          cwd: (event.cwd as string | undefined) ?? state.workspace?.path ?? process.cwd(),
+      : decidePermissionForEvent(event, {
+          cwd: eventCwd ?? state.workspace?.path ?? process.cwd(),
           workspacePath: state.workspace?.path,
           workspaceRoot: state.workspace?.root ?? process.cwd(),
           workflowAllowsDestructiveGit: state.workflow?.destructiveGit?.allow ?? false,
+          // trusted autopilot run-scoped: keep allow-by-default (no defaultDeny)
         });
 
     // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-    const commandClass = classifyCommand(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
+    const commandClass = segments.length > 0 ? mostDangerousClass(toolName, segments) : classifyCommand(toolName);
     const auditEntry: import('./src/types').PermissionAuditEntry = {
       at: Date.now(),
       runId,

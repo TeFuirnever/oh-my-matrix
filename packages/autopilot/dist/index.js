@@ -525,7 +525,6 @@ function register(api) {
             return;
         const [runId, state] = entry;
         const toolName = event.toolName;
-        const toolKind = event.toolKind;
         // B-1: dispatch tool_call activity so stall detector resets lastActivityAt.
         // Use withActivity as base for all subsequent setState calls to preserve lastActivityAt.
         const withActivity = (0, orchestrator_1.orchestratorReducer)(state, {
@@ -534,20 +533,22 @@ function register(api) {
             activity: 'tool_call',
             now: Date.now(),
         });
+        // Real OpenClaw event: {toolName, params:{command?, workdir?}, runId, toolCallId}.
+        // NO event.args / event.toolKind / event.cwd (verified live 2026-06-28). Command
+        // lives in params.command; cwd in params.workdir.
+        const { segments, cwd: eventCwd } = (0, permission_policy_1.extractCommandSegments)(event);
         const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
         const decision = isConfiguredHighRisk
             ? ({ outcome: 'block', reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` })
-            : (0, permission_policy_1.decidePermission)({
-                toolName,
-                toolKind,
-                command: Array.isArray(event.args) ? event.args : [],
-                cwd: event.cwd ?? state.workspace?.path ?? process.cwd(),
+            : (0, permission_policy_1.decidePermissionForEvent)(event, {
+                cwd: eventCwd ?? state.workspace?.path ?? process.cwd(),
                 workspacePath: state.workspace?.path,
                 workspaceRoot: state.workspace?.root ?? process.cwd(),
                 workflowAllowsDestructiveGit: state.workflow?.destructiveGit?.allow ?? false,
+                // trusted autopilot run-scoped: keep allow-by-default (no defaultDeny)
             });
         // GAP-9: Log every tool call to permission audit trail (cap at 200 entries)
-        const commandClass = (0, permission_policy_1.classifyCommand)(toolName, Array.isArray(event.args) ? event.args : [], toolKind);
+        const commandClass = segments.length > 0 ? (0, permission_policy_1.mostDangerousClass)(toolName, segments) : (0, permission_policy_1.classifyCommand)(toolName);
         const auditEntry = {
             at: Date.now(),
             runId,
