@@ -52,6 +52,15 @@ omm 不自建自主循环 / 目标 / 并行原语，而是委托宿主：
 
 （见 [ADR-002](adr/002-team-delegation-to-host.md)、[ADR-008](adr/008-delegation-to-host.md)。）
 
+## 运行时安全（subagent guard）
+
+OpenProse 扇出的 subagent 在 OpenClaw gateway 的 `before_tool_call`（priority 11）受运行时守卫保护，fail-closed 拦截 destructive 操作：
+
+- **所在**：`@openclaw/dynamic-workflows` plugin（guard）+ `@openclaw/permission-policy`（原语库）；autopilot 与 dynamic-workflows 互不依赖（ADR-011→012→013）。
+- **威胁模型**：subagent 不可信（可能被 prompt 诱导）；主 session agent 是第一道防线，guard 是 defense-in-depth。
+- **拦截**：读真实事件 `params.command`，按 shell 操作符（`&&`/`&`/`|`/`;`/换行）拆段逐段分类；`destructive git`（reset --hard / force-push / clean）、文件清除（`rm` / `find -delete`）、credential / system-write、shell substitution（`$(...)`）、wrapper-exec（`npx` / `pnpm exec`）在 `:subagent:` 会话 hard-block。
+- **已知局限**：tokenize-based（非 shell parser）——redirect 写 `>file`、未知非 shell 框架工具、引号内 split。详见 [docs/fixes/runtime-guard-event-shape.md](fixes/runtime-guard-event-shape.md) 与 [设计文档 §11.3.3](design/dynamic-workflows-design.md)。
+
 ## 后续方向
 
 - live-DAG UI（复用 MA `WorkflowGraph` 套件可视化 .prose 执行进度）

@@ -12,6 +12,10 @@ oh-my-matrix 为 **OpenClaw 及衍生项目**提供 **AI 自主多 agent 编排�
 
 运行时由 OpenProse（OpenClaw bundled plugin）提供——不重复建设。
 
+## 运行时安全（subagent guard）
+
+Dynamic Workflows 扇出的 subagent 在 OpenClaw gateway 的 `before_tool_call`（priority 11）受运行时守卫保护——`destructive git`（reset --hard / force-push / clean）、文件清除（`rm` / `find -delete`）、credential / system-write、shell substitution（`$(...)`）、wrapper-exec（`npx` / `pnpm exec`）等在 `:subagent:` 会话被 **hard-block**，fail-closed（defaultDeny）。守卫代码在 `packages/{permission-policy, dynamic-workflows}`，设计见 [ADR-011/012/013](docs/adr/)，修复历史（placebo → 真守卫）见 [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md)。
+
 ## 阅读地图（脊柱）
 
 | 文档 | 内容 |
@@ -19,7 +23,9 @@ oh-my-matrix 为 **OpenClaw 及衍生项目**提供 **AI 自主多 agent 编排�
 | [docs/architecture.md](docs/architecture.md) | 架构总览与设计参考（已标注实现重置） |
 | [docs/roadmap.md](docs/roadmap.md) | 路线图（Phase 1–4 为历史记录） |
 | [CONTEXT.md](CONTEXT.md) | 领域语言与核心概念（Workflow Mode / Phase / State / Counter / Hook …） |
-| [docs/adr/](docs/adr/) | 委托哲学与托管决策（ADR-002、ADR-008、ADR-010） |
+| [docs/adr/](docs/adr/) | 委托哲学与托管决策（ADR-002、008、010；011–013 运行时守卫） |
+| [docs/fixes/](docs/fixes/) | 修复 spec（runtime-guard-event-shape：placebo → 真守卫，2026-06-28） |
+| [docs/runbooks/](docs/runbooks/) | 运维手册（ma-subagent-guard-e2e：部署 + live 验证） |
 | [docs/archive/](docs/archive/) | v0.x 实现的完整设计记录（ADR / 契约 / 计划 / 调研 / 评审），已归档 |
 | [website/](website/) | VitePress 文档站点 |
 
@@ -42,7 +48,12 @@ pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
 │   ├── agents/              仓库协作约定（issue 跟踪、triage、领域文档）
 │   └── archive/             v0.x 实现设计记录（历史，已归档）
 ├── packages/
-│   └── autopilot/           @openclaw/autopilot canonical 源码（托管，非 omm 交付物；见 ADR-010）
+│   ├── autopilot/           @openclaw/autopilot canonical 源码（托管，非 omm 交付物；见 ADR-010）
+│   ├── dynamic-workflows/   @openclaw/dynamic-workflows — subagent 运行时守卫 plugin（before_tool_call priority 11）
+│   └── permission-policy/   @openclaw/permission-policy — 守卫原语库（classifyCommand / decidePermission / audit）
+├── scripts/
+│   ├── sync-to-ma.sh        build 守卫三包 + cp dist → MatrixAssistant（部署）
+│   └── verify-guard.cjs     直驱 MA 加载的 dist 验证守卫 block（部署冒烟，exit 0 = 全过）
 ├── skill/dynamic-workflows/ 核心交付物：AI 自主生成 .prose 编排
 ├── website/                 VitePress 文档站
 ├── CONTEXT.md               领域语言
