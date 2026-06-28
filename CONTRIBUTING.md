@@ -37,6 +37,7 @@ git diff --check
 4. For docs changes, update every public surface that would otherwise contradict the new claim.
 5. Do not claim host deployment is complete unless the host dist was actually refreshed and smoke-tested.
 6. Use Conventional Commits: `docs:`, `fix:`, `feat:`, `refactor:`, `test:`, `chore:`.
+7. `master` is protected: PRs need the `test` check green and use squash-merge; direct pushes and force-pushes are blocked.
 
 ## Issue Quality
 
