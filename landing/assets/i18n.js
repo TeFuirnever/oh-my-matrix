@@ -7,6 +7,7 @@
 
   var i18n = {
     zh: {
+      "skip.link": "跳到主内容",
       "nav.abilities": "能力", "nav.demo": "演示", "nav.boundary": "边界", "nav.roadmap": "路线图",
 
       "hero.badge": "WIP · 当前无公开 release · 源码/测试/ADR 公开",
@@ -93,6 +94,7 @@
     },
 
     en: {
+      "skip.link": "Skip to content",
       "nav.abilities": "Abilities", "nav.demo": "Demo", "nav.boundary": "Boundary", "nav.roadmap": "Roadmap",
 
       "hero.badge": "WIP · no public release yet · source / tests / ADRs open",

@@ -84,6 +84,20 @@ h2.title em { font-style: normal; color: var(--blue); }
   padding-bottom: .14em;
 }
 
+/* ---------- a11y: keyboard focus + skip link ---------- */
+a:focus-visible, button:focus-visible, .btn:focus-visible, .lang-toggle button:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.skip-link {
+  position: absolute; left: -999px; top: 8px; z-index: 100;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--font-mono); font-size: 14px;
+  padding: 8px 14px; border-radius: 8px; text-decoration: none;
+}
+.skip-link:focus { left: 12px; }
+
 /* ---------- nav ---------- */
 .nav {
   position: sticky; top: 0; z-index: 50;
