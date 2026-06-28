@@ -5,6 +5,13 @@
 Accepted (2026-06-27). **Supersedes [ADR-011](011-runtime-workflow-guard.md)** (which
 shipped the runtime guard INSIDE `@openclaw/autopilot`).
 
+> **Honesty note (2026-06-28):** the extracted guard was **fail-open in production**
+> until [docs/fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md).
+> It read `event.args` / `event.toolKind` / `event.cwd`, none of which exist on the real
+> OpenClaw `before_tool_call` event — so it silently allowed destructive ops. The "guard
+> works" claim this ADR made was true only against fictional test shapes. Fixed + verified
+> 2026-06-28 (real event shape captured live, tests rewritten, evasion paths closed).
+
 ## Context
 
 [ADR-011](011-runtime-workflow-guard.md) shipped a runtime subagent guard as a branch

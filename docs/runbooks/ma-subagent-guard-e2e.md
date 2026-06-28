@@ -13,6 +13,28 @@
 > [ADR-012](../adr/012-dynamic-workflows-plugin-extraction.md),
 > [ADR-013](../adr/013-permission-policy-library.md).
 
+## 0. Deploy the guard (build + sync dist to MA)
+
+After any change to `packages/{permission-policy,dynamic-workflows,autopilot}`:
+
+```bash
+bash scripts/sync-to-ma.sh   # builds all 3 + cp dist → MA node_modules + resources/claw-plugin
+```
+
+Smoke-verify the DEPLOYED dist (bypasses the MA UI / main-session agent, which
+declines to dispatch destructive ops to subagents in practice):
+
+```bash
+node scripts/verify-guard.cjs   # exits 0 if all expected blocks fire
+```
+
+Expect: `destructive` / `cd && git reset --hard` / `rm -rf` / `git push --force` /
+`echo $(rm)` / `npx rm` → block; `git status` / main-session → allow.
+
+> Why this exists: the 2026-06-28 placebo bug shipped because tests used a fictional
+> event shape. `verify-guard.cjs` require()s MA's actual loaded dist, so a deploy drift
+> (e.g. missing permission-policy lib dist) surfaces as a crash here, not silently.
+
 ## 1. Launch MA + confirm plugins load
 
 ```bash
