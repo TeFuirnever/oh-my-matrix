@@ -93,7 +93,7 @@ via `sessions_spawn` fan-out). **All assumptions below replaced by fact.**
 
 **Real subagent `git status` event — use as the test fixture (not invented shapes):**
 ```json
-{"toolName":"exec","params":{"command":"cd /Users/guanxueliang/Desktop/Matrix/TestProject && git status 2>&1","workdir":"/Users/guanxueliang/Desktop/Matrix/TestProject"},"runId":"b7fc1214-b67e-4317-9232-5b573e189d9a","toolCallId":"call_019f0bc72adf7c10883b0dad"}
+{"toolName":"exec","params":{"command":"cd <test-workspace> && git status 2>&1","workdir":"<test-workspace>"},"runId":"b7fc1214-b67e-4317-9232-5b573e189d9a","toolCallId":"call_019f0bc72adf7c10883b0dad"}
 ```
 
 **Tokenize must handle:** `&&` `||` `;` `|` `2>&1`; subagents prepend `cd <dir> &&` even when
@@ -173,7 +173,7 @@ Host-level plugin load failure → no warning (register never runs). Consider a 
 - [ ] Subagent path uses `defaultDeny:true` (unclassified → block); autopilot run-scoped path stays allow-by-default.
 - [ ] ZERO occurrences of `event.args` or fictional `toolKind` values (`destructive_git`/`credential_access`/`workspace_write`) in source OR tests.
 - [ ] `grep -rn "event.args\|toolKind.*destructive\|toolKind.*credential" packages/` → empty.
-- [ ] **Live MA e2e** (`docs/runbooks/ma-subagent-guard-e2e.md`) PASSES: a real OpenProse subagent issuing `git reset --hard` → hard-blocked at the gateway (log + audit). This is the test the fictional unit tests replaced — it must actually run this time.
+- [ ] **Live MA e2e** (host-repo runbook, not in this repo) PASSES: a real OpenProse subagent issuing `git reset --hard` → hard-blocked at the gateway (log + audit). This is the test the fictional unit tests replaced — it must actually run this time.
 - [ ] 641+ tests green (the rewritten tests + existing).
 
 ## Verification mindset

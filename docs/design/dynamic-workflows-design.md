@@ -120,9 +120,9 @@ OpenProse VM 执行（parallel / pipeline / loop / agent spawn / 错误处理）
 | S1 启用 OpenProse | `~/.openclaw/openclaw.json` 的 `plugins.allow` 加 `open-prose` | ✅ config-audit.jsonl 记录 `openclaw plugins enable open-prose` |
 | S2 放进 skill | `ln -s .../oh-my-matrix/skill/dynamic-workflows ~/.openclaw/skills/dynamic-workflows` | ✅ SKILL.md 可读 |
 | S3 重启 MA | Gateway PID 37263，启动时间与 config 修改时间一致 | ✅ 新 config 已生效 |
-| **真实任务** | 对 TestProject 做错误处理审计 | ✅ agent 自动生成 `error_audit.prose`（27 行） |
+| **真实任务** | 对 `<test-workspace>` 做错误处理审计 | ✅ agent 自动生成 `error_audit.prose`（27 行） |
 
-**生成的 .prose 证据**（`/Users/guanxueliang/Desktop/Matrix/TestProject/error_audit.prose`）：
+**生成的 .prose 证据**（`<test-workspace>/error_audit.prose`）：
 - 3 个专家 agent（`auditor-python` / `auditor-javascript` / `auditor-config`）
 - 并行扇出（`let python_report = session: auditor-python` 等 3 路）
 - 合成 session（context 引用 3 路结果）
@@ -190,7 +190,7 @@ TypeScript 编译通过（无新增报错）。
 | **v13** | **MA 实测闭环 + 执行模型修正**：实测发现 agent 跳过 `prose compile`/`prose run` 直接 `sessions_spawn`；溯源 OpenProse SKILL.md 确认"You ARE the VM"——`prose run` 不是 CLI 是 skill activation。重写 Step 3-4-5 为双模式（OpenProse primary + fallback direct）；frontmatter 加 dual-mode 描述+中文触发词；重组节顺序（Pattern selection → Core patterns → Composing → Repair loop）。Darwin 评分 88.7/100，首个 full_test 轮次。 | 优化态 |
 | **v14** | **MA 二轮实测 + 证据驱动修复**：4 条测试提示实测（fan-out 审计/bounded fallback/负例/破坏性 git），发现两个问题：(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行——根因是 OpenProse 接管后绕过 dynamic-workflows 的检查点流程；(2) 安全类问题不触发 skill——根因是 skill 加载机制对非 workflow-creation 查询不敏感。修复：新增"Reuse path"拦截段（强制展示已有 .prose 并征得确认）、扩展触发词（"并行 agent"+安全查询）、更新 test expectations 标注 skill 触发限制。复测确认：agent 不再盲目执行已有 .prose，改为展示已有结果。554 行核心。 | 优化态 |
 | **v15** | **业界对标 + 对抗审查 + 结构性修复**：3 路科学家调研（OpenProse 80+ 能力 / OpenClaw 扩展机制 / Claude Code 可迁移模式）+ 2 轮 3 人 opus 对抗审查团。A1-A5 已实施：Reuse Path 🔴 CHECKPOINT 升级 + Step 2 删 reuse 从句 + 启动 banner（仅 mode）+ 按模式拆分执行期进度 + templates/ 目录（3 模板）+ 质量模式 9-11 追加。SKILL.md 578 行。MA 实测：对强模型有效，弱模型（MiniMax/glm）仍跳 CHECKPOINT——prompt 级方案天花板（后续由运行时守卫根治，见 v16 + §11.8 B1）。| 实施态 |
-| **v16** | **运行时守卫落地（根治弱模型绕过）——✅ fail-open bug 已修（2026-06-28）**：B1 经 3 轮 ralplan 共识演进——ADR-011 守卫 ship 在 autopilot plugin（Design 2）；ADR-012 提取为 `@openclaw/dynamic-workflows` plugin（priority 11）；ADR-013 原语抽成 `@openclaw/permission-policy` 库，两 plugin 解耦。**2026-06-27 对抗审查发现 P0 bug**（守卫读 `event.args`/`event.toolKind`，真实事件是 `params` 对象 → 生产 fail-open；测试用虚构事件形状所以"绿"），**2026-06-28 修复并验证**：真实事件形状 live capture、测试改真实形状、evasion 路径封堵（force-push / `&` background / `$(...)` substitution / `npx` wrapper-exec）、编译期事件形状契约、部署 dist 直驱验证（`scripts/verify-guard.cjs`）。残留 tokenize-based 已知局限见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。| **当前（实施态，守卫已生效）** |
+| **v16** | **运行时守卫落地（根治弱模型绕过）——✅ fail-open bug 已修（2026-06-28）**：B1 经 3 轮 ralplan 共识演进——ADR-011 守卫 ship 在 autopilot plugin（Design 2）；ADR-012 提取为 `@openclaw/dynamic-workflows` plugin（priority 11）；ADR-013 原语抽成 `@openclaw/permission-policy` 库，两 plugin 解耦。**2026-06-27 对抗审查发现 P0 bug**（守卫读 `event.args`/`event.toolKind`，真实事件是 `params` 对象 → 生产 fail-open；测试用虚构事件形状所以"绿"），**2026-06-28 修复并验证**：真实事件形状 live capture、测试改真实形状、evasion 路径封堵（force-push / `&` background / `$(...)` substitution / `npx` wrapper-exec）、编译期事件形状契约、部署 dist 直驱验证（deployed-dist smoke check, run in the host repo）。残留 tokenize-based 已知局限见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。| **当前（实施态，守卫已生效）** |
 
 ## 10. 关键参考文件
 
@@ -398,7 +398,7 @@ hooks:
 
 > **✅ 反转（2026-06-27）**：原先判"ROI 不足、接受 prompt-only"建立在**错误前提**上——把"真拦截 = 从零写新 plugin"当成大工程。实际上 `packages/autopilot/`（ADR-010 托管）**已是一个带 `before_tool_call` + `decidePermission` + 硬 block + 审计的成熟 plugin**（520 测试）。边际成本是"给已有 handler 加一个 subagent 分支"，不是"从零造 plugin"。ROI 计算翻转。
 >
-> **已实施 + 演进（ADR-011→012→013）——✅ fail-open bug 已修（2026-06-28）**：运行时守卫住在独立的 `@openclaw/dynamic-workflows` plugin（`before_tool_call` priority 11），原语在中性 `@openclaw/permission-policy` 库，autopilot 与 dynamic-workflows 互不依赖。守卫读真实事件 `params.command`（按 `&&`/`&`/`|`/`;`/换行 拆段逐段分类），subagent 会话 defaultDeny fail-closed，evasion（force-push / amend / `$(...)` substitution / `npx` wrapper-exec）封堵；编译期事件形状契约防漂移；部署 dist 直驱验证（`scripts/verify-guard.cjs`）。残留 tokenize-based 已知局限（redirect 写 / defaultDeny non-shell / quote split）见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。详见 ADR-011/012/013。
+> **已实施 + 演进（ADR-011→012→013）——✅ fail-open bug 已修（2026-06-28）**：运行时守卫住在独立的 `@openclaw/dynamic-workflows` plugin（`before_tool_call` priority 11），原语在中性 `@openclaw/permission-policy` 库，autopilot 与 dynamic-workflows 互不依赖。守卫读真实事件 `params.command`（按 `&&`/`&`/`|`/`;`/换行 拆段逐段分类），subagent 会话 defaultDeny fail-closed，evasion（force-push / amend / `$(...)` substitution / `npx` wrapper-exec）封堵；编译期事件形状契约防漂移；部署 dist 直驱验证（deployed-dist smoke check, run in the host repo）。残留 tokenize-based 已知局限（redirect 写 / defaultDeny non-shell / quote split）见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。详见 ADR-011/012/013。
 
 #### 11.3.4 其他扩展点
 

@@ -16,7 +16,7 @@ import type { OpenClawPluginApi } from 'openclaw/plugin-sdk/plugin-runtime';
 // Part 1: Hook name contract
 //
 // Keep this list in sync with the hooks registered in
-// openclaw-extensions/autopilot/index.ts.
+// the host's plugin source tree (autopilot/index.ts).
 // ---------------------------------------------------------------------------
 
 /**

@@ -14,7 +14,7 @@ import { register, _resetForTest } from '../index';
 
 // Real subagent sessionKey format (captured live 2026-06-28).
 const SUBAGENT_KEY = 'agent:main:subagent:b9b3d8fc-ad1c-48d9-87de-b51db969e804';
-const WS = '/Users/guanxueliang/Desktop/Matrix/TestProject';
+const WS = '<test-workspace>';
 
 function createMockApi(pluginConfig: Record<string, unknown> = {}) {
   const hooks = new Map<string, (...args: unknown[]) => unknown>();

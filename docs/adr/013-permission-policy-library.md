@@ -46,10 +46,10 @@ a regular dep would 404 at MA install, the same failure that forced peerDep orig
 ### Why a library, not a plugin
 
 A library is ~2 MA distribution artifacts (root `file:` dep + vendored tgz) vs a plugin's
-~4 (+ build script + claw-plugin copy + discovery + openclaw.plugin.json + hooks). The
+~4 (+ build script + bundled-plugin copy + discovery + openclaw.plugin.json + hooks). The
 library is `require()`d at runtime from the plugins' dist via Node's upward walk to MA
 root `node_modules` — verified by `require.resolve` from both
-`resources/claw-plugin/autopilot/dist` and `resources/claw-plugin/dynamic-workflows/dist`.
+the host's bundled-plugin directory for autopilot and for dynamic-workflows.
 
 ### Why peerDep, not regular dep (Architect's correction)
 
@@ -88,9 +88,9 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 - `@openclaw/permission-policy`: 105 tests pass (`permission-policy` 91 + `audit-persister` 14).
 - `@openclaw/dynamic-workflows`: 8 tests pass (subagent-guard; imports primitives from the lib).
 - `@openclaw/autopilot`: 528 pass | 4 skipped (imports primitives from the lib; zero regression).
-- MA: `require.resolve('@openclaw/permission-policy', {paths:['<MA>/resources/claw-plugin/autopilot/dist']})`
-  AND from `claw-plugin/dynamic-workflows/dist` → both succeed.
-- `grep -c dynamic-workflows` in `resources/claw-plugin/autopilot/dist/index.js` = **0**
+- MA: `require.resolve('@openclaw/permission-policy', {paths:['<MA>/<bundled-plugin-dir>/autopilot/dist']})`
+  AND from the dynamic-workflows bundled-plugin dist → both succeed.
+- `grep -c dynamic-workflows` in the host's autopilot plugin dist = **0**
   (full severance).
 
 ## Follow-ups

@@ -17,3 +17,6 @@ packages/*/*.tgz
 
 # permission-policy audit 产物（测试/运行时 appendAuditEntry 写入 cwd），不入库
 .autopilot/
+
+# Claude Code 本地设置（含机器本地路径/权限/历史命令，不入库）
+.claude/settings.local.json

@@ -1059,9 +1059,7 @@ pnpm --filter @openclaw/autopilot build
 
 ### 9.3 同步到 MatrixAssistant
 
-```bash
-./packages/autopilot/scripts/sync-to-ma.sh
-```
+(internal host-deploy step, not in this repo)
 
 ---
 

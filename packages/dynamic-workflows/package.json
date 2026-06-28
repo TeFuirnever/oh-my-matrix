@@ -2,6 +2,10 @@
   "name": "@openclaw/dynamic-workflows",
   "version": "0.1.0",
   "description": "Dynamic Workflows: runtime subagent guard plugin (before_tool_call priority 11, fail-closed destructive-op blocking for :subagent: sessions). Imports permission primitives from @openclaw/permission-policy.",
+  "private": true,
+  "publishConfig": {
+    "access": "restricted"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

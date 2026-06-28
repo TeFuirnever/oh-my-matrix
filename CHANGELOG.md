@@ -8,18 +8,18 @@ All notable changes to oh-my-matrix (omm).
 
 ### Added
 
-- **`packages/autopilot/`** — canonical `@openclaw/autopilot@2.0.0` source migrated from MatrixAssistant (`openclaw-extensions/autopilot/`). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
+- **`packages/autopilot/`** — canonical `@openclaw/autopilot@2.0.0` source migrated from MatrixAssistant (the host's plugin source tree). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
 - **`pnpm-workspace.yaml`** — omm is now a pnpm workspace (`packages/*`).
 - **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@openclaw/autopilot` in omm rather than keep it embedded in MA; documents compatibility with ADR-008.
 
 ### Changed
 
-- **MA consumes autopilot as a package** — `"@openclaw/autopilot": "file:resources/autopilot/openclaw-autopilot-2.0.0.tgz"`; MA is self-contained (tgz vendored into `resources/autopilot/`), plugin discovery resolves from `node_modules` in dev and `resources/claw-plugin` when packaged.
+- **MA consumes autopilot as a package** — `"@openclaw/autopilot": "<a versioned file: tgz dependency>"`; MA is self-contained (tgz vendored into its bundled-plugin directory), plugin discovery resolves from `node_modules` in dev and the bundled-plugin directory when packaged.
 - omm `package.json` version bumped 0.6.0 → 0.7.1.
 
 ### Removed
 
-- (MA side, recorded here for cross-repo traceability) `openclaw-extensions/autopilot/` source and `scripts/build-autopilot-plugin.js` removed from MatrixAssistant.
+- (MA side, recorded here for cross-repo traceability) the host's autopilot plugin source tree and build script removed from MatrixAssistant.
 
 ## [0.7.0] — 2026-06-18
 
@@ -102,7 +102,7 @@ Two themes: tool-surface reduction (focus on `team` + employee bridge) and team 
   (omm-ping, omm-cancel, omm-ralph, omm-team, omm-autopilot). The 9 extended
   skills (omm-deep-interview, omm-ralplan, omm-ultrawork, omm-ultraqa,
   omm-docs, omm-ui, omm-git, omm-research, omm-refactor) remain in
-  `omm-packages/omm-skills/` but are excluded from the suite tarball to focus
+  v0.x skill bundles (since removed — see docs/archive/) but are excluded from the suite tarball to focus
   MA integration testing on the core workflow engine.
 
 ### Added
@@ -161,12 +161,12 @@ Two themes: tool-surface reduction (focus on `team` + employee bridge) and team 
 
 ### Added
 
-- **omm-docs skill** at `omm-packages/omm-skills/omm-docs/SKILL.md` —
+- **omm-docs skill** (v0.x skill bundle, since removed — see docs/archive/) —
   documentation generation pipeline orchestrating document-specialist
   (research) and writer (draft), followed by a verification phase
   (code-block execution + link checks + slop scan). Three-phase
   separation enforces "writer never invents facts".
-- **omm-ui skill** at `omm-packages/omm-skills/omm-ui/SKILL.md` —
+- **omm-ui skill** (v0.x skill bundle, since removed — see docs/archive/) —
   UI artifact generation pipeline (component / spec / theme outputs)
   orchestrating the designer agent across discover → generate →
   verify phases. Mandates a domain check that overrides the model's
@@ -208,7 +208,7 @@ ralplan-omm-next-best-practices (2026-05-08).
 
 ### Added
 
-- 11 ported agent prompts at `omm-packages/omm-skills/agent-prompts/`:
+- 11 ported agent prompts (v0.x skill bundles, since removed — see docs/archive/):
   planner, tracer, code-reviewer, security-reviewer, test-engineer,
   debugger, qa-tester, explore, document-specialist, designer, writer
 - `docs/research/mcp-capability-survey.md` — Phase 2 deliverable
@@ -218,7 +218,7 @@ ralplan-omm-next-best-practices (2026-05-08).
 
 ### Changed
 
-- `omm-packages/omm-skills/omm-ralplan/SKILL.md`: Step 1 now loads `planner`
+- omm-ralplan skill (v0.x skill bundle, since removed — see docs/archive/): Step 1 now loads `planner`
   agent prompt (was loading `analyst`, which was a known label-vs-load mismatch).
 - `CONTEXT.md`: Agent Prompt section extended with bundled count (16),
   Prompt Style Coexistence Policy (lean vs XML-structured), Agent Inventory

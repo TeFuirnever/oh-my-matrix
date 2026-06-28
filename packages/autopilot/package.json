@@ -2,6 +2,10 @@
   "name": "@openclaw/autopilot",
   "version": "2.1.1",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
+  "private": true,
+  "publishConfig": {
+    "access": "restricted"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

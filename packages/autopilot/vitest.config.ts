@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // matrixassistant-audit is mocked in g1-priority-inversion.test.ts;
-      // alias points to MA's real path so the vi.mock() intercept works.
+      // alias points to the host's audit plugin so the vi.mock() intercept works.
       '@openclaw/matrixassistant-audit': resolve(
         __dirname,
         '../../node_modules/@openclaw/matrixassistant-audit'

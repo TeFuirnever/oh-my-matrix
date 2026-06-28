@@ -23,7 +23,7 @@ consumer of `decidePermission` materializes."*
 A second ralplan consensus loop (2026-06-27) was convened on the user's proposal:
 *"omm was designed as a single MA plugin but is becoming a plugin collection — split
 `workflow` out into its own plugin now."* That loop's **Critic approved a middle path**
-(generalize `sync-to-ma.sh`, **defer** extraction until the revisit trigger fires), on
+(generalize the host-deploy step, **defer** extraction until the revisit trigger fires), on
 verified findings:
 
 - MA-side distribution is structurally per-plugin (3 copy-pasted
@@ -104,7 +104,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 
 **Negative:**
 - MA-side distribution tax paid: a 4th hand-rolled build script
-  (`build-dynamic-workflows-plugin.js`), a 2nd `file:` dependency, a 2nd `resources/` dir,
+  (the host's), a 2nd `file:` dependency, a 2nd bundled-plugin directory,
   + plugin-discovery registration. This is the per-plugin cost the consensus flagged; it
   will recur for each future plugin until MA-side build tooling is generalized.
 - ~998 LOC of tests relocated/rewritten (`permission-policy.test`,
@@ -125,9 +125,9 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 - `@openclaw/autopilot`: 528 tests pass | 4 skipped (was 637; −109 moved to
   dynamic-workflows: 91 + 14 + 4 subagent describe). Zero regression — autopilot-run
   policy + WORKFLOW.md escape hatch intact.
-- MA distribution: `sync-to-ma.sh` produced `openclaw-dynamic-workflows-0.1.0.tgz`,
+- MA distribution: (internal host-deploy step, not in this repo) produced a versioned file: tgz dependency,
   MA installed `@openclaw/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
-  `resources/claw-plugin/dynamic-workflows`, `init-default-plugins.ts` registers it.
+  the host's bundled-plugin directory, the host's plugin-discovery module registers it.
 
 ## Follow-ups
 
@@ -152,5 +152,5 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
   directed Option B)
 - Implementation: `packages/dynamic-workflows/index.ts`, `packages/dynamic-workflows/src/`
 - Consumer refactor: `packages/autopilot/index.ts` (imports from `@openclaw/dynamic-workflows`)
-- MA distribution: `MatrixAssistant/scripts/build-dynamic-workflows-plugin.js`,
-  `MatrixAssistant/electron/utils/init-default-plugins.ts`
+- MA distribution: the host's plugin build script,
+  the host's plugin-discovery module

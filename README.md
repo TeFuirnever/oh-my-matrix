@@ -25,7 +25,7 @@ Dynamic Workflows 扇出的 subagent 在 OpenClaw gateway 的 `before_tool_call`
 | [CONTEXT.md](CONTEXT.md) | 领域语言与核心概念（Workflow Mode / Phase / State / Counter / Hook …） |
 | [docs/adr/](docs/adr/) | 委托哲学与托管决策（ADR-002、008、010；011–013 运行时守卫） |
 | [docs/fixes/](docs/fixes/) | 修复 spec（runtime-guard-event-shape：placebo → 真守卫，2026-06-28） |
-| [docs/runbooks/](docs/runbooks/) | 运维手册（ma-subagent-guard-e2e：部署 + live 验证） |
+| [docs/runbooks/](docs/runbooks/) | 运维手册（部署 + live 验证） |
 | [docs/archive/](docs/archive/) | v0.x 实现的完整设计记录（ADR / 契约 / 计划 / 调研 / 评审），已归档 |
 | [website/](website/) | VitePress 文档站点 |
 
@@ -52,8 +52,7 @@ pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
 │   ├── dynamic-workflows/   @openclaw/dynamic-workflows — subagent 运行时守卫 plugin（before_tool_call priority 11）
 │   └── permission-policy/   @openclaw/permission-policy — 守卫原语库（classifyCommand / decidePermission / audit）
 ├── scripts/
-│   ├── sync-to-ma.sh        build 守卫三包 + cp dist → MatrixAssistant（部署）
-│   └── verify-guard.cjs     直驱 MA 加载的 dist 验证守卫 block（部署冒烟，exit 0 = 全过）
+│   (internal host-deploy + deployed-dist smoke check, not in this repo)
 ├── skill/dynamic-workflows/ 核心交付物：AI 自主生成 .prose 编排
 ├── website/                 VitePress 文档站
 ├── CONTEXT.md               领域语言

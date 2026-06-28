@@ -61,7 +61,7 @@ let stallInterval = null;
 /**
  * before_tool_call priority — must be higher than matrixassistant-audit (priority 9).
  * Ensures autopilot audit trail is recorded before audit can short-circuit.
- * @see openclaw-extensions/matrixassistant-audit/index.ts (AUDIT_HOOK_PRIORITY = 9)
+ * @see the host's matrixassistant-audit plugin (AUDIT_HOOK_PRIORITY = 9)
  */
 const BEFORE_TOOL_CALL_PRIORITY = 10;
 // Cross-plugin coordination with audit plugin — same Node.js process, CommonJS, package-name require.
