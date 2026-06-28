@@ -6,6 +6,12 @@
   "publishConfig": {
     "access": "restricted"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TeFuirnever/oh-my-matrix.git",
+    "directory": "packages/dynamic-workflows"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

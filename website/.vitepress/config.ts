@@ -40,7 +40,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/your-org/oh-my-matrix" },
+      { icon: "github", link: "https://github.com/TeFuirnever/oh-my-matrix" },
     ],
   },
 });

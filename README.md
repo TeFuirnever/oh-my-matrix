@@ -1,69 +1,110 @@
-# omm (oh-my-matrix)
+单人项目 · WIP · 部分已发布/部分已重置，见状态矩阵
+
+# oh-my-matrix (omm)
+
+![oh-my-matrix](.github/assets/hero.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/TeFuirnever/oh-my-matrix/actions/workflows/ci.yml/badge.svg)](https://github.com/TeFuirnever/oh-my-matrix/actions/workflows/ci.yml)
 
-**OpenClaw Dynamic Workflows — AI 自主多 agent 编排。**
+面向 OpenClaw 宿主的 Dynamic Workflows skill + `before_tool_call` subagent 守卫。
 
-> **状态 (0.7.0):** Dynamic Workflows skill 包已交付。对标 Claude Code dynamic workflows——用户说自然语言，AI 自动生成 `.prose` 编排程序，经 OpenProse 扇出多 agent 并行执行，只回最终结果。
+oh-my-matrix 不是终端开发者 CLI，也没有根级 npm 安装入口。它面向 OpenClaw 集成者/宿主项目，交付 `skill/dynamic-workflows/` 与 `@openclaw/*` 库/插件源码：让宿主把 Dynamic Workflows skill 挂入 OpenClaw skills 目录，并在 gateway 注册 `@openclaw/dynamic-workflows` 运行时守卫。
 
-## 这是什么
+当前根仓库版本为 `0.7.2`（[`package.json`](package.json)）。截至 2026-06-28，项目仍是单人 WIP，GitHub star / release 均为 0；README 不把这些数字包装成成熟度证据。
 
-oh-my-matrix 为 **OpenClaw 及衍生项目**提供 **AI 自主多 agent 编排能力**。核心是一个 SKILL.md 包（`skill/dynamic-workflows/`），教 OpenClaw agent 在任务需要时自动生成 `.prose` 工作流程序并经 OpenProse 执行——涵盖 8 种编排模式（fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop）。
+## 集成三切片
 
-运行时由 OpenProse（OpenClaw bundled plugin）提供——不重复建设。
+| 切片 | 集成接口 | 代码/文档 |
+|---|---|---|
+| 集成接口 | `decidePermission` / `classifyCommand` / audit API | [`packages/permission-policy/`](packages/permission-policy/) (`@openclaw/permission-policy`) |
+| 运行时契约 | `before_tool_call` priority 11 / fail-closed / `defaultDeny` for `:subagent:` shell commands | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) (`@openclaw/dynamic-workflows`), [ADR-012](docs/adr/012-dynamic-workflows-plugin-extraction.md), [ADR-013](docs/adr/013-permission-policy-library.md) |
+| skill 内容 | 8 编排模式 / 自然语言任务生成 `.prose` 工作流 | [`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md), [ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md) |
 
-## 运行时安全（subagent guard）
+## 状态矩阵
 
-Dynamic Workflows 扇出的 subagent 在 OpenClaw gateway 的 `before_tool_call`（priority 11）受运行时守卫保护——`destructive git`（reset --hard / force-push / clean）、文件清除（`rm` / `find -delete`）、credential / system-write、shell substitution（`$(...)`）、wrapper-exec（`npx` / `pnpm exec`）等在 `:subagent:` 会话被 **hard-block**，fail-closed（defaultDeny）。守卫代码在 `packages/{permission-policy, dynamic-workflows}`，设计见 [ADR-011/012/013](docs/adr/)，修复历史（placebo → 真守卫）见 [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md)。
+| 交付物 | ADR/路径 | 状态 |
+|---|---|---|
+| Dynamic Workflows skill 包：586 行 `SKILL.md`，覆盖 fan-out-reduce / pipeline / adversarial-verify / loop-until-dry / routing / tournament / generate-and-filter / duel-loop | [`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md), [ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md) | ✅ shipped |
+| `@openclaw/dynamic-workflows`：独立 subagent runtime guard plugin，注册 `before_tool_call` priority 11 | [`packages/dynamic-workflows/`](packages/dynamic-workflows/), [ADR-012](docs/adr/012-dynamic-workflows-plugin-extraction.md) | ✅ shipped |
+| `@openclaw/permission-policy`：守卫原语库，提供 `decidePermissionForEvent`、`decidePermission`、`classifyCommand`、audit persister | [`packages/permission-policy/`](packages/permission-policy/), [ADR-013](docs/adr/013-permission-policy-library.md) | ✅ shipped |
+| `@openclaw/autopilot` canonical 源码托管：omm 保存源码，消费方以 vendoring / packed package 方式使用 | [`packages/autopilot/`](packages/autopilot/), [ADR-010](docs/adr/010-autopilot-source-hosting.md) | 🔶 partial |
+| v0.x team 编排实现 | [`docs/archive/`](docs/archive/), [ADR-008](docs/adr/008-delegation-to-host.md), [ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md) | 🔶 partial / 已重置为历史记录 |
+| tokenize-based 守卫已知绕过：redirect 写 `>file`、未知非 shell 框架工具、引号内 split 过度拦截 | [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md#known-limitations-tokenize-based-post-review-2026-06-28) | ⛔ limitation |
 
-## 阅读地图（脊柱）
+## 集成步骤
 
-| 文档 | 内容 |
-|------|------|
-| [docs/architecture.md](docs/architecture.md) | 架构总览与设计参考（已标注实现重置） |
-| [docs/roadmap.md](docs/roadmap.md) | 路线图（Phase 1–4 为历史记录） |
-| [CONTEXT.md](CONTEXT.md) | 领域语言与核心概念（Workflow Mode / Phase / State / Counter / Hook …） |
-| [docs/adr/](docs/adr/) | 委托哲学与托管决策（ADR-002、008、010；011–013 运行时守卫） |
-| [docs/fixes/](docs/fixes/) | 修复 spec（runtime-guard-event-shape：placebo → 真守卫，2026-06-28） |
-| [docs/runbooks/](docs/runbooks/) | 运维手册（部署 + live 验证） |
-| [docs/archive/](docs/archive/) | v0.x 实现的完整设计记录（ADR / 契约 / 计划 / 调研 / 评审），已归档 |
-| [website/](website/) | VitePress 文档站点 |
+1. 挂载 [`skill/dynamic-workflows/`](skill/dynamic-workflows/) 到宿主的 OpenClaw skills 目录，让 agent 可以加载 Dynamic Workflows skill。
+2. 在宿主 gateway 注册 [`@openclaw/dynamic-workflows`](packages/dynamic-workflows/) 插件，使其 `before_tool_call` hook 以 priority 11 运行。
+3. 确认宿主已启用 OpenProse 运行时；omm 的 skill 负责教 agent 生成 `.prose`，执行由宿主的 OpenProse 提供，见 [ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md)。
+4. 对 `packages/autopilot/`、`packages/dynamic-workflows/`、`packages/permission-policy/` 的源码变更，先运行对应 package 测试，再走宿主内部部署/刷新流程；`packages/autopilot/` 是托管源码，不是 omm 的独立终端入口，见 [ADR-010](docs/adr/010-autopilot-source-hosting.md)。
 
-## 本地预览文档站
+## 设计原则
 
-```bash
-pnpm install
-pnpm docs:dev      # 本地开发服务器
-pnpm docs:build    # 构建静态站点到 website/.vitepress/dist
+- **Subagent 须有运行时守卫。** Dynamic Workflows 生成的 `.prose` 会扇出 subagent；守卫必须在 gateway `before_tool_call` 层拦截，而不是只依赖 prompt 约束。见 [ADR-011](docs/adr/011-runtime-workflow-guard.md)、[ADR-012](docs/adr/012-dynamic-workflows-plugin-extraction.md)、[ADR-013](docs/adr/013-permission-policy-library.md)。
+- **自主循环委托宿主。** omm 删除自建 ralph/autopilot/goal 方向，把连续自主循环交给宿主已有能力。见 [ADR-008](docs/adr/008-delegation-to-host.md)。
+- **运行时由 OpenProse 提供，不重复建设。** omm 交付 skill 包，教 agent 生成 `.prose`；编译、执行、fan-out 与状态由 OpenProse 负责。见 [ADR-009](docs/adr/009-dynamic-workflows-via-openprose.md)。
+- **托管 canonical 源码，消费方 vendoring。** `packages/autopilot/` 是 `@openclaw/autopilot` 的 canonical 源码位置；消费方通过打包/ vendoring 刷新自身 bundled plugin。见 [ADR-010](docs/adr/010-autopilot-source-hosting.md)。
+
+## 采用 `@openclaw/dynamic-workflows` vs 手写 `before_tool_call` 守卫
+
+| 方案 | 成本 | 风险 | 锁定 |
+|---|---|---|---|
+| 采用 `@openclaw/dynamic-workflows` | 需要接入一个 OpenClaw gateway plugin，并同步 `@openclaw/permission-policy` | 复用已验证的真实 `event.params.command` 解析、operator split、`defaultDeny` subagent 策略；仍受 tokenize 边界限制 | 绑定 OpenClaw hook 形状与 `:subagent:` session key 约定 |
+| 手写 `before_tool_call` 守卫 | 初始代码少，但要自行维护 command extraction、分类、audit、priority、fail-closed 策略 | 容易重复 2026-06-28 的 event-shape fail-open 问题，见 [runtime guard fix spec](docs/fixes/runtime-guard-event-shape.md) | 可按宿主改写，但需要自行承担 OpenClaw 事件形状漂移 |
+
+## 架构流
+
+```mermaid
+flowchart LR
+  A[NL 任务] --> B[AI 生成 .prose<br/>8 编排模式]
+  B --> C[OpenProse 执行]
+  C --> D[fan out subagents]
+  D --> E[before_tool_call guard<br/>p11]
+  E -->|block| F[block destructive]
+  E -->|allow| G[allow read-only]
+  F --> H[synthesize]
+  G --> H
+  H --> I[结果]
 ```
+
+## 运行时守卫
+
+[`@openclaw/dynamic-workflows`](packages/dynamic-workflows/) 在 `before_tool_call` priority 11 执行，只对 `:subagent:` 会话生效。它读取真实 OpenClaw 事件的 `event.params.command`，按 shell 操作符 `&&` / `&` / `|` / `;` / 换行拆段逐段分类，并在 subagent shell 命令上使用 `defaultDeny`。
+
+守卫会拦截 destructive git（`reset --hard` / force-push / `clean` / history rewrite）、文件清除（`rm` / `find -delete`）、credential、system write、shell substitution（`$()` / backticks / process substitution）、wrapper-exec（例如 `npx`）。2026-06-28 的 live e2e 闭环已记录真实 subagent 被真实 block 的 audit 证据，见 [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md)。
+
+## 已知局限
+
+- 守卫是 tokenize-based，不是完整 shell parser；redirect 写 `>file` 不建模，见 [known limitations](docs/fixes/runtime-guard-event-shape.md#known-limitations-tokenize-based-post-review-2026-06-28)。
+- 未知非 shell 框架工具默认按 toolName 分类；未 allowlist 的破坏性框架工具需要宿主继续收紧，见 [runtime guard event-shape fix](docs/fixes/runtime-guard-event-shape.md)。
+- 引号内 split 可能被 `&&` / `|` 等字符误伤，表现为 fail-closed 过度拦截，不是静默放行，见 [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md)。
+
+## 阅读地图
+
+| 文档 | 用途 |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | 当前架构总览与历史重置说明 |
+| [docs/roadmap.md](docs/roadmap.md) | 路线图；旧 Phase 记录需按 ADR 状态阅读 |
+| [CONTEXT.md](CONTEXT.md) | 仓库领域语言与当前方向 |
+| [docs/adr/](docs/adr/) | 委托、OpenProse、源码托管、运行时守卫决策 |
+| [docs/fixes/](docs/fixes/) | 修复 spec，尤其是 runtime guard event shape |
+| [docs/archive/](docs/archive/) | v0.x team/MCP/contract 设计记录；作为历史保留 |
 
 ## 仓库布局
 
-```
+```text
 .
-├── docs/
-│   ├── architecture.md      设计参考（脊柱）
-│   ├── roadmap.md           路线图（脊柱）
-│   ├── adr/                 委托哲学与托管 ADR（002 / 008 / 010）
-│   ├── agents/              仓库协作约定（issue 跟踪、triage、领域文档）
-│   └── archive/             v0.x 实现设计记录（历史，已归档）
-├── packages/
-│   ├── autopilot/           @openclaw/autopilot canonical 源码（托管，非 omm 交付物；见 ADR-010）
-│   ├── dynamic-workflows/   @openclaw/dynamic-workflows — subagent 运行时守卫 plugin（before_tool_call priority 11）
-│   └── permission-policy/   @openclaw/permission-policy — 守卫原语库（classifyCommand / decidePermission / audit）
-├── scripts/
-│   (internal host-deploy + deployed-dist smoke check, not in this repo)
-├── skill/dynamic-workflows/ 核心交付物：AI 自主生成 .prose 编排
-├── website/                 VitePress 文档站
-├── CONTEXT.md               领域语言
-├── AGENTS.md                AI 代理工作约定
-└── CHANGELOG.md             变更历史
+├── docs/                  架构、roadmap、ADR、fix spec、archive
+├── packages/              @openclaw/* 库与插件源码
+│   ├── autopilot/         @openclaw/autopilot canonical 源码（托管）
+│   ├── dynamic-workflows/ @openclaw/dynamic-workflows subagent guard plugin
+│   └── permission-policy/ @openclaw/permission-policy 守卫原语库
+├── skill/                 OpenClaw skills；当前核心为 dynamic-workflows
+├── website/               VitePress 文档站
+└── scripts/               当前无部署脚本；宿主部署步骤不在本仓库
 ```
-
-## 贡献
-
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全披露见 [SECURITY.md](SECURITY.md)。行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)

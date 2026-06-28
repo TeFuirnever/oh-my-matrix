@@ -1,6 +1,6 @@
 # Roadmap
 
-> 🔄 **实现已重置 (0.6.0)** — v0.x 实现已移除。下方为方向性概要；完整路线图（含 Phase 1–4 历史记录）见仓库 [`docs/roadmap.md`](https://github.com/your-org/oh-my-matrix/blob/master/docs/roadmap.md)。
+> 🔄 **实现已重置 (0.6.0)** — v0.x 实现已移除。下方为方向性概要；完整路线图（含 Phase 1–4 历史记录）见仓库 [`docs/roadmap.md`](https://github.com/TeFuirnever/oh-my-matrix/blob/master/docs/roadmap.md)。
 
 ## 当前状态
 

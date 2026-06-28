@@ -2,6 +2,31 @@
 
 All notable changes to oh-my-matrix (omm).
 
+## [0.7.2] — 2026-06-28
+
+**Runtime guard closed loop + open-source readiness.** The subagent runtime guard (a placebo in production) is fixed end-to-end with live e2e proof, and the repo is scrubbed for open-source release.
+
+### Added
+
+- **Runtime guard fix** — `@openclaw/dynamic-workflows` reads the real `event.params.command` (was `event.args`, never emitted → fail-open placebo). Per-segment shell split (`&&`/`&`/`|`/`;`/newline, `2>&1` lookbehind), `:subagent:` `defaultDeny` fail-closed, evasion blocks (destructive git / file cleanup / credential / shell substitution / wrapper-exec). Fix spec: [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md).
+- **Compile-time event-shape contract** — TS2353 reverse-verifies the guard reads the real `PluginHookBeforeToolCallEvent` shape.
+- **CI** (`.github/workflows/ci.yml`) — `pnpm -r test` on push/PR (autopilot 528+4skip / permission-policy 118 / dynamic-workflows 12).
+- **Hero image** (`.github/assets/hero.png`) + [`docs/credits.md`](docs/credits.md) provenance.
+- **package.json discoverability** — `license` / `keywords` / `repository` / `homepage` / `author` / `bugs` on root + `@openclaw/*` packages.
+
+### Changed
+
+- **README rewritten** as a skill-package/library template for OpenClaw integrators: integration surface × runtime contract × skill content; status matrix (with limitations); `adopt @openclaw/dynamic-workflows vs hand-roll guard` comparison.
+- **VitePress site** — `index.md` hero updated to 0.7.x; GitHub org placeholders → `TeFuirnever`; `docs.yml` trigger `main` → `master`.
+
+### Security
+
+- **Pre-open-source scrub** — untracked `.claude/settings.local.json` (consuming-host dev topology + local paths), history scrubbed via git-filter-repo; removed host-deploy tooling (`sync-to-ma.sh` ×3, `verify-guard.cjs`) + host runbook; abstracted host-internal paths in docs/ADRs; de-personalized test fixtures; explicit `private: true` (was null) + `publishConfig.access: restricted`.
+
+### Verified
+
+- **Live e2e closed (2026-06-28)** — real OpenProse subagent hard-blocked (`git reset --hard` → `destructive_git` / `block`) in audit; verify-guard drives 7 real-shape events (all pass) against the deployed dist.
+
 ## [0.7.1] — 2026-06-19
 
 **`@openclaw/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@openclaw/autopilot` plugin source; MatrixAssistant consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).

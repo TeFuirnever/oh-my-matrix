@@ -1,8 +1,28 @@
 {
   "name": "omm",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "description": "oh-my-matrix — documentation & design repository (OpenClaw-native orchestration)",
+  "license": "MIT",
+  "author": "TeFuirnever",
+  "homepage": "https://tefuirnever.github.io/oh-my-matrix/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TeFuirnever/oh-my-matrix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TeFuirnever/oh-my-matrix/issues"
+  },
+  "keywords": [
+    "openclaw",
+    "dynamic-workflows",
+    "ai-orchestration",
+    "multi-agent",
+    "subagent",
+    "runtime-guard",
+    "skill",
+    "openprose"
+  ],
   "type": "module",
   "packageManager": "pnpm@10.24.0",
   "workspaces": [

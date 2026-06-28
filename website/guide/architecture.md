@@ -1,6 +1,6 @@
 # Architecture
 
-> 🔄 **实现已重置 (0.6.0)** — v0.x 的 OpenClaw 插件 / MCP / team 编排实现已全部移除。以下保留**连续方向的架构叙事**；完整设计参考见仓库 [`docs/architecture.md`](https://github.com/your-org/oh-my-matrix/blob/master/docs/architecture.md)。
+> 🔄 **实现已重置 (0.6.0)** — v0.x 的 OpenClaw 插件 / MCP / team 编排实现已全部移除。以下保留**连续方向的架构叙事**；完整设计参考见仓库 [`docs/architecture.md`](https://github.com/TeFuirnever/oh-my-matrix/blob/master/docs/architecture.md)。
 
 ## 定位
 
