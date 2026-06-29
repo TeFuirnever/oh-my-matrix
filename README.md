@@ -41,7 +41,7 @@ omm 把这三件事拆成可验证的 OpenClaw 模块，而不是做一个黑盒
 | `@oh-my-matrix/autopilot` | 连续执行插件。管理目标、状态机、重试队列、stall 检测、token 预算、证据门、projection、`WORKFLOW.md` 配置和 11 个 OpenClaw hooks | ✅ source hosted, tests present | [`packages/autopilot/`](packages/autopilot/) |
 | `@oh-my-matrix/dynamic-workflows` | Workflow subagent 运行时守卫。注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed 拦截危险操作 | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
 | `@oh-my-matrix/permission-policy` | 共享权限原语。提供 `classifyCommand`、`decidePermission`、`decidePermissionForEvent`、audit persistence | ✅ shipped source | [`packages/permission-policy/`](packages/permission-policy/) |
-| `dynamic-workflows` skill | 教 agent 何时生成 `.prose`，如何选择 8 种编排模式，如何验证与汇总结果 | ✅ shipped skill | [`skill/dynamic-workflows/`](skill/dynamic-workflows/) |
+| `dynamic-workflows` skill | 教 agent 何时生成 `.prose`，如何选择 8 种编排模式，如何验证与汇总结果 | ✅ shipped skill | [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/) |
 | 历史 v0.x team/MCP 实现 | 早期设计与实现记录，已移除，不再作为当前运行面 | 📦 archived | [`docs/archive/`](docs/archive/) |
 
 ## 架构
@@ -79,7 +79,7 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 ### Dynamic Workflows: 多 agent 编排
 
-`skill/dynamic-workflows/SKILL.md` 让 agent 根据任务生成 `.prose` 程序，并优先交给 OpenProse 执行。它覆盖 8 种模式：
+`packages/dynamic-workflows/skill/SKILL.md` 让 agent 根据任务生成 `.prose` 程序，并优先交给 OpenProse 执行。它覆盖 8 种模式：
 
 - fan-out-reduce
 - pipeline
@@ -114,7 +114,7 @@ pnpm --filter @oh-my-matrix/autopilot test
 2. [`docs/architecture.md`](docs/architecture.md): 三模块架构。
 3. [`docs/adr/010-autopilot-source-hosting.md`](docs/adr/010-autopilot-source-hosting.md): autopilot 为什么托管在本仓库。
 4. [`docs/adr/012-dynamic-workflows-plugin-extraction.md`](docs/adr/012-dynamic-workflows-plugin-extraction.md) 与 [`docs/adr/013-permission-policy-library.md`](docs/adr/013-permission-policy-library.md): guard 和 permission policy 的拆分。
-5. [`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md): runtime agent 应该如何生成 workflow。
+5. [`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md): runtime agent 应该如何生成 workflow。
 
 代码变更前运行对应测试：
 
