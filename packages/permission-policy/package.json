@@ -20,7 +20,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "pack": "pnpm pack"
+    "pack": "pnpm pack",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

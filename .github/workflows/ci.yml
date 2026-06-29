@@ -9,8 +9,14 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on the same ref (mirrors oh-my-openagent / ECC).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  lint:
+    name: Lint (eslint + markdownlint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -19,7 +25,67 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-      - name: Install
-        run: pnpm install
-      - name: Test (all workspaces)
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint && pnpm lint:md
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Lint (eslint + markdownlint)\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Typecheck\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  commitlint:
+    name: Commitlint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint commit messages
+        run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}" --verbose
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Commitlint\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: Test (all workspaces)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test
         run: pnpm -r test
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Test (all workspaces)\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

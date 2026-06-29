@@ -28,12 +28,32 @@
   "workspaces": [
     "packages/*"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "docs:dev": "vitepress dev website",
     "docs:build": "vitepress build website",
-    "docs:preview": "vitepress preview website"
+    "docs:preview": "vitepress preview website",
+    "lint": "eslint .",
+    "lint:md": "markdownlint-cli2",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm lint && pnpm lint:md && pnpm typecheck",
+    "verify": "pnpm check && pnpm -r test && pnpm docs:build",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "markdownlint-cli2": "^0.22.1",
+    "simple-git-hooks": "^2.13.1",
+    "typescript-eslint": "^8.62.0",
     "vitepress": "^1.6.4"
+  },
+  "simple-git-hooks": {
+    "commit-msg": "npx --no -- commitlint --edit \"$1\""
   }
 }

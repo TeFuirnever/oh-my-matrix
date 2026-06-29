@@ -105,7 +105,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 **Negative:**
 - MA-side distribution tax paid: a 4th hand-rolled build script
   (the host's), a 2nd `file:` dependency, a 2nd bundled-plugin directory,
-  + plugin-discovery registration. This is the per-plugin cost the consensus flagged; it
+  - plugin-discovery registration. This is the per-plugin cost the consensus flagged; it
   will recur for each future plugin until MA-side build tooling is generalized.
 - ~998 LOC of tests relocated/rewritten (`permission-policy.test`,
   `audit-persister.test` moved; `permission-wiring.test` split — subagent describe moved
