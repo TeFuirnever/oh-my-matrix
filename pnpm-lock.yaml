@@ -38,7 +38,7 @@ importers:
 
   packages/autopilot:
     devDependencies:
-      '@openclaw/permission-policy':
+      '@oh-my-matrix/permission-policy':
         specifier: workspace:*
         version: link:../permission-policy
       '@types/node':
@@ -56,7 +56,7 @@ importers:
 
   packages/dynamic-workflows:
     devDependencies:
-      '@openclaw/permission-policy':
+      '@oh-my-matrix/permission-policy':
         specifier: workspace:*
         version: link:../permission-policy
       '@types/node':

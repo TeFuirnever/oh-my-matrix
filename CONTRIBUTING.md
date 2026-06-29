@@ -22,9 +22,9 @@ pnpm install
 Useful checks:
 
 ```bash
-pnpm --filter @openclaw/autopilot test
-pnpm --filter @openclaw/dynamic-workflows test
-pnpm --filter @openclaw/permission-policy test
+pnpm --filter @oh-my-matrix/autopilot test
+pnpm --filter @oh-my-matrix/dynamic-workflows test
+pnpm --filter @oh-my-matrix/permission-policy test
 pnpm docs:build
 git diff --check
 ```

@@ -1,10 +1,10 @@
 /**
- * @openclaw/permission-policy — shared permission policy primitives.
+ * @oh-my-matrix/permission-policy — shared permission policy primitives.
  *
  * Pure library (NOT a plugin — no openclaw.plugin.json, no hooks, no register()).
  * Consumed by:
- *   - @openclaw/autopilot (run-scoped permission policy + audit)
- *   - @openclaw/dynamic-workflows (subagent guard)
+ *   - @oh-my-matrix/autopilot (run-scoped permission policy + audit)
+ *   - @oh-my-matrix/dynamic-workflows (subagent guard)
  * Single source of truth for the destructive-op classification + audit trail.
  * See ADR-013.
  */

@@ -53,8 +53,8 @@ Instructions for AI agents working. All content in English.
 
 ### Planning & Risk
 
-- This repository is **documentation & design first**. It also hosts the canonical `@openclaw/autopilot` source at `packages/autopilot/` (a pnpm workspace package; see [ADR-010](docs/adr/010-autopilot-source-hosting.md)). The v0.x OpenClaw plugin / MCP implementation has been removed and its design records archived under `docs/archive/`.
-- `packages/autopilot/` is **hosted** source (ADR-010), not an omm deliverable. After source changes run `pnpm --filter @openclaw/autopilot test`, then run the internal host-deploy step (not in this repo) to rebuild, refresh MA's tgz, install, and rebuild the bundled-plugin copy the Gateway loads.
+- This repository is **documentation & design first**. It also hosts the canonical `@oh-my-matrix/autopilot` source at `packages/autopilot/` (a pnpm workspace package; see [ADR-010](docs/adr/010-autopilot-source-hosting.md)). The v0.x OpenClaw plugin / MCP implementation has been removed and its design records archived under `docs/archive/`.
+- `packages/autopilot/` is **hosted** source (ADR-010), not an omm deliverable. After source changes run `pnpm --filter @oh-my-matrix/autopilot test`, then run the internal host-deploy step (not in this repo) to rebuild, refresh MA's tgz, install, and rebuild the bundled-plugin copy the Gateway loads.
 - Changes to the **subagent runtime guard** (`permission-policy` / `dynamic-workflows` / `autopilot` before_tool_call) ship via the internal host-deploy step (builds all 3 + cp dist into MA); verify the deployed dist with a deployed-dist smoke check (run in the host repo) before restarting MA. See `docs/fixes/runtime-guard-event-shape.md`.
 - Use the active planning workflow for non-trivial doc work, structural changes, or anything spanning multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.

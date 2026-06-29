@@ -10,7 +10,7 @@ export declare function isValidBlockedReason(value: string): value is BlockedRea
 /** H-2: Safe BlockedReason coercion — returns the value if valid, otherwise falls back. */
 export declare function toBlockedReason(value: string, fallback?: BlockedReason): BlockedReason;
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
-import type { CommandClass, PermissionAuditEntry } from '@openclaw/permission-policy';
+import type { CommandClass, PermissionAuditEntry } from '@oh-my-matrix/permission-policy';
 export type { CommandClass, PermissionAuditEntry };
 export interface WorkspaceRecord {
     root: string;

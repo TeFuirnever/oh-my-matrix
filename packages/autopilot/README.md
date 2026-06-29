@@ -1,4 +1,4 @@
-# @openclaw/autopilot
+# @oh-my-matrix/autopilot
 
 OpenClaw-native plugin for **continuous, long-running task execution**. Keeps a task
 running across turns and enters explainable states on tool errors, stalls, missing
@@ -9,9 +9,9 @@ Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime 
 ## Install
 
 ```bash
-npm install @openclaw/autopilot
+npm install @oh-my-matrix/autopilot
 # peer dependencies
-npm install openclaw@">=2026.5.28" @openclaw/permission-policy
+npm install openclaw@">=2026.5.28" @oh-my-matrix/permission-policy
 ```
 
 ## Use
@@ -28,7 +28,7 @@ behaviour via `WORKFLOW.md` (destructive-git policy, retry, evidence gates).
 - **Evidence gate** — blocks completion until success criteria are verified.
 - **Projection + goal manager** — preserves run state and goal across compaction.
 - **Permission-policy integration** — coordinates the run-scoped policy with
-  [`@openclaw/permission-policy`](../permission-policy).
+  [`@oh-my-matrix/permission-policy`](../permission-policy).
 
 ## Status
 

@@ -102,7 +102,7 @@ and history rewrites (`git rebase`, `git filter-branch`) unless the workflow
 configuration explicitly sets `destructive_git.allow: true` and cwd is contained
 inside the workflow workspace. If that config is absent or ambiguous, block.
 
-This blacklist is also enforced at **runtime**: the `@openclaw/dynamic-workflows`
+This blacklist is also enforced at **runtime**: the `@oh-my-matrix/dynamic-workflows`
 plugin's `before_tool_call` hook (priority 11, runs before autopilot + audit)
 hard-blocks destructive git, credential access, and system writes for any
 `:subagent:` session, so a model that skips this preflight is still blocked at

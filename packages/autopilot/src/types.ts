@@ -61,12 +61,12 @@ export function toBlockedReason(value: string, fallback: BlockedReason = 'valida
 
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
 
-// ─── Shared permission types (now in @openclaw/permission-policy, ADR-012) ───
+// ─── Shared permission types (now in @oh-my-matrix/permission-policy, ADR-012) ───
 // decidePermission + classifyCommand + audit-persister moved to
-// @openclaw/permission-policy; autopilot is now a CONSUMER of those primitives.
+// @oh-my-matrix/permission-policy; autopilot is now a CONSUMER of those primitives.
 // Imported locally (AutopilotState.permissionAudit uses PermissionAuditEntry)
 // and re-exported so existing `import type { ... } from './types'` resolves.
-import type { CommandClass, PermissionAuditEntry } from '@openclaw/permission-policy';
+import type { CommandClass, PermissionAuditEntry } from '@oh-my-matrix/permission-policy';
 export type { CommandClass, PermissionAuditEntry };
 
 export interface WorkspaceRecord {

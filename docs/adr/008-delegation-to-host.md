@@ -8,7 +8,7 @@ Accepted, 2026-06-16.
 
 omm was originally designed as a three-mode workflow state machine — `ralph` (iterative convergence loop), `autopilot` (autonomous multi-step pipeline), and `team` (multi-agent delegation) — plus a planned `goal` mode for multi-instance intent tracking ([ADR-004](004-three-mode-state-machine.md), [ADR-007](007-goal-mode.md)). The three modes shared a single validation dispatcher, exclusivity guard, and terminal-phase enforcement.
 
-After ADR-004/007 were accepted, the host (MatrixAssistant, MA) shipped its own `@openclaw/autopilot` plugin (v2.0.0, in the host's bundled-plugin directory). This plugin **simultaneously covers** the responsibility surface of all three omm capabilities being considered for removal:
+After ADR-004/007 were accepted, the host (MatrixAssistant, MA) shipped its own `@oh-my-matrix/autopilot` plugin (v2.0.0, in the host's bundled-plugin directory). This plugin **simultaneously covers** the responsibility surface of all three omm capabilities being considered for removal:
 
 - **Continuous execution** (omm's `autopilot`) — MA autopilot provides a stage-driven pipeline with per-step verification, retry, and blocking semantics.
 - **Iterative convergence** (omm's `ralph`) — MA autopilot's stall-detector + goal_manager combination provides the iterative-plan-fix loop with persisted ledger and resume.
@@ -28,7 +28,7 @@ Meanwhile, omm's remaining responsibility — `team` orchestration plus the plan
 
 ## Decision
 
-**Delete omm's `ralph`, `autopilot`, and planned `goal` capabilities. Delegate autonomous-loop and goal tracking to the MA host's `@openclaw/autopilot` plugin. omm converges to a single workflow mode: `team`.**
+**Delete omm's `ralph`, `autopilot`, and planned `goal` capabilities. Delegate autonomous-loop and goal tracking to the MA host's `@oh-my-matrix/autopilot` plugin. omm converges to a single workflow mode: `team`.**
 
 ### What was removed (2026-06-16)
 

@@ -49,7 +49,7 @@ Exit criteria:
 Exit criteria:
 
 - Autopilot has a documented integration path, config examples, and host UI contract.
-- `pnpm --filter @openclaw/autopilot test` remains green.
+- `pnpm --filter @oh-my-matrix/autopilot test` remains green.
 
 ## P3: Dynamic Workflows Observability
 

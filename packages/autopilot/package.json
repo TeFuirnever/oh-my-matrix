@@ -1,5 +1,5 @@
 {
-  "name": "@openclaw/autopilot",
+  "name": "@oh-my-matrix/autopilot",
   "version": "2.1.1",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
   "publishConfig": {
@@ -42,11 +42,11 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.28",
-    "@openclaw/permission-policy": "0.1.0"
+    "@oh-my-matrix/permission-policy": "0.1.0"
   },
   "devDependencies": {
     "openclaw": "2026.5.28",
-    "@openclaw/permission-policy": "workspace:*",
+    "@oh-my-matrix/permission-policy": "workspace:*",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0"

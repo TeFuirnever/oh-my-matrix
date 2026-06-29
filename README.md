@@ -33,9 +33,9 @@ omm 把这三件事拆成可验证的 OpenClaw 模块，而不是做一个黑盒
 
 | 模块 | 做什么 | 当前状态 | 路径 |
 |---|---|---:|---|
-| `@openclaw/autopilot` | 连续执行插件。管理目标、状态机、重试队列、stall 检测、token 预算、证据门、projection、`WORKFLOW.md` 配置和 11 个 OpenClaw hooks | ✅ source hosted, tests present | [`packages/autopilot/`](packages/autopilot/) |
-| `@openclaw/dynamic-workflows` | Workflow subagent 运行时守卫。注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed 拦截危险操作 | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
-| `@openclaw/permission-policy` | 共享权限原语。提供 `classifyCommand`、`decidePermission`、`decidePermissionForEvent`、audit persistence | ✅ shipped source | [`packages/permission-policy/`](packages/permission-policy/) |
+| `@oh-my-matrix/autopilot` | 连续执行插件。管理目标、状态机、重试队列、stall 检测、token 预算、证据门、projection、`WORKFLOW.md` 配置和 11 个 OpenClaw hooks | ✅ source hosted, tests present | [`packages/autopilot/`](packages/autopilot/) |
+| `@oh-my-matrix/dynamic-workflows` | Workflow subagent 运行时守卫。注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed 拦截危险操作 | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
+| `@oh-my-matrix/permission-policy` | 共享权限原语。提供 `classifyCommand`、`decidePermission`、`decidePermissionForEvent`、audit persistence | ✅ shipped source | [`packages/permission-policy/`](packages/permission-policy/) |
 | `dynamic-workflows` skill | 教 agent 何时生成 `.prose`，如何选择 8 种编排模式，如何验证与汇总结果 | ✅ shipped skill | [`skill/dynamic-workflows/`](skill/dynamic-workflows/) |
 | 历史 v0.x team/MCP 实现 | 早期设计与实现记录，已移除，不再作为当前运行面 | 📦 archived | [`docs/archive/`](docs/archive/) |
 
@@ -58,7 +58,7 @@ flowchart LR
 
 ### Autopilot: 长程连续执行
 
-`@openclaw/autopilot` 是 OpenClaw-native continuous execution 插件。它不是 README 里的角落能力，而是当前仓库的一等模块：
+`@oh-my-matrix/autopilot` 是 OpenClaw-native continuous execution 插件。它不是 README 里的角落能力，而是当前仓库的一等模块：
 
 - hook surface: `before_agent_finalize`、`agent_end`、`after_tool_call`、`before_compaction`、`after_compaction`、`session_start`、`session_end`、`agent_turn_prepare`、`before_agent_run`、`before_tool_call`、`llm_output`
 - state: `idle` / `running` / `paused` / `done`
@@ -69,7 +69,7 @@ flowchart LR
 验证入口：
 
 ```bash
-pnpm --filter @openclaw/autopilot test
+pnpm --filter @oh-my-matrix/autopilot test
 ```
 
 ### Dynamic Workflows: 多 agent 编排
@@ -89,7 +89,7 @@ pnpm --filter @openclaw/autopilot test
 
 ### Permission Policy: 运行时边界
 
-`@openclaw/permission-policy` 是 autopilot 和 dynamic workflows 的共享安全层。它分类 shell/tool 操作，写入 audit，并让 `@openclaw/dynamic-workflows` 对 workflow subagent 采用 `defaultDeny`。
+`@oh-my-matrix/permission-policy` 是 autopilot 和 dynamic workflows 的共享安全层。它分类 shell/tool 操作，写入 audit，并让 `@oh-my-matrix/dynamic-workflows` 对 workflow subagent 采用 `defaultDeny`。
 
 当前会拦截：
 
@@ -114,9 +114,9 @@ pnpm --filter @openclaw/autopilot test
 代码变更前运行对应测试：
 
 ```bash
-pnpm --filter @openclaw/autopilot test
-pnpm --filter @openclaw/dynamic-workflows test
-pnpm --filter @openclaw/permission-policy test
+pnpm --filter @oh-my-matrix/autopilot test
+pnpm --filter @oh-my-matrix/dynamic-workflows test
+pnpm --filter @oh-my-matrix/permission-policy test
 pnpm docs:build
 ```
 
@@ -133,7 +133,7 @@ pnpm check            # 仅静态门（eslint + markdownlint + typecheck）
 
 # 单独跑 docs 或某个包
 pnpm docs:dev
-pnpm --filter @openclaw/autopilot test
+pnpm --filter @oh-my-matrix/autopilot test
 ```
 
 提交须遵循 Conventional Commits（本地 hook + CI 双重看护）。多 gate harness 的全貌与如何新增 gate 见 [`CONTRIBUTING.md`](CONTRIBUTING.md)、`harness` skill 与 [`docs/design/dev-harness.md`](docs/design/dev-harness.md)。

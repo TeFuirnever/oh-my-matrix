@@ -31,8 +31,8 @@ Expected response target: acknowledgement within 48 hours.
 
 omm treats workflow subagents as untrusted.
 
-- `@openclaw/dynamic-workflows` registers `before_tool_call` priority 11 for `:subagent:` sessions.
-- `@openclaw/permission-policy` classifies commands and returns permission decisions.
+- `@oh-my-matrix/dynamic-workflows` registers `before_tool_call` priority 11 for `:subagent:` sessions.
+- `@oh-my-matrix/permission-policy` classifies commands and returns permission decisions.
 - Subagent sessions use fail-closed defaults.
 - Audit entries are persisted under `.autopilot/`.
 
@@ -47,8 +47,8 @@ See [`docs/fixes/runtime-guard-event-shape.md`](docs/fixes/runtime-guard-event-s
 ## Maintainer Checks
 
 ```bash
-pnpm --filter @openclaw/autopilot test
-pnpm --filter @openclaw/dynamic-workflows test
-pnpm --filter @openclaw/permission-policy test
+pnpm --filter @oh-my-matrix/autopilot test
+pnpm --filter @oh-my-matrix/dynamic-workflows test
+pnpm --filter @oh-my-matrix/permission-policy test
 pnpm audit
 ```

@@ -14,7 +14,7 @@
 ## 1. Background & Problem
 
 `oh-my-matrix` is a small, **docs-first** pnpm monorepo. It hosts three real TypeScript packages
-(`@openclaw/autopilot`, `@openclaw/dynamic-workflows`, `@openclaw/permission-policy`), a VitePress
+(`@oh-my-matrix/autopilot`, `@oh-my-matrix/dynamic-workflows`, `@oh-my-matrix/permission-policy`), a VitePress
 `website/`, a hand-drawn `landing/`, `docs/`, and `skill/dynamic-workflows/`.
 
 Its current development harness is **thin and leaky**:

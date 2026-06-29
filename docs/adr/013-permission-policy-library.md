@@ -1,4 +1,4 @@
-# ADR-013: Extract `@openclaw/permission-policy` as a Neutral Library
+# ADR-013: Extract `@oh-my-matrix/permission-policy` as a Neutral Library
 
 ## Status
 
@@ -14,17 +14,17 @@
 > the guard's event-shape plumbing is what's broken.
 
 Accepted (2026-06-27). **Refines [ADR-012](012-dynamic-workflows-plugin-extraction.md)**
-— the runtime guard stays in `@openclaw/dynamic-workflows`, but the shared permission
+— the runtime guard stays in `@oh-my-matrix/dynamic-workflows`, but the shared permission
 **primitives** move out into a dedicated neutral library. Resolves the plugin-to-plugin
 coupling ADR-012 introduced.
 
 ## Context
 
-ADR-012 extracted the subagent guard into `@openclaw/dynamic-workflows` but left that
+ADR-012 extracted the subagent guard into `@oh-my-matrix/dynamic-workflows` but left that
 package **dual-purpose**: it was both (1) a runtime guard plugin (`before_tool_call`
 priority 11) AND (2) the owner of the shared permission primitives (`decidePermission`,
-`classifyCommand`, audit-persister), re-exported for `@openclaw/autopilot` to consume.
-Consequently `@openclaw/autopilot` declared `@openclaw/dynamic-workflows` as a
+`classifyCommand`, audit-persister), re-exported for `@oh-my-matrix/autopilot` to consume.
+Consequently `@oh-my-matrix/autopilot` declared `@oh-my-matrix/dynamic-workflows` as a
 peerDependency + devDependency — a **plugin-to-plugin package coupling** (build-time
 only, via peerDep, but a conceptual smell: dynamic-workflows wore two hats).
 
@@ -35,11 +35,11 @@ not yet distributed to MA). Direction was agreed by all three agents.
 
 ## Decision
 
-**Extract `@openclaw/permission-policy` as a neutral LIBRARY (not a plugin).** Move
+**Extract `@oh-my-matrix/permission-policy` as a neutral LIBRARY (not a plugin).** Move
 `permission-policy.ts`, `audit-persister.ts`, and the shared `types.ts`
 (`CommandClass`, `PermissionAuditEntry`, `PermissionDecisionInput`) out of
-`@openclaw/dynamic-workflows` into the new package. Both `@openclaw/autopilot` and
-`@openclaw/dynamic-workflows` depend on it as a **peerDependency** (the proven pattern —
+`@oh-my-matrix/dynamic-workflows` into the new package. Both `@oh-my-matrix/autopilot` and
+`@oh-my-matrix/dynamic-workflows` depend on it as a **peerDependency** (the proven pattern —
 a regular dep would 404 at MA install, the same failure that forced peerDep originally).
 **Neither plugin depends on the other.**
 
@@ -53,7 +53,7 @@ the host's bundled-plugin directory for autopilot and for dynamic-workflows.
 
 ### Why peerDep, not regular dep (Architect's correction)
 
-`@openclaw/permission-policy` is not on the npm registry. A regular dep in autopilot's
+`@oh-my-matrix/permission-policy` is not on the npm registry. A regular dep in autopilot's
 tgz would make pnpm try the registry (404) during MA install. peerDep + MA root `file:`
 dep is the arrangement that works (pnpm hoists the root instance into each plugin's
 scoped node_modules). Both plugins declare it peerDep `0.1.0` + devDep `workspace:*`
@@ -69,7 +69,7 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 ## Consequences
 
 **Positive:**
-- **True plugin independence.** `@openclaw/autopilot` and `@openclaw/dynamic-workflows`
+- **True plugin independence.** `@oh-my-matrix/autopilot` and `@oh-my-matrix/dynamic-workflows`
   no longer reference each other (verified: `grep -c dynamic-workflows` in autopilot's
   dist = 0). Each is independently installable (given the lib).
 - **Single source of truth.** The permission policy + audit primitives live in one place;
@@ -79,16 +79,16 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
   discovery registration.
 
 **Negative:**
-- A 3rd omm package (`@openclaw/permission-policy`) + a 3rd MA root `file:` dep.
+- A 3rd omm package (`@oh-my-matrix/permission-policy`) + a 3rd MA root `file:` dep.
 - `AUDIT_SUBDIR = '.autopilot'` stays hardcoded in v1 (deferred parameterization — let
   a real 3rd consumer drive the API shape; avoid guessing now).
 
 ## Verification (2026-06-27)
 
-- `@openclaw/permission-policy`: 105 tests pass (`permission-policy` 91 + `audit-persister` 14).
-- `@openclaw/dynamic-workflows`: 8 tests pass (subagent-guard; imports primitives from the lib).
-- `@openclaw/autopilot`: 528 pass | 4 skipped (imports primitives from the lib; zero regression).
-- MA: `require.resolve('@openclaw/permission-policy', {paths:['<MA>/<bundled-plugin-dir>/autopilot/dist']})`
+- `@oh-my-matrix/permission-policy`: 105 tests pass (`permission-policy` 91 + `audit-persister` 14).
+- `@oh-my-matrix/dynamic-workflows`: 8 tests pass (subagent-guard; imports primitives from the lib).
+- `@oh-my-matrix/autopilot`: 528 pass | 4 skipped (imports primitives from the lib; zero regression).
+- MA: `require.resolve('@oh-my-matrix/permission-policy', {paths:['<MA>/<bundled-plugin-dir>/autopilot/dist']})`
   AND from the dynamic-workflows bundled-plugin dist → both succeed.
 - `grep -c dynamic-workflows` in the host's autopilot plugin dist = **0**
   (full severance).
@@ -111,4 +111,4 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 - Plan: [`.omc/plans/decouple-permission-policy.md`](../../.omc/plans/decouple-permission-policy.md)
   (ralplan: Planner→Architect→Critic ITERATE→resolved)
 - Implementation: `packages/permission-policy/`, `packages/dynamic-workflows/index.ts`,
-  `packages/autopilot/index.ts` (all import from `@openclaw/permission-policy`)
+  `packages/autopilot/index.ts` (all import from `@oh-my-matrix/permission-policy`)

@@ -1,6 +1,6 @@
 # ADR-002: Team Delegation to Host Skill
 
-> **Status update (2026-06-16):** The `linked_ralph` ralph↔team coordination mentioned below was removed when ralph was delegated to the host (`@openclaw/autopilot`) — see [ADR-008](008-delegation-to-host.md). The team-delegation principle itself stands; only the ralph linkage is historical.
+> **Status update (2026-06-16):** The `linked_ralph` ralph↔team coordination mentioned below was removed when ralph was delegated to the host (`@oh-my-matrix/autopilot`) — see [ADR-008](008-delegation-to-host.md). The team-delegation principle itself stands; only the ralph linkage is historical.
 
 ## Context
 

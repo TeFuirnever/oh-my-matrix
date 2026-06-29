@@ -1,6 +1,6 @@
 /**
  * Minimal structured logger for the dynamic-workflows guard plugin.
- * Mirrors @openclaw/autopilot's logger interface (log/warn/error/logWithContext)
+ * Mirrors @oh-my-matrix/autopilot's logger interface (log/warn/error/logWithContext)
  * so the guard code is portable between the two. Env-gated:
  *
  *   DYNAMIC_WORKFLOWS_LOG_LEVEL  — debug | info (default) | warn | error | silent

@@ -21,12 +21,12 @@ import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
-import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@openclaw/permission-policy';
+import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
 import { runValidationCommands } from './src/command-runner';
 import { detectValidationCommands } from './src/project-detector';
-import { appendAuditEntry, loadRecentAuditEntries } from '@openclaw/permission-policy';
+import { appendAuditEntry, loadRecentAuditEntries } from '@oh-my-matrix/permission-policy';
 import { statSync } from 'fs';
 import { isAbsolute } from 'path';
 

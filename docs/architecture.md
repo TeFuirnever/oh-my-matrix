@@ -2,9 +2,9 @@
 
 oh-my-matrix (omm) 是 OpenClaw 宿主的 autonomous agent runtime stack。当前架构由三个一等模块组成：
 
-1. `@openclaw/autopilot`: 长程连续执行。
-2. `dynamic-workflows` skill + `@openclaw/dynamic-workflows`: 多 agent `.prose` 编排与 subagent guard。
-3. `@openclaw/permission-policy`: 共享运行时权限原语。
+1. `@oh-my-matrix/autopilot`: 长程连续执行。
+2. `dynamic-workflows` skill + `@oh-my-matrix/dynamic-workflows`: 多 agent `.prose` 编排与 subagent guard。
+3. `@oh-my-matrix/permission-policy`: 共享运行时权限原语。
 
 v0.x 的 team / MCP / plugin 实现已经移除，历史记录在 [`archive/`](archive/)。本文件只描述当前方向。
 
@@ -14,14 +14,14 @@ v0.x 的 team / MCP / plugin 实现已经移除，历史记录在 [`archive/`](a
 flowchart TB
   U[User goal] --> G[OpenClaw Gateway]
 
-  G --> A[@openclaw/autopilot]
+  G --> A[@oh-my-matrix/autopilot]
   G --> S[dynamic-workflows skill]
 
   S --> P[OpenProse .prose runtime]
   P --> W[parallel workflow subagents]
 
-  A --> PP[@openclaw/permission-policy]
-  W --> DG[@openclaw/dynamic-workflows guard]
+  A --> PP[@oh-my-matrix/permission-policy]
+  W --> DG[@oh-my-matrix/dynamic-workflows guard]
   DG --> PP
 
   PP --> AUDIT[permission audit]
@@ -35,7 +35,7 @@ flowchart TB
 
 ### Autopilot
 
-`packages/autopilot/` hosts `@openclaw/autopilot`, an OpenClaw-native continuous execution plugin.
+`packages/autopilot/` hosts `@oh-my-matrix/autopilot`, an OpenClaw-native continuous execution plugin.
 
 It owns:
 
@@ -78,7 +78,7 @@ The split prevents duplicated safety logic and lets future OpenClaw plugins reus
 2. Dynamic Workflows skill generates a `.prose` program using one or more of the 8 orchestration patterns.
 3. OpenProse compiles and executes the program.
 4. Subagents fan out through OpenClaw sessions.
-5. `@openclaw/dynamic-workflows` guards each `:subagent:` tool call.
+5. `@oh-my-matrix/dynamic-workflows` guards each `:subagent:` tool call.
 6. Final synthesis separates verified findings from failed or uncertain branches.
 
 ## Safety Model

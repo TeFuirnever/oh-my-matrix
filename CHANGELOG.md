@@ -31,7 +31,7 @@ _No unreleased changes yet._
 
 ### Added
 
-- **Runtime guard fix** — `@openclaw/dynamic-workflows` reads the real `event.params.command` (was `event.args`, never emitted → fail-open placebo). Per-segment shell split (`&&`/`&`/`|`/`;`/newline, `2>&1` lookbehind), `:subagent:` `defaultDeny` fail-closed, evasion blocks (destructive git / file cleanup / credential / shell substitution / wrapper-exec). Fix spec: [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md).
+- **Runtime guard fix** — `@oh-my-matrix/dynamic-workflows` reads the real `event.params.command` (was `event.args`, never emitted → fail-open placebo). Per-segment shell split (`&&`/`&`/`|`/`;`/newline, `2>&1` lookbehind), `:subagent:` `defaultDeny` fail-closed, evasion blocks (destructive git / file cleanup / credential / shell substitution / wrapper-exec). Fix spec: [docs/fixes/runtime-guard-event-shape.md](docs/fixes/runtime-guard-event-shape.md).
 - **Compile-time event-shape contract** — TS2353 reverse-verifies the guard reads the real `PluginHookBeforeToolCallEvent` shape.
 - **CI** (`.github/workflows/ci.yml`) — `pnpm -r test` on push/PR (autopilot 528+4skip / permission-policy 118 / dynamic-workflows 12).
 - **Hero image** (`.github/assets/hero.png`) + [`docs/credits.md`](docs/credits.md) provenance.
@@ -39,7 +39,7 @@ _No unreleased changes yet._
 
 ### Changed
 
-- **README rewritten** as a skill-package/library template for OpenClaw integrators: integration surface × runtime contract × skill content; status matrix (with limitations); `adopt @openclaw/dynamic-workflows vs hand-roll guard` comparison.
+- **README rewritten** as a skill-package/library template for OpenClaw integrators: integration surface × runtime contract × skill content; status matrix (with limitations); `adopt @oh-my-matrix/dynamic-workflows vs hand-roll guard` comparison.
 - **VitePress site** — `index.md` hero updated to 0.7.x; GitHub org placeholders → `TeFuirnever`; `docs.yml` trigger `main` → `master`.
 
 ### Security
@@ -52,17 +52,17 @@ _No unreleased changes yet._
 
 ## [0.7.1] — 2026-06-19
 
-**`@openclaw/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@openclaw/autopilot` plugin source; MatrixAssistant consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).
+**`@oh-my-matrix/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@oh-my-matrix/autopilot` plugin source; MatrixAssistant consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).
 
 ### Added
 
-- **`packages/autopilot/`** — canonical `@openclaw/autopilot@2.0.0` source migrated from MatrixAssistant (the host's plugin source tree). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
+- **`packages/autopilot/`** — canonical `@oh-my-matrix/autopilot@2.0.0` source migrated from MatrixAssistant (the host's plugin source tree). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
 - **`pnpm-workspace.yaml`** — omm is now a pnpm workspace (`packages/*`).
-- **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@openclaw/autopilot` in omm rather than keep it embedded in MA; documents compatibility with ADR-008.
+- **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@oh-my-matrix/autopilot` in omm rather than keep it embedded in MA; documents compatibility with ADR-008.
 
 ### Changed
 
-- **MA consumes autopilot as a package** — `"@openclaw/autopilot": "<a versioned file: tgz dependency>"`; MA is self-contained (tgz vendored into its bundled-plugin directory), plugin discovery resolves from `node_modules` in dev and the bundled-plugin directory when packaged.
+- **MA consumes autopilot as a package** — `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"`; MA is self-contained (tgz vendored into its bundled-plugin directory), plugin discovery resolves from `node_modules` in dev and the bundled-plugin directory when packaged.
 - omm `package.json` version bumped 0.6.0 → 0.7.1.
 
 ### Removed
