@@ -9,7 +9,7 @@ Covered:
 - `packages/autopilot/`
 - `packages/dynamic-workflows/`
 - `packages/permission-policy/`
-- `skill/dynamic-workflows/`
+- `packages/dynamic-workflows/skill/`
 - packaging/deployment docs that affect host runtime safety
 
 Archived v0.x records under `docs/archive/` are historical and not supported as live software.

@@ -7,7 +7,7 @@ oh-my-matrix 面向 OpenClaw 宿主集成者。当前核心不是“只读文档
 | 目标 | 入口 |
 |---|---|
 | 长程连续执行 | `packages/autopilot/` |
-| 多 agent workflow 编排 | `skill/dynamic-workflows/` |
+| 多 agent workflow 编排 | `packages/dynamic-workflows/skill/` |
 | workflow subagent guard | `packages/dynamic-workflows/` |
 | 共享权限原语 | `packages/permission-policy/` |
 | 架构背景 | `docs/architecture.md` |
