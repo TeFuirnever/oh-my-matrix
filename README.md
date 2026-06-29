@@ -143,12 +143,26 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 提交须遵循 Conventional Commits（本地 hook + CI 双重看护）。多 gate harness 的全貌与如何新增 gate 见 [`CONTRIBUTING.md`](CONTRIBUTING.md)、`harness` skill 与 [`docs/design/dev-harness.md`](docs/design/dev-harness.md)。
 
+## 发布到 npm（维护者）
+
+改 `packages/<pkg>/package.json` 版本号后，在**自己的终端**发布（不要用 Claude 的 `!`）：
+
+```bash
+pnpm --filter @oh-my-matrix/autopilot publish --access public
+pnpm --filter @oh-my-matrix/dynamic-workflows publish --access public
+pnpm --filter @oh-my-matrix/permission-policy publish --access public
+```
+
+- **2FA 必须开着**：`@oh-my-matrix` org 强制发布者开 2FA，关掉会被 E403 锁死。npm 交互式要 OTP（从认证 App 读 6 位码敲进去）。
+- **在自己终端跑**：Claude `!` + `--otp=` 容易撞 OTP 30 秒时效和权限分类器；本地交互最顺。
+- **不能重发同版本**：npm 版本不可变，改了内容必须 bump（哪怕只 patch）。`pnpm --filter <pkg> pack` 可预览 tarball。
+
 ## 项目状态
 
 | 事项 | 状态 |
 |---|---|
 | 根仓库公开 release | v0.8.0（GitHub Release）|
-| npm public package | 已发布 `@oh-my-matrix/*`（permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.0）|
+| npm public package | 已发布 `@oh-my-matrix/*`（permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.1）|
 | CI / Harness | GitHub Actions 4 gate（lint / typecheck / commitlint / test）+ 本地 `pnpm verify` 镜像 |
 | 依赖扫描 | Dependabot 已启用（`.github/dependabot.yml`） |
 | 在线站点 | https://tefuirnever.github.io/oh-my-matrix/ — 手绘 landing（根）+ 文档（`/docs/`，VitePress 源见 [`website/`](website/)）|
