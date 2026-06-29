@@ -48,6 +48,22 @@ Gates: `pnpm lint` (eslint), `pnpm lint:md` (markdownlint), `pnpm typecheck` (`t
 6. Use Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` (enforced by commitlint — local hook + CI).
 7. `master` is protected: PRs need the `test` check green and use squash-merge; direct pushes and force-pushes are blocked.
 
+## Repository Setup
+
+The repo's automation and policy live under `.github/`:
+
+| Setting | File | What it does |
+|---|---|---|
+| CI | `.github/workflows/ci.yml` | On push/PR: 4 jobs — lint (eslint + markdownlint), typecheck, commitlint (PR only), test. Concurrency cancel + pnpm cache + per-job summaries |
+| Docs deploy | `.github/workflows/docs.yml` | On push to `master`: builds `landing` + VitePress, deploys to GitHub Pages |
+| Branch protection | GitHub settings | `master` requires the `test` check green + squash-merge; direct/force pushes blocked (see Pull Request Rules above) |
+| Dependency scan | `.github/dependabot.yml` | Dependabot watches dependency updates and security advisories |
+| Code ownership | `.github/CODEOWNERS` | Default reviewers per path |
+| PR template | `.github/PULL_REQUEST_TEMPLATE.md` | Structured PR description |
+| Issue templates | `.github/ISSUE_TEMPLATE/` | bug / feature request forms |
+
+To add a gate or adjust CI, see the `harness` skill and [`docs/design/dev-harness.md`](docs/design/dev-harness.md).
+
 ## Issue Quality
 
 Good issues include:
