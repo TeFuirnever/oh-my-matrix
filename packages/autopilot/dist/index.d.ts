@@ -1,5 +1,6 @@
 import type { AutopilotState } from './src/types';
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
+export type { AutopilotProjection } from './src/projection';
 export declare const id = "autopilot";
 export declare const name = "Autopilot Continuous Mode";
 export declare const version = "2.0.0";

@@ -30,6 +30,11 @@ import { appendAuditEntry, loadRecentAuditEntries } from '@oh-my-matrix/permissi
 import { statSync } from 'fs';
 import { isAbsolute } from 'path';
 
+// Public re-export so consumers import AutopilotProjection from the package
+// barrel (@oh-my-matrix/autopilot), not the deep dist/src/projection path.
+// See docs/roadmap.md (P2: Autopilot Release Readiness).
+export type { AutopilotProjection } from './src/projection';
+
 /**
  * Validate a renderer-supplied workspacePath before storing it as the
  * containment boundary.  Rejects relative paths, non-existent paths, and
