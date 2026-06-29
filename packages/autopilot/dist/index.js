@@ -17,12 +17,12 @@ const goal_manager_1 = require("./src/goal-manager");
 const projection_1 = require("./src/projection");
 const types_1 = require("./src/types");
 const orchestrator_1 = require("./src/orchestrator");
-const permission_policy_1 = require("@openclaw/permission-policy");
+const permission_policy_1 = require("@oh-my-matrix/permission-policy");
 const workflow_config_1 = require("./src/workflow-config");
 const evidence_gate_1 = require("./src/evidence-gate");
 const command_runner_1 = require("./src/command-runner");
 const project_detector_1 = require("./src/project-detector");
-const permission_policy_2 = require("@openclaw/permission-policy");
+const permission_policy_2 = require("@oh-my-matrix/permission-policy");
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**
@@ -68,7 +68,7 @@ const BEFORE_TOOL_CALL_PRIORITY = 10;
 // Lazy load: if audit plugin absent, autopilot still works (degraded but safe).
 let _auditSetMode = null;
 try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- CJS lazy import; audit plugin is an optional peer
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS lazy import; audit plugin is an optional peer
     const auditPlugin = require('@openclaw/matrixassistant-audit');
     if (typeof auditPlugin === 'object' &&
         auditPlugin !== null &&

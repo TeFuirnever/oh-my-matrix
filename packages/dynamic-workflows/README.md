@@ -1,18 +1,18 @@
-# @openclaw/dynamic-workflows
+# @oh-my-matrix/dynamic-workflows
 
 OpenClaw plugin providing the **subagent runtime guard** — blocks destructive
 operations (destructive git, file cleanup, credential access, shell substitution,
 wrapper-exec) for `:subagent:` sessions. Also re-exports the permission-policy
-library API consumed by [`@openclaw/autopilot`](../autopilot).
+library API consumed by [`@oh-my-matrix/autopilot`](../autopilot).
 
 Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime stack.
 
 ## Install
 
 ```bash
-npm install @openclaw/dynamic-workflows
+npm install @oh-my-matrix/dynamic-workflows
 # peer dependencies
-npm install openclaw@">=2026.5.28" @openclaw/permission-policy
+npm install openclaw@">=2026.5.28" @oh-my-matrix/permission-policy
 ```
 
 ## Use

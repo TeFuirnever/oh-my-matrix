@@ -10,9 +10,9 @@
 
 任一 hosted package 源码变更后:
 
-- `packages/autopilot/`(`@openclaw/autopilot`)
-- `packages/dynamic-workflows/`(`@openclaw/dynamic-workflows`)
-- `packages/permission-policy/`(`@openclaw/permission-policy`)
+- `packages/autopilot/`(`@oh-my-matrix/autopilot`)
+- `packages/dynamic-workflows/`(`@oh-my-matrix/dynamic-workflows`)
+- `packages/permission-policy/`(`@oh-my-matrix/permission-policy`)
 
 三者共享 permission-policy —— **三者同改时,三个都要验**(见 fixes 文档"build 3 个 + cp dist into MA")。
 
@@ -25,9 +25,9 @@
 逐包跑测试,全绿才继续:
 
 ```bash
-pnpm --filter @openclaw/permission-policy test    # 当前 ~111 tests
-pnpm --filter @openclaw/dynamic-workflows test    # 当前 ~12 tests
-pnpm --filter @openclaw/autopilot test            # 当前 ~520 tests
+pnpm --filter @oh-my-matrix/permission-policy test    # 当前 ~111 tests
+pnpm --filter @oh-my-matrix/dynamic-workflows test    # 当前 ~12 tests
+pnpm --filter @oh-my-matrix/autopilot test            # 当前 ~520 tests
 ```
 
 任一包红 → 先修,不进入部署。
@@ -36,19 +36,19 @@ pnpm --filter @openclaw/autopilot test            # 当前 ~520 tests
 
 ```bash
 # autopilot 走 tgz(MA 以 file: 协议 vendoring,见 ADR-010)
-pnpm --filter @openclaw/autopilot build
-pnpm --filter @openclaw/autopilot pack            # → packages/autopilot/openclaw-autopilot-<ver>.tgz
+pnpm --filter @oh-my-matrix/autopilot build
+pnpm --filter @oh-my-matrix/autopilot pack            # → packages/autopilot/openclaw-autopilot-<ver>.tgz
 
 # runtime guard 两包走 cp dist(ADR-012/013 + fixes 文档)
-pnpm --filter @openclaw/permission-policy build
-pnpm --filter @openclaw/dynamic-workflows build
+pnpm --filter @oh-my-matrix/permission-policy build
+pnpm --filter @oh-my-matrix/dynamic-workflows build
 ```
 
 产物:`packages/autopilot/openclaw-autopilot-<ver>.tgz` + 三个 `dist/`。
 
 ### 3. `[TODO:host]` 刷新 MA bundled-plugin copy
 
-- 把 autopilot tgz 放进 MA 的 `resources/autopilot/`(ADR-010),并在 MA `package.json` 把 `"@openclaw/autopilot"` 版本 bump 到新 tgz 的版本号(tgz 文件名里的版本是合约)。
+- 把 autopilot tgz 放进 MA 的 `resources/autopilot/`(ADR-010),并在 MA `package.json` 把 `"@oh-my-matrix/autopilot"` 版本 bump 到新 tgz 的版本号(tgz 文件名里的版本是合约)。
 - 把 permission-policy / dynamic-workflows 的 `dist/` cp 进 MA 的 bundled-plugin 目录。
 - `[TODO:host]`:MA 仓库内具体的 cp 目标路径、版本 bump 命令、是否需 `pnpm install` 重建 bundled-plugin 目录。
 

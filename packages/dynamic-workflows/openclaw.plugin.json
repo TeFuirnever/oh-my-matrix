@@ -1,7 +1,7 @@
 {
   "id": "dynamic-workflows",
   "name": "Dynamic Workflows Guard",
-  "description": "Runtime permission guard for OpenClaw workflow subagents — fail-closed destructive-op blocking for :subagent: sessions. Also exports the shared permission primitives (decidePermission, classifyCommand, audit) consumed by @openclaw/autopilot.",
+  "description": "Runtime permission guard for OpenClaw workflow subagents — fail-closed destructive-op blocking for :subagent: sessions. Also exports the shared permission primitives (decidePermission, classifyCommand, audit) consumed by @oh-my-matrix/autopilot.",
   "version": "0.1.0",
   "main": "dist/index.js",
   "activation": {

@@ -30,7 +30,7 @@ Phase 4: Merge     → Merge by default; wait until actually merged; then worktr
 - **Surgical changes only** (AGENTS.md). Don't refactor adjacent code/docs; every changed line traces to the PR's purpose.
 - **Spine docs are high-risk** (`CONTEXT.md`, `docs/architecture.md`, `docs/roadmap.md`, `docs/adr/`). Touch them only when the PR's purpose is that change; otherwise leave them.
 - **`docs/archive/` is frozen** — never rewrite history.
-- `packages/autopilot` is hosted source (ADR-010); source changes need `pnpm --filter @openclaw/autopilot test` plus the internal host-deploy step — don't claim host deployment is done unless the dist was actually refreshed and smoke-tested.
+- `packages/autopilot` is hosted source (ADR-010); source changes need `pnpm --filter @oh-my-matrix/autopilot test` plus the internal host-deploy step — don't claim host deployment is done unless the dist was actually refreshed and smoke-tested.
 
 ## Phase 0 — Setup
 

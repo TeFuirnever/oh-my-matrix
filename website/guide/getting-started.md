@@ -18,9 +18,9 @@ oh-my-matrix 面向 OpenClaw 宿主集成者。当前核心不是“只读文档
 ```bash
 pnpm install
 
-pnpm --filter @openclaw/autopilot test
-pnpm --filter @openclaw/dynamic-workflows test
-pnpm --filter @openclaw/permission-policy test
+pnpm --filter @oh-my-matrix/autopilot test
+pnpm --filter @oh-my-matrix/dynamic-workflows test
+pnpm --filter @oh-my-matrix/permission-policy test
 
 pnpm docs:dev
 pnpm docs:build

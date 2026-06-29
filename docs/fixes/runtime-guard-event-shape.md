@@ -154,7 +154,7 @@ Add at least one test that constructs a literal `PluginHookBeforeToolCallEvent` 
 ### 5. P2 cleanups (ride along)
 
 - `.gitignore`: add `dist/` (or `packages/*/dist/`). Currently dist is committed (stale-build risk). `git rm -r --cached packages/*/dist`.
-- `packages/dynamic-workflows/openclaw.plugin.json`: description still says "exports permission primitives" — they moved to `@openclaw/permission-policy`. Fix.
+- `packages/dynamic-workflows/openclaw.plugin.json`: description still says "exports permission primitives" — they moved to `@oh-my-matrix/permission-policy`. Fix.
 - `packages/{dynamic-workflows,permission-policy}/tsconfig.json`: `moduleResolution:"node"` deprecated → `"bundler"` or `ignoreDeprecations:"6.0"` (note: the omm workspace's pnpm resolves TS 6.x; verify build works after the change — earlier ignoreDeprecations:"6.0" caused TS5103 in one path; the dynamic-workflows build works WITHOUT it via `pnpm build`).
 
 ### 6. Subagent detection (P1, optional in this fix or follow-up)

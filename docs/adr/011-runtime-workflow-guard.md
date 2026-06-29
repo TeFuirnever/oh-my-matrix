@@ -4,7 +4,7 @@
 
 **Superseded by [ADR-012](012-dynamic-workflows-plugin-extraction.md) (2026-06-27)** —
 the runtime guard was extracted out of the autopilot plugin into a dedicated
-`@openclaw/dynamic-workflows` plugin. The in-plugin design recorded below is preserved
+`@oh-my-matrix/dynamic-workflows` plugin. The in-plugin design recorded below is preserved
 as history.
 
 Accepted (2026-06-27). **Reverses the B1 conclusion recorded in
@@ -23,7 +23,7 @@ prompt-only.
 
 That conclusion rested on a **false premise**: it treated "real interception" as
 "build a new plugin from scratch." In fact, [ADR-010](010-autopilot-source-hosting.md)
-hosts `@openclaw/autopilot`, a mature OpenClaw plugin that **already** implements:
+hosts `@oh-my-matrix/autopilot`, a mature OpenClaw plugin that **already** implements:
 
 - `before_tool_call` hook (priority 10), `index.ts:553`
 - `decidePermission()` — a pure, stateless policy function (`permission-policy.ts:177`)
@@ -115,7 +115,7 @@ and audit. Ad-hoc destructive git in workflow subagents is blocked.
 ## Related ADRs
 
 - [ADR-009](009-dynamic-workflows-via-openprose.md) — dynamic workflows via OpenProse.
-- [ADR-010](010-autopilot-source-hosting.md) — hosting `@openclaw/autopilot` in omm;
+- [ADR-010](010-autopilot-source-hosting.md) — hosting `@oh-my-matrix/autopilot` in omm;
   this ADR depends on that plugin already existing with `before_tool_call`.
 
 ## References

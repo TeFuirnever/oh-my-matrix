@@ -18,7 +18,7 @@ v0.x 的 `team` / MCP / plugin 实现已移除，设计记录保留在 [`docs/ar
 
 OpenClaw-native continuous execution plugin。它让一个长程任务跨 turn 继续运行，并在工具错误、stall、证据缺失、权限拒绝、token 预算等情况下进入可解释状态，而不是静默漂移。
 
-当前源码包：[`packages/autopilot/`](packages/autopilot/)，package name 为 `@openclaw/autopilot`。
+当前源码包：[`packages/autopilot/`](packages/autopilot/)，package name 为 `@oh-my-matrix/autopilot`。
 
 ### Dynamic Workflow
 
@@ -40,7 +40,7 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 
 ### Permission Policy
 
-[`@openclaw/permission-policy`](packages/permission-policy/) 是共享安全原语库。它被 autopilot 和 dynamic workflows 共同消费，负责：
+[`@oh-my-matrix/permission-policy`](packages/permission-policy/) 是共享安全原语库。它被 autopilot 和 dynamic workflows 共同消费，负责：
 
 - command / tool classification
 - permission decision
@@ -49,7 +49,7 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 
 ### Runtime Guard
 
-[`@openclaw/dynamic-workflows`](packages/dynamic-workflows/) 注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed。它不是 prompt 约束，而是 gateway hook 级别的运行时边界。
+[`@oh-my-matrix/dynamic-workflows`](packages/dynamic-workflows/) 注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed。它不是 prompt 约束，而是 gateway hook 级别的运行时边界。
 
 ### Host Deploy
 

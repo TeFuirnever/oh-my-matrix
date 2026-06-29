@@ -1,8 +1,8 @@
-# @openclaw/permission-policy
+# @oh-my-matrix/permission-policy
 
 Shared permission-policy primitives consumed by
-[`@openclaw/autopilot`](../autopilot) and
-[`@openclaw/dynamic-workflows`](../dynamic-workflows). A **pure, stateless library**
+[`@oh-my-matrix/autopilot`](../autopilot) and
+[`@oh-my-matrix/dynamic-workflows`](../dynamic-workflows). A **pure, stateless library**
 (platform-level) — not an OpenClaw plugin.
 
 Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime stack.
@@ -10,7 +10,7 @@ Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime 
 ## Install
 
 ```bash
-npm install @openclaw/permission-policy
+npm install @oh-my-matrix/permission-policy
 ```
 
 ## What it provides

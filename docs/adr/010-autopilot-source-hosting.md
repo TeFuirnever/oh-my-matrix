@@ -1,4 +1,4 @@
-# ADR-010: Host the `@openclaw/autopilot` Source in omm
+# ADR-010: Host the `@oh-my-matrix/autopilot` Source in omm
 
 ## Status
 
@@ -6,21 +6,21 @@ Accepted (2026-06-19).
 
 ## Context
 
-[ADR-008](008-delegation-to-host.md) deleted omm's own `ralph`/`autopilot`/`goal` implementations and delegated autonomous loops to the host's `@openclaw/autopilot` plugin. That decision is about **not reimplementing** autopilot in omm — it says nothing about where the one canonical copy of `@openclaw/autopilot` source lives.
+[ADR-008](008-delegation-to-host.md) deleted omm's own `ralph`/`autopilot`/`goal` implementations and delegated autonomous loops to the host's `@oh-my-matrix/autopilot` plugin. That decision is about **not reimplementing** autopilot in omm — it says nothing about where the one canonical copy of `@oh-my-matrix/autopilot` source lives.
 
-Before this ADR, `@openclaw/autopilot` lived inside MatrixAssistant (MA) in the host's plugin source tree and was integrated via a build script that compiled it and copied the output into the host's bundled-plugin directory. This build-script-copy pattern is a legacy coupling: the plugin source is entangled with the consuming app, and the copy step is a maintenance tax.
+Before this ADR, `@oh-my-matrix/autopilot` lived inside MatrixAssistant (MA) in the host's plugin source tree and was integrated via a build script that compiled it and copied the output into the host's bundled-plugin directory. This build-script-copy pattern is a legacy coupling: the plugin source is entangled with the consuming app, and the copy step is a maintenance tax.
 
 The plugin itself is fully self-contained — zero MA-internal imports, a single `openclaw` peer dependency, a self-contained test suite (633 tests). It is portable by design.
 
 ## Decision
 
-**Host the canonical `@openclaw/autopilot` source in omm at `packages/autopilot/`, making omm a pnpm monorepo. MA consumes the plugin as an offline npm package via `pnpm pack` + the `file:` protocol.**
+**Host the canonical `@oh-my-matrix/autopilot` source in omm at `packages/autopilot/`, making omm a pnpm monorepo. MA consumes the plugin as an offline npm package via `pnpm pack` + the `file:` protocol.**
 
 This is **hosting, not reimplementation.** The decision strengthens ADR-008: there is now exactly one autopilot source in the whole stack (omm's `packages/autopilot/`), and MA consumes it as a package rather than owning a forked copy.
 
 - omm becomes a pnpm workspace (`pnpm-workspace.yaml` → `packages/*`).
 - `packages/autopilot/` holds source, 43 test files, `openclaw.plugin.json`, and a `pnpm pack` build.
-- MA declares `"@openclaw/autopilot": "<a versioned file: tgz dependency>"` and bundles the tgz into its bundled-plugin directory, so MA is self-contained and does not depend on the sibling omm repo at install time.
+- MA declares `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"` and bundles the tgz into its bundled-plugin directory, so MA is self-contained and does not depend on the sibling omm repo at install time.
 - Plugin discovery in MA (the host's plugin-discovery module) resolves the plugin from `node_modules` (dev) and the host's bundled-plugin directory when packaged.
 
 ## Consequences
@@ -40,7 +40,7 @@ This is **hosting, not reimplementation.** The decision strengthens ADR-008: the
 ## Follow-ups
 
 1. **Automate the tgz refresh.** A script or CI step that rebuilds and copies the tgz on autopilot source change.
-2. **Optional npm publish.** If a second consumer appears, publish `@openclaw/autopilot` to a registry and replace the `file:` dependency with a versioned one.
+2. **Optional npm publish.** If a second consumer appears, publish `@oh-my-matrix/autopilot` to a registry and replace the `file:` dependency with a versioned one.
 
 ## Related ADRs
 

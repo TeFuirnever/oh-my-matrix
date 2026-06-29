@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.version = exports.name = exports.id = void 0;
 exports._resetForTest = _resetForTest;
 exports.register = register;
-const permission_policy_1 = require("@openclaw/permission-policy");
+const permission_policy_1 = require("@oh-my-matrix/permission-policy");
 const logger_1 = require("./src/logger");
 exports.id = 'dynamic-workflows';
 exports.name = 'Dynamic Workflows Guard';

@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-06-27). **Supersedes [ADR-011](011-runtime-workflow-guard.md)** (which
-shipped the runtime guard INSIDE `@openclaw/autopilot`).
+shipped the runtime guard INSIDE `@oh-my-matrix/autopilot`).
 
 > **Honesty note (2026-06-28):** the extracted guard was **fail-open in production**
 > until [docs/fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md).
@@ -15,7 +15,7 @@ shipped the runtime guard INSIDE `@openclaw/autopilot`).
 ## Context
 
 [ADR-011](011-runtime-workflow-guard.md) shipped a runtime subagent guard as a branch
-inside `@openclaw/autopilot`'s `before_tool_call` handler (Design 2). ADR-011 itself
+inside `@oh-my-matrix/autopilot`'s `before_tool_call` handler (Design 2). ADR-011 itself
 flagged the conceptual mis-scope ("autopilot plugin enforcing dynamic-workflow safety
 is a naming smell") and set extraction behind a revisit trigger: *"extract when a third
 consumer of `decidePermission` materializes."*
@@ -38,7 +38,7 @@ anyway**, accepting the documented costs. This ADR records that decision.
 ## Decision
 
 **Extract `dynamic-workflows` as the second omm plugin** at `packages/dynamic-workflows/`.
-It owns the shared permission primitives + the subagent runtime guard. `@openclaw/autopilot`
+It owns the shared permission primitives + the subagent runtime guard. `@oh-my-matrix/autopilot`
 becomes a CONSUMER of those primitives. The plugin registers `before_tool_call` at
 **priority 11** so it runs before autopilot (10) and matrixassistant-audit (9), and block
 short-circuits the lower-priority handlers.
@@ -56,9 +56,9 @@ short-circuits the lower-priority handlers.
 
 ### What stayed
 
-- `@openclaw/autopilot` keeps its run-scoped `before_tool_call` handler (priority 10),
+- `@oh-my-matrix/autopilot` keeps its run-scoped `before_tool_call` handler (priority 10),
   now importing `decidePermission` / `classifyCommand` / `appendAuditEntry` from
-  `@openclaw/dynamic-workflows`. Its `src/types.ts` re-exports `CommandClass` /
+  `@oh-my-matrix/dynamic-workflows`. Its `src/types.ts` re-exports `CommandClass` /
   `PermissionAuditEntry` so internal imports are unchanged.
 - The SKILL pack stays at `skill/dynamic-workflows/` (teaching material, distributed via
   MA's `resources/skills/default/` skill sync). It is NOT inside the plugin package —
@@ -72,7 +72,7 @@ OpenClaw runs `before_tool_call` handlers in descending priority order; `block` 
 | plugin | priority | role |
 |---|---|---|
 | `dynamic-workflows` | 11 | subagent guard — blocks destructive ops for `:subagent:` sessions, short-circuits |
-| `@openclaw/autopilot` | 10 | run-scoped policy for autopilot runs (main sessions) |
+| `@oh-my-matrix/autopilot` | 10 | run-scoped policy for autopilot runs (main sessions) |
 | `matrixassistant-audit` | 9 | audit |
 
 The guard only fires on `:subagent:` session keys, so autopilot runs (main session) are
@@ -96,7 +96,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 ## Consequences
 
 **Positive:**
-- Coherent workflow-plugin boundary; `@openclaw/dynamic-workflows` is the natural home for
+- Coherent workflow-plugin boundary; `@oh-my-matrix/dynamic-workflows` is the natural home for
   future workflow-runtime concerns.
 - Safety decoupled from autopilot's on/off (ADR-011 silent-degradation resolved).
 - Single source of truth for permission policy (both consumers import the same primitives).
@@ -110,7 +110,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 - ~998 LOC of tests relocated/rewritten (`permission-policy.test`,
   `audit-persister.test` moved; `permission-wiring.test` split — subagent describe moved
   to the new package's `subagent-guard.test`; `tier4` + `m2-types-projection` re-pointed
-  at `@openclaw/dynamic-workflows`).
+  at `@oh-my-matrix/dynamic-workflows`).
 - `audit-persister.ts` still writes to the `.autopilot/` subdir (cosmetic wart — both
   autopilot-run and subagent-guard audit share it, discriminated by `runId`). Renaming
   to a neutral subdir is a follow-up (would move existing audit files).
@@ -119,14 +119,14 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 
 ## Verification (2026-06-27)
 
-- `@openclaw/dynamic-workflows`: 113 tests pass (`permission-policy` 91, `audit-persister` 14,
+- `@oh-my-matrix/dynamic-workflows`: 113 tests pass (`permission-policy` 91, `audit-persister` 14,
   `subagent-guard` 8). Guard runtime-logs confirm priority-11 block on `:subagent:`
   destructive git + `enabled:false` loud-degradation.
-- `@openclaw/autopilot`: 528 tests pass | 4 skipped (was 637; −109 moved to
+- `@oh-my-matrix/autopilot`: 528 tests pass | 4 skipped (was 637; −109 moved to
   dynamic-workflows: 91 + 14 + 4 subagent describe). Zero regression — autopilot-run
   policy + WORKFLOW.md escape hatch intact.
 - MA distribution: (internal host-deploy step, not in this repo) produced a versioned file: tgz dependency,
-  MA installed `@openclaw/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
+  MA installed `@oh-my-matrix/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
   the host's bundled-plugin directory, the host's plugin-discovery module registers it.
 
 ## Follow-ups
@@ -151,6 +151,6 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
   (ralplan consensus: Planner→B, Architect→middle path, Critic→APPROVE middle path; user
   directed Option B)
 - Implementation: `packages/dynamic-workflows/index.ts`, `packages/dynamic-workflows/src/`
-- Consumer refactor: `packages/autopilot/index.ts` (imports from `@openclaw/dynamic-workflows`)
+- Consumer refactor: `packages/autopilot/index.ts` (imports from `@oh-my-matrix/dynamic-workflows`)
 - MA distribution: the host's plugin build script,
   the host's plugin-discovery module

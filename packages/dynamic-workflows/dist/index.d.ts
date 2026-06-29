@@ -1,5 +1,5 @@
 /**
- * @openclaw/dynamic-workflows — OpenClaw plugin: subagent runtime guard.
+ * @oh-my-matrix/dynamic-workflows — OpenClaw plugin: subagent runtime guard.
  *
  * Registers `before_tool_call` (priority 11) that fail-closed blocks
  * destructive ops for `:subagent:` sessions (OpenProse-spawned workflow
@@ -8,7 +8,7 @@
  * Main sessions + autopilot runs keep their own behavior.
  *
  * The permission primitives (decidePermission, classifyCommand, audit) now
- * live in @openclaw/permission-policy (ADR-013); this plugin imports them.
+ * live in @oh-my-matrix/permission-policy (ADR-013); this plugin imports them.
  */
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 export declare const id = "dynamic-workflows";

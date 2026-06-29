@@ -8,7 +8,7 @@
 
 ## 1. 目标
 
-为 `@openclaw/autopilot` 引入**分级思考强度**（graduated thinking intensity）和**模型 tier 路由**（model tier routing），使 autopilot 能根据执行阶段（初始 turn / 实现 / 验证）自动调整 LLM 的思考深度和模型选择。subagent（workflow 中的每个 agent）也自动获得同等能力。
+为 `@oh-my-matrix/autopilot` 引入**分级思考强度**（graduated thinking intensity）和**模型 tier 路由**（model tier routing），使 autopilot 能根据执行阶段（初始 turn / 实现 / 验证）自动调整 LLM 的思考深度和模型选择。subagent（workflow 中的每个 agent）也自动获得同等能力。
 
 ### 1.1 动机
 
@@ -1036,13 +1036,13 @@ autopilot:
 
 ```bash
 # 所有 633 现有测试必须通过（向后兼容保证）
-pnpm --filter @openclaw/autopilot test
+pnpm --filter @oh-my-matrix/autopilot test
 
 # 新增测试
-pnpm --filter @openclaw/autopilot test -- --grep "effort-injection|model-routing"
+pnpm --filter @oh-my-matrix/autopilot test -- --grep "effort-injection|model-routing"
 
 # TypeScript 编译检查
-pnpm --filter @openclaw/autopilot build
+pnpm --filter @oh-my-matrix/autopilot build
 ```
 
 ### 9.2 集成验证（手动）
