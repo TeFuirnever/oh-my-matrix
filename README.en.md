@@ -143,12 +143,26 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 Commits must follow Conventional Commits (enforced by both a local hook and CI). For the full multi-gate harness and how to add a gate, see [`CONTRIBUTING.md`](CONTRIBUTING.md), the `harness` skill, and [`docs/design/dev-harness.md`](docs/design/dev-harness.md).
 
+## Publishing to npm (maintainer)
+
+After bumping the version in `packages/<pkg>/package.json`, publish from **your own terminal** (not Claude's `!`):
+
+```bash
+pnpm --filter @oh-my-matrix/autopilot publish --access public
+pnpm --filter @oh-my-matrix/dynamic-workflows publish --access public
+pnpm --filter @oh-my-matrix/permission-policy publish --access public
+```
+
+- **Keep 2FA on**: the `@oh-my-matrix` org requires publishers to have 2FA; disabling it gets you E403-locked. npm prompts for OTP interactively (read the 6-digit code from your authenticator app).
+- **Run from your own terminal**: Claude's `!` + `--otp=` is fragile (OTP 30s window + permission classifier); local interactive is smoothest.
+- **No re-publishing the same version**: npm versions are immutable; changed content requires a bump (even a patch). `pnpm --filter <pkg> pack` previews the tarball.
+
 ## Project status
 
 | Item | Status |
 |---|---|
 | Root public release | v0.8.0 (GitHub Release) |
-| npm public package | published `@oh-my-matrix/*` (permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.0) |
+| npm public package | published `@oh-my-matrix/*` (permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.1) |
 | CI / Harness | GitHub Actions, 4 gates (lint / typecheck / commitlint / test) + local `pnpm verify` mirror |
 | Dependency scanning | Dependabot enabled (`.github/dependabot.yml`) |
 | Docs site | https://tefuirnever.github.io/oh-my-matrix/ — hand-drawn landing (root) + docs (`/docs/`, VitePress source in [`website/`](website/)) |
