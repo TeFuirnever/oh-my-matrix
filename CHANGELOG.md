@@ -4,7 +4,15 @@ All notable changes to oh-my-matrix (omm).
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [0.8.0] — 2026-06-29
+
+**First public release + development harness.** The repo's first GitHub Release, plus a multi-gate development harness (typecheck / eslint / markdownlint / commitlint / split CI / MCP / skills).
+
 ### Added
+- **Development harness (#14)** — per-package `typecheck` (`tsc --noEmit`, closes the gap where CI never ran `tsc`), ESLint flat config, markdownlint, commitlint (local `commit-msg` hook + CI), and a split CI (`lint` / `typecheck` / `commitlint` / `test` jobs with concurrency + job summaries). `pnpm check` / `pnpm verify` mirror CI locally; `.mcp.json` declares codegraph; new `work-with-pr` + `harness` skills. See [`docs/design/dev-harness.md`](docs/design/dev-harness.md).
+- **README + CONTRIBUTING sync (#15)** — 「本地开发」 now documents `pnpm verify` / `pnpm check`; new **Repository Setup** section documents `.github/` (CI / dependabot / CODEOWNERS / templates / branch protection).
 - **Hand-drawn landing page** — bilingual (zh/en) marketing site at the GitHub Pages root (`landing/`), omo.dev-style with rough.js animations; VitePress docs moved under `/docs/`. Live at https://tefuirnever.github.io/oh-my-matrix/.
 - **Host deploy runbook skeleton** — [`docs/runbooks/host-deploy.md`](docs/runbooks/host-deploy.md): the build → pack/cp dist → refresh MA → restart gateway → deployed-dist smoke path. Repo-side steps executable; host-internal steps marked `[TODO:host]`.
 - **Dependabot + CODEOWNERS** — `.github/dependabot.yml` (npm + github-actions, weekly, minor/patch grouped) and `.github/CODEOWNERS`.
