@@ -10,7 +10,7 @@ oh-my-matrix 为 OpenClaw 及衍生宿主提供 **autonomous agent runtime stack
 - **Dynamic Workflows**: 多 agent 编排。agent 根据自然语言生成 `.prose` 程序，经 OpenProse 执行 fan-out / pipeline / adversarial verification。
 - **Permission Policy**: 运行时边界。为 autopilot 和 workflow subagent 共用 command classification、permission decision、audit persistence。
 
-v0.x 的 `team` / MCP / plugin 实现已移除，设计记录保留在 [`docs/archive/`](docs/archive/)。当前活跃源码位于 [`packages/`](packages/) 与 [`skill/dynamic-workflows/`](skill/dynamic-workflows/)。
+v0.x 的 `team` / MCP / plugin 实现已移除，设计记录保留在 [`docs/archive/`](docs/archive/)。当前活跃源码位于 [`packages/`](packages/) 与 [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/)。
 
 ## 核心概念
 
@@ -32,7 +32,7 @@ OpenProse 的编排 DSL。markdown-first 语法，2 空格缩进，支持 `sessi
 
 ### Dynamic Workflows skill
 
-[`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md) 是给 agent 的操作手册。它规定何时使用 workflow、如何选择 8 种模式、如何验证 `.prose`、如何在 OpenProse 不可用时降级。
+[`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md) 是给 agent 的操作手册。它规定何时使用 workflow、如何选择 8 种模式、如何验证 `.prose`、如何在 OpenProse 不可用时降级。
 
 ### OpenProse
 

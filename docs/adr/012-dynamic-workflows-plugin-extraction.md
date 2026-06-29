@@ -64,6 +64,13 @@ short-circuits the lower-priority handlers.
   MA's `resources/skills/default/` skill sync). It is NOT inside the plugin package —
   content and runtime are separate distribution channels.
 
+> **Update (2026-06-29):** the SKILL pack **moved into** `packages/dynamic-workflows/skill/`
+> and now ships inside the `@oh-my-matrix/dynamic-workflows` npm package (added to `files`,
+> v0.1.1). MA/hosts pull it from the registry instead of the separate `resources/skills/default/`
+> hand-sync — single source of truth (the MA-side vendored copy had drifted to a stale
+> `@openclaw/*` name). This **partially supersedes** the "NOT inside the plugin package /
+> separate distribution channels" claim above; the runtime-guard distribution is unchanged.
+
 ### Priority ordering (load-bearing)
 
 OpenClaw runs `before_tool_call` handlers in descending priority order; `block` short-circuits

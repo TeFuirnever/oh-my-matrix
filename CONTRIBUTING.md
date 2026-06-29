@@ -9,7 +9,7 @@ Thanks for contributing. This repo is small, safety-sensitive, and docs-first. G
 | Autopilot | `packages/autopilot/` | package tests plus host-deploy awareness |
 | Dynamic Workflows guard | `packages/dynamic-workflows/` | guard tests plus event-shape care |
 | Permission Policy | `packages/permission-policy/` | command classification tests and audit checks |
-| Dynamic Workflows skill | `skill/dynamic-workflows/` | prompt/behavior review and realistic examples |
+| Dynamic Workflows skill | `packages/dynamic-workflows/skill/` | prompt/behavior review and realistic examples |
 | Spine docs | `README.md`, `CONTEXT.md`, `docs/architecture.md`, `docs/roadmap.md`, `docs/adr/` | consistency sweep across public docs |
 | Archive | `docs/archive/` | preserve history; do not rewrite old records |
 

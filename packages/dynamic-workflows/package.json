@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/dynamic-workflows",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Dynamic Workflows: runtime subagent guard plugin (before_tool_call priority 11, fail-closed destructive-op blocking for :subagent: sessions). Imports permission primitives from @oh-my-matrix/permission-policy.",
   "publishConfig": {
     "access": "public"
@@ -15,7 +15,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "openclaw.plugin.json"
+    "openclaw.plugin.json",
+    "skill"
   ],
   "openclaw": {
     "extensions": ["./dist/index.js"],

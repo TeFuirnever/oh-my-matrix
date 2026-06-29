@@ -28,7 +28,7 @@ flowchart TB
 
 ## Dynamic Workflows
 
-`skill/dynamic-workflows/` teaches the agent to generate `.prose`. `packages/dynamic-workflows/` guards spawned subagents at `before_tool_call` priority 11.
+`packages/dynamic-workflows/skill/` teaches the agent to generate `.prose`. `packages/dynamic-workflows/` guards spawned subagents at `before_tool_call` priority 11.
 
 ## Permission Policy
 

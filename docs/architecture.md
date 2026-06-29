@@ -52,7 +52,7 @@ The plugin registers 11 OpenClaw hooks declared in `packages/autopilot/package.j
 
 ### Dynamic Workflows
 
-`skill/dynamic-workflows/SKILL.md` teaches the agent to generate `.prose` programs and execute them through OpenProse. The runtime goal is high-scale parallelism with low user-context pollution: branch work happens inside workflow state, final synthesis returns to the user.
+`packages/dynamic-workflows/skill/SKILL.md` teaches the agent to generate `.prose` programs and execute them through OpenProse. The runtime goal is high-scale parallelism with low user-context pollution: branch work happens inside workflow state, final synthesis returns to the user.
 
 `packages/dynamic-workflows/` is the runtime guard plugin for workflow subagents. It registers `before_tool_call` at priority 11, before autopilot and audit handlers, so dangerous subagent calls are stopped at the gateway.
 

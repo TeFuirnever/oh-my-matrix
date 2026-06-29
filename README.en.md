@@ -41,7 +41,7 @@ omm breaks these three into verifiable OpenClaw modules rather than a black-box 
 | `@oh-my-matrix/autopilot` | Continuous-execution plugin. Manages goals, state machine, retry queue, stall detection, token budget, evidence gates, projection, `WORKFLOW.md` config, and 11 OpenClaw hooks | ✅ source hosted, tests present | [`packages/autopilot/`](packages/autopilot/) |
 | `@oh-my-matrix/dynamic-workflows` | Workflow-subagent runtime guard. Registers `before_tool_call` at priority 11, fail-closed blocking of dangerous operations for `:subagent:` sessions | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
 | `@oh-my-matrix/permission-policy` | Shared permission primitives. Provides `classifyCommand`, `decidePermission`, `decidePermissionForEvent`, and audit persistence | ✅ shipped source | [`packages/permission-policy/`](packages/permission-policy/) |
-| `dynamic-workflows` skill | Teaches the agent when to generate `.prose`, how to choose among 8 orchestration patterns, and how to verify and aggregate results | ✅ shipped skill | [`skill/dynamic-workflows/`](skill/dynamic-workflows/) |
+| `dynamic-workflows` skill | Teaches the agent when to generate `.prose`, how to choose among 8 orchestration patterns, and how to verify and aggregate results | ✅ shipped skill | [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/) |
 | Legacy v0.x team/MCP implementation | Early design and implementation records, removed, no longer the current runtime surface | 📦 archived | [`docs/archive/`](docs/archive/) |
 
 ## Architecture
@@ -79,7 +79,7 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 ### Dynamic Workflows: multi-agent orchestration
 
-`skill/dynamic-workflows/SKILL.md` lets the agent generate `.prose` programs from a task and hand them to OpenProse for execution. It covers 8 patterns:
+`packages/dynamic-workflows/skill/SKILL.md` lets the agent generate `.prose` programs from a task and hand them to OpenProse for execution. It covers 8 patterns:
 
 - fan-out-reduce
 - pipeline
@@ -114,7 +114,7 @@ If you are an AI agent integrating omm into an OpenClaw host, read in this order
 2. [`docs/architecture.md`](docs/architecture.md): the three-module architecture.
 3. [`docs/adr/010-autopilot-source-hosting.md`](docs/adr/010-autopilot-source-hosting.md): why autopilot is hosted in this repo.
 4. [`docs/adr/012-dynamic-workflows-plugin-extraction.md`](docs/adr/012-dynamic-workflows-plugin-extraction.md) and [`docs/adr/013-permission-policy-library.md`](docs/adr/013-permission-policy-library.md): the split between the guard and the permission policy.
-5. [`skill/dynamic-workflows/SKILL.md`](skill/dynamic-workflows/SKILL.md): how the runtime agent should generate workflows.
+5. [`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md): how the runtime agent should generate workflows.
 
 Before changing code, run the relevant tests:
 
