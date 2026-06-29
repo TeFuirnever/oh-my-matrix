@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/autopilot",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
   "publishConfig": {
     "access": "public"
