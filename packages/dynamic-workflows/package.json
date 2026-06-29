@@ -28,7 +28,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "pack": "pnpm pack"
+    "pack": "pnpm pack",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.28",

@@ -29,6 +29,15 @@ pnpm docs:build
 git diff --check
 ```
 
+The commands above are now part of a multi-gate harness — run the full local mirror of CI before pushing:
+
+```bash
+pnpm verify   # lint + markdownlint + typecheck + workspace tests + docs build
+pnpm check # lint + markdownlint + typecheck (static gates only)
+```
+
+Gates: `pnpm lint` (eslint), `pnpm lint:md` (markdownlint), `pnpm typecheck` (`tsc --noEmit` per package), `pnpm -r test` (vitest). Commits must follow Conventional Commits — enforced by a local `commit-msg` hook (installed automatically on `pnpm install`) and re-checked in CI. See [docs/design/dev-harness.md](docs/design/dev-harness.md) and the `harness` skill for the full picture and how to add a gate.
+
 ## Pull Request Rules
 
 1. Start from `master`.
@@ -36,7 +45,7 @@ git diff --check
 3. Add or update tests for code behavior changes.
 4. For docs changes, update every public surface that would otherwise contradict the new claim.
 5. Do not claim host deployment is complete unless the host dist was actually refreshed and smoke-tested.
-6. Use Conventional Commits: `docs:`, `fix:`, `feat:`, `refactor:`, `test:`, `chore:`.
+6. Use Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` (enforced by commitlint — local hook + CI).
 7. `master` is protected: PRs need the `test` check green and use squash-merge; direct pushes and force-pushes are blocked.
 
 ## Issue Quality

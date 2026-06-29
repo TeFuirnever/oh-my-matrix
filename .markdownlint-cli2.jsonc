@@ -1,0 +1,39 @@
+// markdownlint-cli2 config — single source of truth (rules + globs + ignores).
+// Stylistic rules that conflict with the repo's established doc style are
+// disabled (we won't churn existing docs to satisfy them); structural defaults
+// stay on so the gate still catches real issues (trailing whitespace, hard
+// tabs, empty links, missing alt text, spaces in code spans, etc.).
+// docs/archive/** is excluded entirely — historical records are preserved as-is.
+{
+  "config": {
+    "default": true,
+    "MD012": { "maximum": 2 },
+    "MD013": false,
+    "MD022": false,
+    "MD024": { "siblings_only": true },
+    "MD028": false,
+    "MD031": false,
+    "MD032": false,
+    "MD033": false,
+    "MD034": false,
+    "MD036": false,
+    "MD040": false,
+    "MD041": false,
+    "MD056": false,
+    "MD058": false,
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": [
+    "**/node_modules/**",
+    "website/**",
+    "CHANGELOG.md",
+    "docs/archive/**",
+    ".codegraph/**",
+    ".context/**",
+    ".autopilot/**",
+    ".omc/**",
+    ".omx/**",
+    "packages/*/*.tgz"
+  ]
+}

@@ -77,7 +77,7 @@ const BEFORE_TOOL_CALL_PRIORITY = 10;
 // Lazy load: if audit plugin absent, autopilot still works (degraded but safe).
 let _auditSetMode: ((mode: 'active' | 'monitor' | 'passive') => void) | null = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires -- CJS lazy import; audit plugin is an optional peer
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS lazy import; audit plugin is an optional peer
   const auditPlugin: unknown = require('@openclaw/matrixassistant-audit');
   if (
     typeof auditPlugin === 'object' &&
