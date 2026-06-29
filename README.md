@@ -6,6 +6,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/TeFuirnever/oh-my-matrix/actions/workflows/ci.yml/badge.svg)](https://github.com/TeFuirnever/oh-my-matrix/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@oh-my-matrix/autopilot)](https://www.npmjs.com/package/@oh-my-matrix/autopilot)
+[![Release](https://img.shields.io/github/v/release/TeFuirnever/oh-my-matrix)](https://github.com/TeFuirnever/oh-my-matrix/releases)
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TeFuirnever/oh-my-matrix)
 
 **把 OpenClaw 变成可持续工作的 autonomous agent runtime stack。**
 
