@@ -15,9 +15,9 @@ oh-my-matrix 面向 OpenClaw 宿主和集成者，交付三块能力：
 - **Dynamic Workflows**: AI 根据自然语言生成 `.prose` 多 agent 编排程序，经 OpenProse 执行 fan-out / pipeline / adversarial verification。
 - **Permission Policy**: `before_tool_call` 运行时安全原语，供 autopilot 与 workflow subagent 共用。
 
-它不是终端用户 CLI，也不是独立 SaaS。它是给 OpenClaw 宿主加载、打包、验证的插件/skill 源码仓库。根仓库版本为 `0.7.2`，核心包版本见各 `packages/*/package.json`。
+它不是终端用户 CLI，也不是独立 SaaS。它是给 OpenClaw 宿主加载、打包、验证的插件/skill 源码仓库。根仓库版本为 `0.8.0`，核心包版本见各 `packages/*/package.json`。
 
-> 当前成熟度: WIP。`@openclaw/*` packages 仍为 private workspace packages，部署到宿主需要内部 refresh / vendoring 流程。README 不使用未验证的 star、下载量、用户评价或 release 作为成熟度证据。
+> 当前成熟度: WIP。`@oh-my-matrix/*` packages 已发布到 npm（public）；其中 `@oh-my-matrix/autopilot` 作为 OpenClaw 宿主的 hosted plugin，部署到 MA 仍需内部 refresh / vendoring 流程。README 不使用未验证的 star、下载量、用户评价作为成熟度证据。
 
 ## 为什么需要它
 
@@ -142,8 +142,8 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 | 事项 | 状态 |
 |---|---|
-| 根仓库公开 release | 未发布 |
-| npm public package | 未发布，workspace packages 为 private |
+| 根仓库公开 release | v0.8.0（GitHub Release）|
+| npm public package | 已发布 `@oh-my-matrix/*`（permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.0）|
 | CI / Harness | GitHub Actions 4 gate（lint / typecheck / commitlint / test）+ 本地 `pnpm verify` 镜像 |
 | 依赖扫描 | Dependabot 已启用（`.github/dependabot.yml`） |
 | 在线站点 | https://tefuirnever.github.io/oh-my-matrix/ — 手绘 landing（根）+ 文档（`/docs/`，VitePress 源见 [`website/`](website/)）|
