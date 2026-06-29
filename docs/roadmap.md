@@ -44,11 +44,13 @@ Exit criteria:
 | Public package policy | Packages are private today; users need clear install story | Planned |
 | `WORKFLOW.md` examples | Autopilot config exists but needs copy-pasteable examples | Planned |
 | Projection contract docs | Host UI needs stable fields and failure semantics | Planned |
+| Public type exports (`AutopilotProjection` from barrel) | Hosts deep-import `dist/src/projection` today, coupling to OMM's internal layout | Planned |
 | Evidence gate examples | Users need to understand required vs optional validation | Planned |
 
 Exit criteria:
 
 - Autopilot has a documented integration path, config examples, and host UI contract.
+- Public types (`AutopilotProjection`) exported from the package barrel; no consumer reaches into `dist/src/`.
 - `pnpm --filter @oh-my-matrix/autopilot test` remains green.
 
 ## P3: Dynamic Workflows Observability
