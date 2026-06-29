@@ -125,17 +125,18 @@ pnpm docs:build
 ## 本地开发
 
 ```bash
-pnpm install
+pnpm install          # 同时装好本地 commit-msg hook
 
-# docs
+# 推送前：跑完整的本地 CI 镜像（推荐）
+pnpm verify           # eslint + markdownlint + typecheck + 全部工作区测试 + docs 构建
+pnpm check            # 仅静态门（eslint + markdownlint + typecheck）
+
+# 单独跑 docs 或某个包
 pnpm docs:dev
-pnpm docs:build
-
-# packages
 pnpm --filter @openclaw/autopilot test
-pnpm --filter @openclaw/dynamic-workflows test
-pnpm --filter @openclaw/permission-policy test
 ```
+
+提交须遵循 Conventional Commits（本地 hook + CI 双重看护）。多 gate harness 的全貌与如何新增 gate 见 [`CONTRIBUTING.md`](CONTRIBUTING.md)、`harness` skill 与 [`docs/design/dev-harness.md`](docs/design/dev-harness.md)。
 
 ## 项目状态
 
@@ -143,7 +144,8 @@ pnpm --filter @openclaw/permission-policy test
 |---|---|
 | 根仓库公开 release | 未发布 |
 | npm public package | 未发布，workspace packages 为 private |
-| CI | GitHub Actions 已配置 |
+| CI / Harness | GitHub Actions 4 gate（lint / typecheck / commitlint / test）+ 本地 `pnpm verify` 镜像 |
+| 依赖扫描 | Dependabot 已启用（`.github/dependabot.yml`） |
 | 在线站点 | https://tefuirnever.github.io/oh-my-matrix/ — 手绘 landing（根）+ 文档（`/docs/`，VitePress 源见 [`website/`](website/)）|
 | 安全策略 | [`SECURITY.md`](SECURITY.md) |
 | 贡献指南 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
