@@ -2,9 +2,8 @@
   "name": "@openclaw/autopilot",
   "version": "2.1.1",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
-  "private": true,
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "license": "MIT",
   "repository": {
