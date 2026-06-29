@@ -1,4 +1,6 @@
-单人项目 · WIP · OpenClaw 宿主集成栈 · 当前无公开 release
+[English](README.en.md) | **简体中文**
+
+单人项目 · WIP · OpenClaw 宿主集成栈
 
 # oh-my-matrix (omm)
 
