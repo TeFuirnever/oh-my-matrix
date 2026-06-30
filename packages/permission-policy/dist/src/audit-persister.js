@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports._todayStringForTest = _todayStringForTest;
 exports.getAuditFilePath = getAuditFilePath;
 exports.appendAuditEntry = appendAuditEntry;
+exports.auditFileRecencyKey = auditFileRecencyKey;
 exports.loadRecentAuditEntries = loadRecentAuditEntries;
 /**
  * Audit log persistence for autopilot permission audit entries.
@@ -105,9 +106,29 @@ function appendAuditEntry(entry, workspaceDir) {
         fs.mkdirSync(dir, { recursive: true });
         fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf-8');
     }
-    catch {
-        // Fail silently — audit persistence must never crash the plugin
+    catch (e) {
+        // Audit persistence must never crash the plugin — but the JSONL trail is the
+        // sole forensic record (in-memory trail is capped + lost on process exit), so
+        // a silent write failure must at least be visible to operators. Nested guard
+        // so the logger itself can never throw. (F2: was a bare `catch {}`.)
+        try {
+            console.error('[permission-policy] audit append failed:', e);
+        }
+        catch { /* noop */ }
     }
+}
+/**
+ * Sort key for an audit filename where LARGER = NEWER. Base file `audit-DATE.jsonl`
+ * sorts before its same-day rotations (`audit-DATE-1.jsonl`, `-2`, …) because writes
+ * roll into `-N` only after the base fills, so `-N` is always newer than the base.
+ * Numeric suffix parse (not lexical) so `-10` ranks above `-2`. Exported for tests.
+ */
+function auditFileRecencyKey(f) {
+    const m = f.match(/^audit-(\d{4})-(\d{2})-(\d{2})(?:-(\d+))?\.jsonl$/);
+    if (!m)
+        return -1;
+    const [, y, mo, d, suf] = m;
+    return Number(`${y}${mo}${d}`) * 1000 + (suf ? Number(suf) : 0);
 }
 /**
  * Load the most recent `limit` audit entries from the audit directory.
@@ -126,8 +147,16 @@ function loadRecentAuditEntries(workspaceDir, limit) {
     try {
         files = fs.readdirSync(dir)
             .filter(f => f.startsWith('audit-') && f.endsWith('.jsonl'))
-            .sort()
-            .reverse(); // newest date first
+            // Newest file first. A bare `.sort().reverse()` is NOT correct once same-day
+            // suffix rotation is in play: `audit-DATE-1.jsonl` is NEWER than the base
+            // `audit-DATE.jsonl` (writes roll to `-1` after the base hits 10MB), but
+            // `'-'(0x2D) < '.'(0x2E)` puts `-1` lexically BEFORE the base, so `.reverse()`
+            // ordered the OLDER base first → `loadRecentAuditEntries` returned stale
+            // entries and (via the early `break` below) never opened the rotated file.
+            // Integer suffix is required: a lexical `-N` comparator re-breaks at `-10`
+            // (sorts before `-2`), and mtime breaks under operator `touch`/restore.
+            // (F1 fix.) auditFileRecencyKey: larger = newer.
+            .sort((a, b) => auditFileRecencyKey(b) - auditFileRecencyKey(a));
     }
     catch {
         return [];

@@ -2,7 +2,7 @@
  * TDD: audit-persister — written BEFORE implementation.
  * All tests should FAIL until audit-persister.ts is created.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,6 +12,7 @@ import {
   appendAuditEntry,
   loadRecentAuditEntries,
   getAuditFilePath,
+  auditFileRecencyKey,
   _todayStringForTest,
 } from '../src/audit-persister';
 import type { PermissionAuditEntry } from '../src/types';
@@ -200,5 +201,39 @@ describe('_todayStringForTest — local date, not UTC', () => {
       expect(result).toBe(localExpected);
       expect(result).not.toBe(crossMidnight.toISOString().slice(0, 10));
     }
+  });
+});
+
+describe('auditFileRecencyKey — larger = newer (F1 comparator)', () => {
+  it('ranks base below same-day rotations, numeric (-10 > -2), and later date above earlier', () => {
+    const key = auditFileRecencyKey;
+    const base = key('audit-2026-06-30.jsonl');
+    // same-day rotation: -N is newer than base; monotonic in N
+    expect(key('audit-2026-06-30-1.jsonl')).toBeGreaterThan(base);
+    expect(key('audit-2026-06-30-2.jsonl')).toBeGreaterThan(key('audit-2026-06-30-1.jsonl'));
+    // numeric suffix, NOT lexical: -10 must rank ABOVE -2 (the lexical bug)
+    expect(key('audit-2026-06-30-10.jsonl')).toBeGreaterThan(key('audit-2026-06-30-2.jsonl'));
+    // cross-date: 06-30 base beats every 06-29 file
+    expect(base).toBeGreaterThan(key('audit-2026-06-29.jsonl'));
+    expect(base).toBeGreaterThan(key('audit-2026-06-29-9.jsonl'));
+    // malformed filename → -1 (lowest, sorts first)
+    expect(key('not-an-audit-file.json')).toBe(-1);
+  });
+});
+
+describe('appendAuditEntry — failure surfaces to stderr without throwing (F2)', () => {
+  it('logs to console.error and does not throw when persistence is impossible', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // workspaceDir nested under a regular FILE → mkdirSync raises ENOTDIR.
+    // Cross-platform and privilege-independent (no chmod reliance).
+    const blockFile = path.join(tmpDir, 'i-am-a-file');
+    fs.writeFileSync(blockFile, 'x');
+    const impossibleWorkspace = path.join(blockFile, 'subdir');
+
+    expect(() => appendAuditEntry(makeEntry(), impossibleWorkspace)).not.toThrow();
+    expect(errSpy).toHaveBeenCalled();
+    expect(String(errSpy.mock.calls[0]?.[0])).toContain('audit append failed');
+
+    errSpy.mockRestore();
   });
 });

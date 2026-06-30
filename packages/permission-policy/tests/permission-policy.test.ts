@@ -103,11 +103,20 @@ describe('classifyCommand', () => {
     expect(classifyCommand('git', ['show', 'HEAD'])).toBe('safe_git');
   });
 
-  it('classifies pnpm test/typecheck/lint/build as validation', () => {
+  it('classifies pnpm test as validation', () => {
     expect(classifyCommand('pnpm', ['test'])).toBe('validation');
-    expect(classifyCommand('pnpm', ['run', 'typecheck'])).toBe('validation');
-    expect(classifyCommand('pnpm', ['run', 'lint'])).toBe('validation');
-    expect(classifyCommand('pnpm', ['run', 'build'])).toBe('validation');
+  });
+
+  // B1: `run <script>` executes an arbitrary package.json script (opaque code) —
+  // must NOT be validation, or `npm run evil` bypasses the subagent defaultDeny
+  // guard (validation is allowed unconditionally). Falls to unknown: trusted allow,
+  // subagent block. `test` stays validation by convention.
+  it('classifies pnpm/npm/yarn run <script> as unknown (B1)', () => {
+    expect(classifyCommand('pnpm', ['run', 'typecheck'])).toBe('unknown');
+    expect(classifyCommand('pnpm', ['run', 'lint'])).toBe('unknown');
+    expect(classifyCommand('pnpm', ['run', 'build'])).toBe('unknown');
+    expect(classifyCommand('npm', ['run', 'pwn'])).toBe('unknown');
+    expect(classifyCommand('yarn', ['run', 'anything'])).toBe('unknown');
   });
 
   it('npx / <pkg>-exec wrap arbitrary commands → classify payload (wrapper-exec fix); npm test stays validation', () => {

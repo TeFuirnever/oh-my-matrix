@@ -68,6 +68,9 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
     ['git commit --amend', 'destructive_git'],
     ['git clean -fdx', 'destructive_git'],
     ['git checkout -- ./rm', 'destructive_git'],
+    // B5: `git restore` discards working-tree/staged changes (modern checkout --)
+    ['git restore .', 'destructive_git'],
+    ['git restore --staged .', 'destructive_git'],
   ] as const)('destructive_git: %s', (command, expected) => {
     it(`classifies "${command}" as ${expected}`, () => {
       expect(classifyExec(command)).toBe(expected);
@@ -98,7 +101,7 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
     // ── Validation ────────────────────────────────────────────────────────
     ['pnpm test', 'validation'],
     ['npm test', 'validation'],
-    ['npm run build', 'validation'],
+    // B1: `npm run <script>` is opaque arbitrary execution → unknown (see unknown table)
     // ── Safe git ──────────────────────────────────────────────────────────
     ['git status', 'safe_git'],
     ['git diff', 'safe_git'],
@@ -119,6 +122,9 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
   describe.each([
     // ── Unknown (fail-closed under subagent defaultDeny; allowed when trusted) ──
     ['totally-unknown-binary --flag', 'unknown'],
+    // B1: `npm run <script>` is opaque arbitrary execution → unknown (was validation,
+    // which bypassed the subagent defaultDeny guard). Trusted runs still allow it.
+    ['npm run build', 'unknown'],
     // npx reclassifies its payload; an unrecognized payload → unknown.
     ['npx some-pkg --destroy', 'unknown'],
     // gap: `npm exec -- rm -rf /` — the `--` separator breaks the payload chain,
@@ -186,6 +192,7 @@ describe('E2E decidePermissionForEvent — subagent (defaultDeny) outcome bounda
     ['rm -rf /', 'workspace_cleanup'],
     ['sudo ls', 'system_write'],
     ['totally-unknown-binary --flag', 'unknown'], // defaultDeny fail-closed
+    ['npm run pwn', 'unknown'], // B1: arbitrary package.json script must not bypass defaultDeny
     ['chmod 777 /x', 'system_write'],
   ] as const)('BLOCKS dangerous subagent command: %s', (cmd, expectedCls) => {
     expect(allow(cmd)).toBe('block');

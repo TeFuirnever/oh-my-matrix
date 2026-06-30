@@ -271,3 +271,41 @@ describe('E2E cross-plugin shared format — on-disk entry matches PermissionAud
     expect(loaded[0].commandSummary).toBeUndefined();
   });
 });
+
+describe('F1 regression — rotation returns NEWEST entries, not stale base (valid entries)', () => {
+  // The old `.sort().reverse()` + early-`break` returned STALE base entries once
+  // the base file rolled: `-1` is newer than base but `'-'(0x2D) < '.'(0x2E)` put
+  // it lexically before base, so reverse read base first and the early break
+  // never opened `-1`. Existing rotation tests masked this by filling base with
+  // invalid JSON (0 parsed entries). This test fills base with VALID entries so
+  // the ordering bug is actually exercised.
+  it('limit < total: returns the rotated (-1) tail, not stale base entries', () => {
+    const today = _todayStringForTest(new Date());
+    const dir = path.join(tmpDir, AUDIT_SUBDIR);
+    const base = path.join(dir, `audit-${today}.jsonl`);
+    const rotated = path.join(dir, `audit-${today}-1.jsonl`);
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Base: 300 OLDER valid entries.
+    const baseLines =
+      Array.from({ length: 300 }, (_, i) =>
+        JSON.stringify(makeEntry({ runId: `base-${i}`, toolName: `base-${i}`, at: 1000 + i })),
+      ).join('\n') + '\n';
+    fs.writeFileSync(base, baseLines, 'utf-8');
+
+    // Rotated -1: 50 NEWER valid entries (written after base filled).
+    const rotLines =
+      Array.from({ length: 50 }, (_, i) =>
+        JSON.stringify(makeEntry({ runId: `rot-${i}`, toolName: `rot-${i}`, at: 2000 + i })),
+      ).join('\n') + '\n';
+    fs.writeFileSync(rotated, rotLines, 'utf-8');
+
+    // limit=10 must return the NEWEST 10 = rot-40..rot-49, NOT base-290..base-299.
+    const loaded = loadRecentAuditEntries(tmpDir, 10);
+    expect(loaded).toHaveLength(10);
+    expect(loaded.every((e) => e.toolName.startsWith('rot-'))).toBe(true);
+    expect(loaded.map((e) => e.toolName)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `rot-${40 + i}`),
+    );
+  });
+});
