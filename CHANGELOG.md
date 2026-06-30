@@ -4,7 +4,11 @@ All notable changes to oh-my-matrix (omm).
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+- **High-fidelity E2E/integration suites (#28)** — 12 new `tests/e2e/` suites (~197 cases) across `permission-policy` (classify-matrix, shell-evasion, audit-roundtrip), `dynamic-workflows` (real-event-shape-guard, golden cases wired from the orphaned test-prompts.json), and `autopilot` (dist-barrel-contract, lifecycle, execFile evidence gate, workflow-config round-trip, resilience, projection/NaN guard, goal compaction). Fills the integration gap above the existing unit tests; tests-only — no `src/`/`index.ts`/`dist/` touched.
+
+### Changed
+- **dynamic-workflows skill hardening (#28)** — generated `.prose` programs now route to `<cwd>/.openclaw/workflows/` (keeps the user workspace clean; root `.gitignore` covers `.openclaw/`); `.prose` keywords must stay ASCII-English even in Chinese workflows (closes a darwin-skill dim8 full-test gap where manual validation missed localized keywords).
 
 ## [0.8.0] — 2026-06-29
 
