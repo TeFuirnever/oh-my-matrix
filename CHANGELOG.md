@@ -5,6 +5,8 @@ All notable changes to oh-my-matrix (omm).
 ## [Unreleased]
 
 ### Added
+- **Autopilot model routing + thinking intensity (#33)** — graduated effort injection (3 levels resolved per phase: validation→low, initial turns→high, else configured) and runtime model tier routing via the `before_model_resolve` hook (budget/standard/premium → `modelOverride`). Subagents (`sessions_spawn` / OpenProse `session:`) route via their parent run's sessionKey; when no `modelIds` are configured, no override is emitted and `.prose` `model:` declarations stay in effect. 31 new tests; full suite 650 passed | 4 skipped.
+- **Host-deploy smoke checklist (#34)** — [`docs/runbooks/model-routing-smoke.md`](docs/runbooks/model-routing-smoke.md): 4-dim verification (effort / override / subagent e2e / no-interference) + rollback table. The subagent-coverage e2e is the only runtime evidence (source-only guarantee via `runEmbeddedAgent` reuse).
 - **High-fidelity E2E/integration suites (#28)** — 12 new `tests/e2e/` suites (~197 cases) across `permission-policy` (classify-matrix, shell-evasion, audit-roundtrip), `dynamic-workflows` (real-event-shape-guard, golden cases wired from the orphaned test-prompts.json), and `autopilot` (dist-barrel-contract, lifecycle, execFile evidence gate, workflow-config round-trip, resilience, projection/NaN guard, goal compaction). Fills the integration gap above the existing unit tests; tests-only — no `src/`/`index.ts`/`dist/` touched.
 
 ### Changed
