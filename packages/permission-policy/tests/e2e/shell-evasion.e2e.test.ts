@@ -97,3 +97,29 @@ describe('E2E workspace containment for destructive git (path-relative, not star
     expect(decidePermissionForEvent(ev('git reset --hard', '/anywhere'), subagent).outcome).toBe('block');
   });
 });
+
+describe('E2E git -C containment escape (B2) — -C overrides workdir for the op location', () => {
+  // `git -C <path>` makes git operate in <path> regardless of the shell workdir.
+  // extractCommandSegments must reflect -C into cwd so the destructive-git
+  // containment check sees where the op actually lands. workdir is /ws (inside
+  // workspace) but -C points OUTSIDE → must BLOCK. -C pointing inside → ALLOW.
+  const dec = (command: string, workspacePath: string, workdir: string) =>
+    decidePermissionForEvent(
+      ev(command, workdir),
+      { workspacePath, workflowAllowsDestructiveGit: true },
+    ).outcome;
+
+  it('BLOCKS `git -C <outside> reset --hard` even when workdir is inside workspace', () => {
+    expect(dec('git -C /etc reset --hard', '/ws', '/ws')).toBe('block');
+    expect(dec('git -C /tmp reset --hard', '/ws', '/ws/sub')).toBe('block');
+  });
+
+  it('BLOCKS the attached `-C<path>` single-token form too', () => {
+    expect(dec('git -C/etc reset --hard', '/ws', '/ws')).toBe('block');
+  });
+
+  it('ALLOWS `git -C <inside> reset --hard` (contained — no false positive)', () => {
+    expect(dec('git -C /ws reset --hard', '/ws', '/ws')).toBe('allow');
+    expect(dec('git -C /ws/sub reset --hard', '/ws', '/elsewhere')).toBe('allow');
+  });
+});

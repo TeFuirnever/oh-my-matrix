@@ -94,12 +94,33 @@ export function extractCommandSegments(
     .split(SHELL_SPLIT_RE)
     .map((seg) => tokenizeShell(seg))
     .filter((seg) => seg.length > 0);
-  if (!workdir) {
+
+  // cwd resolution priority:
+  //   1. `git -C <path>` — git's working-dir override. The host workdir does NOT
+  //      capture this: git operates in <path> regardless of the shell cwd, so a
+  //      destructive `git -C /etc reset --hard` issued from /ws would otherwise
+  //      pass the workspace-containment check (cwd=/ws ⊂ workspace) while the op
+  //      actually lands in /etc. git -C is authoritative for where the op lands,
+  //      so it overrides workdir. (B2 containment-escape fix.)
+  //   2. params.workdir (host-authoritative shell cwd)
+  //   3. `cd <dir>` leading segment
+  let cwd = workdir;
+  if (!cwd) {
     for (const seg of segments) {
-      if (seg[0]?.toLowerCase() === 'cd' && seg[1]) return { segments, cwd: seg[1], hasShellFeature };
+      if (seg[0]?.toLowerCase() === 'cd' && seg[1]) { cwd = seg[1]; break; }
     }
   }
-  return { segments, cwd: workdir, hasShellFeature };
+  const GIT_BINARIES = new Set(['git', 'git.exe']);
+  for (const seg of segments) {
+    if (GIT_BINARIES.has(seg[0]?.toLowerCase() ?? '')) {
+      // Last -C wins (matches git). Accept both `-C <path>` and `-C<path>`.
+      for (let i = 1; i < seg.length; i++) {
+        if (seg[i] === '-C' && seg[i + 1]) { cwd = seg[i + 1]; break; }
+        if (seg[i].startsWith('-C') && seg[i].length > 2) { cwd = seg[i].slice(2); break; }
+      }
+    }
+  }
+  return { segments, cwd, hasShellFeature };
 }
 
 export interface PermissionDecisionInput {
@@ -196,8 +217,16 @@ export function classifyCommand(
     // Strip leading global flags (-c key=val, -C path) before the subcommand,
     // so `git -c x=y reset --hard` still classifies as destructive. Without this
     // the global flag pushes the real subcommand past args[0] → 'unknown' → allow.
+    // Also handle the attached `-C<path>` single-token form — otherwise
+    // `git -C/etc reset --hard` classifies as unknown (sub='-C/etc') and never
+    // reaches destructive_git, defeating the B2 containment fix. (B2 robustness.)
     let idx = 0;
-    while (idx + 1 < args.length && (args[idx] === '-c' || args[idx] === '-C')) idx += 2;
+    while (idx < args.length) {
+      const a = args[idx];
+      if ((a === '-c' || a === '-C') && idx + 1 < args.length) { idx += 2; continue; }
+      if (a.startsWith('-C') && a.length > 2) { idx += 1; continue; }
+      break;
+    }
     const sub = args[idx];
 
     // worktree subcommands
@@ -209,6 +238,10 @@ export function classifyCommand(
     // destructive git
     if (sub === 'reset' && args.includes('--hard')) return 'destructive_git';
     if (sub === 'clean') return 'destructive_git';
+    // `git restore` discards working-tree / staged changes — the modern replacement
+    // for `git checkout -- <path>` (the latter is already destructive_git above).
+    // Previously unclassified → fell through to unknown → allowed in trusted runs. (B5)
+    if (sub === 'restore') return 'destructive_git';
     if (sub === 'checkout') {
       if (args.includes('--')) return 'destructive_git'; // explicit discard separator
       const target = args[idx + 1];
@@ -236,7 +269,17 @@ export function classifyCommand(
   if (toolLower === 'pnpm' || toolLower === 'npm' || toolLower === 'yarn') {
     const sub = args[0];
     if (sub === 'install' || sub === 'add' || sub === 'update') return 'network';
-    if (sub === 'test' || sub === 'run') return 'validation';
+    // `test` runs the conventional package.json test script — keep as validation.
+    if (sub === 'test') return 'validation';
+    // ponytail: `run <script>` is intentionally NOT validation. It executes an
+    // arbitrary named package.json script — opaque code execution the classifier
+    // cannot inspect. Letting it fall through to `unknown` means trusted runs still
+    // allow it (unknown→allow) but subagent defaultDeny sessions BLOCK it. B1:
+    // classifying it as validation let `npm run evil` bypass the fail-closed guard
+    // (validation is allowed unconditionally in decidePermission, never reaching
+    // the defaultDeny check). Residual: `npm test` also runs a package.json script
+    // but stays validation by convention — a malicious test script is a narrower,
+    // accepted risk.
     // `exec` runs an ARBITRARY wrapped command — classify the payload, not 'validation'
     if (sub === 'exec' && args.length > 1) return classifyCommand(args[1], args.slice(2), toolKind);
     if (sub === 'exec') return 'validation';
