@@ -312,6 +312,15 @@ export function register(api: OpenClawPluginApi): void {
     log(`[autopilot] before_agent_finalize: session=${sessionKey} action=${decision.action} turn=${state.turnAttempts}/${state.maxAttemptsPerTurn} total=${state.totalContinuations}/${state.maxTotalContinuations}`);
 
     switch (decision.action) {
+      case 'finalize': {
+        // S3 (audit 2026-06-30): decideContinuation returns 'finalize' when the
+        // run is disabled/non-running, or when stopHookActive is set (user hit
+        // stop). Previously this fell through to default and was silently
+        // rewritten to 'continue', leaving status='running' so stall/agent_end
+        // could revive a run the user had asked to stop. Match pause/complete:
+        // emit {action:'finalize'} so the host stops injecting revisions.
+        return { action: 'finalize' };
+      }
       case 'revise': {
         const updated = incrementTotal(incrementTurn(state));
         setState(runId, updated);

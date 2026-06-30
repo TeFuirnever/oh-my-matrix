@@ -1,4 +1,4 @@
-import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult } from './types';
+import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier, AutopilotConfig } from './types';
 export interface AutopilotProjection {
     status: AutopilotState['status'];
     enabled: boolean;
@@ -35,6 +35,12 @@ export interface AutopilotProjection {
     lastEvidenceCommands?: EvidenceCommandResult[];
     workflowSource?: 'workflow_md' | 'default' | 'last_valid';
     workflowConfigError?: string;
+    /** Current resolved thinking intensity (observability only) */
+    thinkingIntensity?: ThinkingIntensity;
+    /** Current resolved model tier (observability) */
+    modelTier?: ModelTier;
+    /** Recommended model ID for current tier (observability) */
+    recommendedModelId?: string;
 }
 /**
  * Claude API pricing constants used for cost estimation.
@@ -43,5 +49,5 @@ export interface AutopilotProjection {
  */
 export declare const AUTOPILOT_INPUT_COST_PER_M_USD = 3;
 export declare const AUTOPILOT_OUTPUT_COST_PER_M_USD = 15;
-export declare function projectState(state: AutopilotState | undefined): AutopilotProjection | undefined;
+export declare function projectState(state: AutopilotState | undefined, config?: Pick<AutopilotConfig, 'thinkingIntensity' | 'modelRouting'>): AutopilotProjection | undefined;
 //# sourceMappingURL=projection.d.ts.map

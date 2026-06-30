@@ -288,12 +288,15 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
   });
 
   it('validation commands from WORKFLOW.md reach state.workflow (consumed by evidence gate)', async () => {
+    // S1: the command binary must be on the validation allowlist (echo is a shell
+    // builtin, not a validation tool, and is filtered fail-closed). Use eslint —
+    // an allowlisted linter — so the round-trip still exercises the wiring.
     writeWorkflowMd(`autopilot:
   version: 1
   validation:
     commands:
       - id: lint
-        command: echo linting
+        command: eslint .
         required: true`);
     await activateWithWorkspace('wf-sess-3', tmpDir);
     const workflow = await getStatusWorkflow('wf-sess-3');
@@ -302,7 +305,7 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
     // runValidationCommands. Pinning them here guards the evidence-gate wiring.
     expect(workflow!.validation.commands).toHaveLength(1);
     expect(workflow!.validation.commands[0]).toEqual({
-      id: 'lint', command: 'echo linting', timeoutMs: 120_000, required: true,
+      id: 'lint', command: 'eslint .', timeoutMs: 120_000, required: true,
     });
   });
 });

