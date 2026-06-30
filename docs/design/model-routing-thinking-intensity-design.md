@@ -4,6 +4,11 @@
 > 审查链：3 路 Opus 对抗 review（架构可行性 / YAGNI / 代码可行性）+ OpenClaw 源码验证。
 > OpenClaw 源码锚点：`embedded-agent-runner/run.ts`、`plugins/hook-types.ts`、`hook-before-agent-start.types.ts`。
 
+> **实现状态：已发布** in #33（2026-06-29），随 `@oh-my-matrix/autopilot@2.2.0`。本文是**设计决策记录**（v1 原始设计 + 对抗 review 修正），正文保持历史快照不回填；代码是唯一真相，按本节导航到实发代码。
+> 与正文的偏差（实现时改进，§4.2.3 / §4.2.5 描述未回填）：
+> - `parseModelRouting` **未**按 §4.2.3（index.ts 内联、camelCase）/ §4.2.5（workflow-config.ts 内联、snake_case）的**重复形态**落地；实发为 `src/model-routing.ts` 中**一个共享 parser**（camelCase + snake_case 同源），`index.ts` 与 `workflow-config.ts` 均 import 它（DRY 合并）。
+> - 正文 `index.ts` 行号引用（472-531、523-525 等）为改前快照，已漂移；实发 `before_model_resolve` 注册在 `index.ts:552`，effort 接线在 `index.ts:535`。
+
 ---
 
 ## 1. 目标
