@@ -1,4 +1,4 @@
-import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier, ModelRoutingConfig } from './types';
+import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier, AutopilotConfig } from './types';
 import { resolveThinkingIntensity } from './effort-injection';
 import { resolveModelTier, resolveModelId } from './model-routing';
 
@@ -59,10 +59,9 @@ const OUTPUT_COST_PER_M = AUTOPILOT_OUTPUT_COST_PER_M_USD;
 
 export function projectState(
   state: AutopilotState | undefined,
-  // config mirrors the before_model_resolve hook's effective config so the
-  // projection's observability fields match actual runtime routing/injection
-  // (otherwise thinkingIntensity/modelTier lied under non-default configs).
-  config?: { thinkingIntensity?: ThinkingIntensity; modelRouting?: ModelRoutingConfig },
+  // Effective config mirrors before_model_resolve (workflow wins, plugin fallback)
+  // so observability fields match actual runtime routing/injection.
+  config?: Pick<AutopilotConfig, 'thinkingIntensity' | 'modelRouting'>,
 ): AutopilotProjection | undefined {
   if (!state) return undefined;
   const now = Date.now();
