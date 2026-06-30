@@ -40,7 +40,7 @@ anyway**, accepting the documented costs. This ADR records that decision.
 **Extract `dynamic-workflows` as the second omm plugin** at `packages/dynamic-workflows/`.
 It owns the shared permission primitives + the subagent runtime guard. `@oh-my-matrix/autopilot`
 becomes a CONSUMER of those primitives. The plugin registers `before_tool_call` at
-**priority 11** so it runs before autopilot (10) and matrixassistant-audit (9), and block
+**priority 11** so it runs before autopilot (10) and the host's audit plugin (9), and block
 short-circuits the lower-priority handlers.
 
 ### What moved into `packages/dynamic-workflows/`
@@ -80,7 +80,7 @@ OpenClaw runs `before_tool_call` handlers in descending priority order; `block` 
 |---|---|---|
 | `dynamic-workflows` | 11 | subagent guard — blocks destructive ops for `:subagent:` sessions, short-circuits |
 | `@oh-my-matrix/autopilot` | 10 | run-scoped policy for autopilot runs (main sessions) |
-| `matrixassistant-audit` | 9 | audit |
+| the host's audit plugin | 9 | audit |
 
 The guard only fires on `:subagent:` session keys, so autopilot runs (main session) are
 unaffected — the `WORKFLOW.md destructive_git.allow=true` escape hatch from ADR-011 still
