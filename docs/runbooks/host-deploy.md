@@ -66,6 +66,7 @@ pnpm --filter @oh-my-matrix/dynamic-workflows build
   - `destructive` / `cd <ws> && git reset --hard` / `rm -rf` → **blocked**
   - `git status` / main-session → **allowed**
 - `[TODO:host]`:`verify-guard` 脚本位置 + 一键调用方式。
+- **autopilot model-routing / thinking-intensity 变更**:另跑 [model-routing-smoke.md](model-routing-smoke.md)(分级 effort + tier override + subagent 覆盖 e2e + 不干预)—— subagent 覆盖目前只有源码推断,smoke 是唯一运行时证据。
 
 ---
 
