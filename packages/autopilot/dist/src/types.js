@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_CONFIG = exports.VALID_BLOCKED_REASONS = void 0;
+exports.DEFAULT_CONFIG = exports.MODEL_TIERS = exports.VALID_BLOCKED_REASONS = void 0;
 exports.isValidBlockedReason = isValidBlockedReason;
 exports.toBlockedReason = toBlockedReason;
 exports.createInitialState = createInitialState;
@@ -26,6 +26,19 @@ function isValidBlockedReason(value) {
 function toBlockedReason(value, fallback = 'validation_failed') {
     return isValidBlockedReason(value) ? value : fallback;
 }
+/**
+ * Model tier for cost-aware routing. Maps to concrete model IDs via
+ * ModelRoutingConfig.modelIds. Consumed via before_model_resolve hook.
+ * - 'budget': cheapest viable (haiku / deepseek)
+ * - 'standard': default balance (sonnet)
+ * - 'premium': highest capability (opus)
+ *
+ * MODEL_TIERS is the single source of truth: the runtime allowlist (used by
+ * parseModelRouting / asTier) and the ModelTier union are both derived from
+ * it, so adding a tier is a compile-checked one-place edit — no parallel
+ * array to keep in sync by hand.
+ */
+exports.MODEL_TIERS = ['budget', 'standard', 'premium'];
 exports.DEFAULT_CONFIG = {
     maxAttemptsPerTurn: 5,
     maxTotalContinuations: 50,

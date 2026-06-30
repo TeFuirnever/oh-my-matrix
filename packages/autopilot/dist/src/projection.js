@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AUTOPILOT_OUTPUT_COST_PER_M_USD = exports.AUTOPILOT_INPUT_COST_PER_M_USD = void 0;
 exports.projectState = projectState;
+const effort_injection_1 = require("./effort-injection");
+const model_routing_1 = require("./model-routing");
 /**
  * Claude API pricing constants used for cost estimation.
  * Model: Claude Sonnet (as of 2026-Q2). Update if model/pricing changes.
@@ -12,13 +14,20 @@ exports.AUTOPILOT_OUTPUT_COST_PER_M_USD = 15.0;
 // Claude Sonnet pricing (per 1M tokens, USD)
 const INPUT_COST_PER_M = exports.AUTOPILOT_INPUT_COST_PER_M_USD;
 const OUTPUT_COST_PER_M = exports.AUTOPILOT_OUTPUT_COST_PER_M_USD;
-function projectState(state) {
+function projectState(state, 
+// Effective config mirrors before_model_resolve (workflow wins, plugin fallback)
+// so observability fields match actual runtime routing/injection.
+config) {
     if (!state)
         return undefined;
     const now = Date.now();
     const inputTokens = state.inputTokensUsed ?? 0;
     const outputTokens = state.outputTokensUsed ?? 0;
     const estimatedCostUsd = (inputTokens * INPUT_COST_PER_M + outputTokens * OUTPUT_COST_PER_M) / 1_000_000;
+    const modelRouting = state.workflow?.modelRouting ?? config?.modelRouting;
+    const modelTier = state.status === 'running'
+        ? (0, model_routing_1.resolveModelTier)(state.totalContinuations, state.evidence?.status, false, modelRouting)
+        : undefined;
     return {
         status: state.status,
         enabled: state.enabled,
@@ -53,6 +62,11 @@ function projectState(state) {
         lastEvidenceCommands: state.evidence?.commands,
         workflowSource: state.workflow?.source,
         workflowConfigError: state.workflowConfigError,
+        thinkingIntensity: state.status === 'running'
+            ? (0, effort_injection_1.resolveThinkingIntensity)(state.totalContinuations, state.evidence?.status, config?.thinkingIntensity)
+            : undefined,
+        modelTier,
+        recommendedModelId: modelTier ? (0, model_routing_1.resolveModelId)(modelTier, modelRouting) : undefined,
     };
 }
 //# sourceMappingURL=projection.js.map

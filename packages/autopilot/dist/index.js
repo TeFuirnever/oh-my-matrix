@@ -11,6 +11,7 @@ const continuation_engine_1 = require("./src/continuation-engine");
 const tool_error_tracker_1 = require("./src/tool-error-tracker");
 const stall_detector_1 = require("./src/stall-detector");
 const effort_injection_1 = require("./src/effort-injection");
+const model_routing_1 = require("./src/model-routing");
 const logger_1 = require("./src/logger");
 const autopilot_state_1 = require("./src/autopilot-state");
 const goal_manager_1 = require("./src/goal-manager");
@@ -233,6 +234,7 @@ function register(api) {
     // pluginConfig is Record<string, unknown> — coerce values to expected types
     const uc = api.pluginConfig ?? {};
     const numOrUndefined = (v) => typeof v === 'number' ? v : undefined;
+    const modelRouting = (0, model_routing_1.parseModelRouting)(uc.modelRouting);
     const config = {
         ...types_1.DEFAULT_CONFIG,
         ...(numOrUndefined(uc.maxAttemptsPerTurn) != null ? { maxAttemptsPerTurn: numOrUndefined(uc.maxAttemptsPerTurn) } : {}),
@@ -242,6 +244,10 @@ function register(api) {
         ...(Array.isArray(uc.highRiskTools) ? { highRiskTools: uc.highRiskTools } : {}),
         ...(numOrUndefined(uc.tokenBudget) != null ? { tokenBudget: numOrUndefined(uc.tokenBudget) } : {}),
         ...(numOrUndefined(uc.maxConcurrentAutopilot) != null ? { maxConcurrentAutopilot: numOrUndefined(uc.maxConcurrentAutopilot) } : {}),
+        ...(typeof uc.thinkingIntensity === 'string' && ['low', 'medium', 'high'].includes(uc.thinkingIntensity)
+            ? { thinkingIntensity: uc.thinkingIntensity }
+            : {}),
+        ...(modelRouting ? { modelRouting } : {}),
     };
     (0, logger_1.log)(`[autopilot] config: maxAttemptsPerTurn=${config.maxAttemptsPerTurn} maxTotalContinuations=${config.maxTotalContinuations} toolErrorThreshold=${config.toolErrorThreshold} excludedAgents=${JSON.stringify(config.excludedAgents)} highRiskTools=${JSON.stringify(config.highRiskTools)} tokenBudget=${config.tokenBudget}`);
     // --- Hooks (use api.on for typed hooks when available, registerHook as fallback) ---
@@ -273,6 +279,15 @@ function register(api) {
         });
         (0, logger_1.log)(`[autopilot] before_agent_finalize: session=${sessionKey} action=${decision.action} turn=${state.turnAttempts}/${state.maxAttemptsPerTurn} total=${state.totalContinuations}/${state.maxTotalContinuations}`);
         switch (decision.action) {
+            case 'finalize': {
+                // S3 (audit 2026-06-30): decideContinuation returns 'finalize' when the
+                // run is disabled/non-running, or when stopHookActive is set (user hit
+                // stop). Previously this fell through to default and was silently
+                // rewritten to 'continue', leaving status='running' so stall/agent_end
+                // could revive a run the user had asked to stop. Match pause/complete:
+                // emit {action:'finalize'} so the host stops injecting revisions.
+                return { action: 'finalize' };
+            }
             case 'revise': {
                 const updated = (0, autopilot_state_1.incrementTotal)((0, autopilot_state_1.incrementTurn)(state));
                 setState(runId, updated);
@@ -489,13 +504,45 @@ function register(api) {
         }
         if (parts.length === 0)
             return;
-        // Effort injection: ensure high effort for every autopilot turn (TD-1)
-        const effortCtx = (0, effort_injection_1.buildEffortInjection)(updated.status);
+        // Effort injection: graduated intensity by execution phase (TD-1)
+        const intensity = (0, effort_injection_1.resolveThinkingIntensity)(updated.totalContinuations, updated.evidence?.status, config.thinkingIntensity);
+        const effortCtx = (0, effort_injection_1.buildEffortInjection)(updated.status, intensity);
         if (effortCtx)
             parts.push(effortCtx);
         // Completion awareness instruction
         parts.push('[Autopilot] When all tasks are complete, explicitly state "All tasks completed".');
         return { appendContext: parts.join('\n') };
+    });
+    // Model routing: override model per execution phase. Consumed by Gateway via
+    // before_model_resolve -> { modelOverride }. No modelIds => no override (inherit).
+    // Read-only: state is read without a lock while other hooks mutate it — a turn
+    // straddling an evidence-status transition may pick the wrong tier for one turn.
+    // Acceptable for a routing heuristic (no data loss, self-corrects next turn).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registerHook('before_model_resolve', (_event, ctx) => {
+        const sessionKey = ctx?.sessionKey;
+        if (!sessionKey)
+            return;
+        // Find the autopilot run: direct, or via parent session for subagents
+        // (subagent keys: agent:<main>:subagent:<sub>).
+        const direct = findRunBySession(sessionKey);
+        const entry = direct
+            ?? ((0, model_routing_1.isSubagentSession)(sessionKey)
+                ? findRunBySession((0, model_routing_1.extractParentSessionKey)(sessionKey) ?? '')
+                : undefined);
+        if (!entry?.[1].enabled || entry[1].status !== 'running')
+            return;
+        const [, state] = entry;
+        // WORKFLOW.md model_routing wins over plugin config when present.
+        const routing = state.workflow?.modelRouting ?? modelRouting;
+        if (!routing?.modelIds)
+            return;
+        const tier = (0, model_routing_1.resolveModelTier)(state.totalContinuations, state.evidence?.status, (0, model_routing_1.isSubagentSession)(sessionKey), routing);
+        const modelId = (0, model_routing_1.resolveModelId)(tier, routing);
+        if (modelId) {
+            (0, logger_1.log)(`[autopilot] before_model_resolve: session=${sessionKey} tier=${tier} model=${modelId}`);
+            return { modelOverride: modelId };
+        }
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerHook('before_agent_run', (_event, ctx) => {
@@ -728,7 +775,7 @@ function register(api) {
                     return undefined;
                 const entry = findRunBySession(ctx.sessionKey);
                 if (entry)
-                    return (0, projection_1.projectState)(entry[1]);
+                    return (0, projection_1.projectState)(entry[1], config);
                 return {
                     status: 'idle',
                     enabled: false,
@@ -928,7 +975,7 @@ function register(api) {
         api.registerGatewayMethod('autopilot.status', async ({ params: ctx, respond }) => {
             const sessionKey = ctx.sessionKey;
             const entry = sessionKey ? findRunBySession(sessionKey) : undefined;
-            const projection = entry ? (0, projection_1.projectState)(entry[1]) : undefined;
+            const projection = entry ? (0, projection_1.projectState)(entry[1], config) : undefined;
             // Also expose raw state fields not in projection (progress, permissionAudit)
             const state = entry ? entry[1] : undefined;
             respond(true, {
