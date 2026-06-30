@@ -50,7 +50,7 @@
     "globals": "^17.7.0",
     "markdownlint-cli2": "^0.22.1",
     "simple-git-hooks": "^2.13.1",
-    "typescript-eslint": "^8.62.0",
+    "typescript-eslint": "^8.62.1",
     "vitepress": "^1.6.4"
   },
   "simple-git-hooks": {
