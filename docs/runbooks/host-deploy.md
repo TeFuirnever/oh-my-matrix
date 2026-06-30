@@ -32,25 +32,31 @@ pnpm --filter @oh-my-matrix/autopilot test            # 当前 ~520 tests
 
 任一包红 → 先修,不进入部署。
 
-### 2. 本仓库:产出分发产物(已完整可执行)
+### 2. 本仓库:publish 到 npm(真实终端,2FA)
+
+OMM 包以 **npm registry 依赖** 被 MA 消费(MA `package.json`:`"@oh-my-matrix/autopilot": "<ver>"`)。ADR-010 早期描述的 file: tgz vendoring 已被 npm registry + MA 的 `install-omm-plugin.js` 取代(见 step 3)。
 
 ```bash
-# autopilot 走 tgz(MA 以 file: 协议 vendoring,见 ADR-010)
-pnpm --filter @oh-my-matrix/autopilot build
-pnpm --filter @oh-my-matrix/autopilot pack            # → packages/autopilot/openclaw-autopilot-<ver>.tgz
-
-# runtime guard 两包走 cp dist(ADR-012/013 + fixes 文档)
-pnpm --filter @oh-my-matrix/permission-policy build
-pnpm --filter @oh-my-matrix/dynamic-workflows build
+# bump 版本(feature→minor / fix→patch),再真实终端 publish(需 2FA)
+pnpm --filter @oh-my-matrix/autopilot publish --access public
+# permission-policy / dynamic-workflows 同理
 ```
 
-产物:`packages/autopilot/openclaw-autopilot-<ver>.tgz` + 三个 `dist/`。
+- npm 版本 **immutable** —— 改了内容必须 bump。model-routing / thinking-intensity 是新 feature → minor(2.1.2 → 2.2.0)。
+- Claude 跑不了 `npm publish`(outward-facing,classifier 拒);必须人工真实终端 + 2FA。
+- `pnpm --filter <pkg> pack` 可预览 tarball 内容,无需手动 cp dist。
 
-### 3. `[TODO:host]` 刷新 MA bundled-plugin copy
+### 3. `[TODO:host]` MA:更新版本号 + rebuild bundled copy
 
-- 把 autopilot tgz 放进 MA 的 `resources/autopilot/`(ADR-010),并在 MA `package.json` 把 `"@oh-my-matrix/autopilot"` 版本 bump 到新 tgz 的版本号(tgz 文件名里的版本是合约)。
-- 把 permission-policy / dynamic-workflows 的 `dist/` cp 进 MA 的 bundled-plugin 目录。
-- `[TODO:host]`:MA 仓库内具体的 cp 目标路径、版本 bump 命令、是否需 `pnpm install` 重建 bundled-plugin 目录。
+MA 通过 npm 依赖 OMM 包,但 **Gateway 运行时从 `resources/claw-plugin/` 加载**(extraResources,asar 外),**不是 node_modules**(asar 内、只读)。终端用户不跑 `pnpm install`,所以 publish 后 MA 要重建 bundled copy:
+
+1. MA `package.json` 把 `"@oh-my-matrix/autopilot"` 版本号改成新 publish 的版本。
+2. `pnpm install`(拉 npm 新版到 `node_modules/@oh-my-matrix/`)。
+3. `pnpm build:plugins` → `scripts/install-omm-plugin.js autopilot` 把 `node_modules/@oh-my-matrix/autopilot` copy 到 `resources/claw-plugin/autopilot/`。脚本是 npm → bundled-plugin 的桥梁(注释明言:"just use npm isn't enough")。
+
+**不改任何逻辑代码** —— 只改版本号 + 重建 bundled copy。permission-policy / dynamic-workflows 同走一个 `install-omm-plugin.js`。
+
+- `[TODO:host]`:MA 是否需完整 `pnpm build:app`(还是单 `build:plugins` 够)、具体重启方式。
 
 ### 4. `[TODO:host]` 重启 MA gateway
 
@@ -74,7 +80,7 @@ pnpm --filter @oh-my-matrix/dynamic-workflows build
 
 1. **仓库测试绿 ≠ 线上生效**。第 5 步 deployed-dist smoke 是唯一证据。任何 guard 相关变更都要真跑 MA live e2e,不再 defer(这正是历史 placebo bug 的根源)。
 2. **不重启 = 旧 module**。第 4 步不可省。
-3. **MA 是合约边界**。两个仓库(omm 源码 + MA vendored dist)必须保持同步,tgz 文件名里的版本号是合约(ADR-010 Negative)。
+3. **MA 是合约边界**。omm(publish 的 npm 版本)与 MA vendored copy(`resources/claw-plugin/`)必须同步 —— MA `package.json` 版本号 + `build:plugins` 是同步手段。npm 版本 immutable,publish 前 bump 是硬要求。
 
 ## 已知限制(不藏)
 
