@@ -83,5 +83,50 @@ describe('projection', () => {
       const state = createInitialState('s', 'r');
       expect(projectState(state)!.maxConcurrentAutopilot).toBe(5);
     });
+
+    // P1 fix: thinkingIntensity must reflect config.thinkingIntensity, not always default 'high'.
+    it('thinkingIntensity honors config.thinkingIntensity in implementation phase', () => {
+      const state = {
+        ...createInitialState('s', 'r'),
+        status: 'running' as const,
+        totalContinuations: 5, // implementation turn, evidence idle
+      };
+      expect(projectState(state, { thinkingIntensity: 'medium' })!.thinkingIntensity).toBe('medium');
+    });
+
+    it('thinkingIntensity defaults to high when config omitted (backward compat)', () => {
+      const state = {
+        ...createInitialState('s', 'r'),
+        status: 'running' as const,
+        totalContinuations: 5,
+      };
+      expect(projectState(state)!.thinkingIntensity).toBe('high');
+    });
+
+    // P1 fix: modelTier/recommendedModelId must reflect plugin-config modelRouting
+    // when WORKFLOW.md provides none (mirrors the before_model_resolve hook).
+    it('modelTier/recommendedModelId reflect plugin-config modelRouting', () => {
+      const state = {
+        ...createInitialState('s', 'r'),
+        status: 'running' as const,
+        totalContinuations: 0, // initial turn -> initialTurnTier 'premium'
+      };
+      const proj = projectState(state, {
+        modelRouting: { defaultTier: 'standard', modelIds: { premium: 'claude-opus-4-8' } },
+      })!;
+      expect(proj.modelTier).toBe('premium');
+      expect(proj.recommendedModelId).toBe('claude-opus-4-8');
+    });
+
+    it('recommendedModelId is undefined when no modelRouting configured anywhere', () => {
+      const state = {
+        ...createInitialState('s', 'r'),
+        status: 'running' as const,
+        totalContinuations: 0,
+      };
+      const proj = projectState(state)!;
+      expect(proj.modelTier).toBe('premium'); // default initialTurnTier
+      expect(proj.recommendedModelId).toBeUndefined();
+    });
   });
 });

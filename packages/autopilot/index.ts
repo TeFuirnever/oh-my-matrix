@@ -548,6 +548,9 @@ export function register(api: OpenClawPluginApi): void {
 
   // Model routing: override model per execution phase. Consumed by Gateway via
   // before_model_resolve -> { modelOverride }. No modelIds => no override (inherit).
+  // Read-only: state is read without a lock while other hooks mutate it — a turn
+  // straddling an evidence-status transition may pick the wrong tier for one turn.
+  // Acceptable for a routing heuristic (no data loss, self-corrects next turn).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerHook('before_model_resolve', (_event: any, ctx: any): any => {
     const sessionKey = ctx?.sessionKey;
@@ -814,7 +817,7 @@ export function register(api: OpenClawPluginApi): void {
     project: (ctx) => {
       if (!ctx.sessionKey) return undefined;
       const entry = findRunBySession(ctx.sessionKey);
-      if (entry) return projectState(entry[1]) as unknown as PluginJsonValue;
+      if (entry) return projectState(entry[1], config) as unknown as PluginJsonValue;
       return {
         status: 'idle' as const,
         enabled: false,
@@ -1007,7 +1010,7 @@ export function register(api: OpenClawPluginApi): void {
   api.registerGatewayMethod('autopilot.status', async ({ params: ctx, respond }: GatewayCtx) => {
       const sessionKey = ctx.sessionKey as string | undefined;
       const entry = sessionKey ? findRunBySession(sessionKey) : undefined;
-      const projection = entry ? projectState(entry[1]) : undefined;
+      const projection = entry ? projectState(entry[1], config) : undefined;
       // Also expose raw state fields not in projection (progress, permissionAudit)
       const state = entry ? entry[1] : undefined;
       respond(true, {
