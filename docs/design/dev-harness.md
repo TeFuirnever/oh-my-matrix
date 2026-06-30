@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
-| **Date** | 2026-06-28 |
+| **Status** | Implemented — all 4 phases shipped (eslint/markdownlint/commitlint/typecheck gates, `pnpm check` + `pnpm verify`, `ci.yml` 4-job split with concurrency + summaries, `.mcp.json`, `skill/harness` + `skill/work-with-pr`) |
+| **Date** | 2026-06-28 (proposed) · implemented 2026-06-29 (PR #14) |
 | **Scope** | `packages/*`, root configs, `.github/workflows/`, `.mcp.json`, `skill/` |
 | **References** | [oh-my-openagent (dev)](https://github.com/code-yeongyu/oh-my-openagent/tree/dev) · [work-with-pr skill](https://github.com/code-yeongyu/oh-my-opencode/blob/dev/.opencode/skills/work-with-pr/SKILL.md) · ECC (local reference) · `AGENTS.md`, `CONTRIBUTING.md`, `docs/adr/` |
 
@@ -26,7 +26,7 @@ Its current development harness is **thin and leaky**:
 - There is **no `.mcp.json`**, and the PR-lifecycle skill (`work-with-pr`) that forms the essence
   of the `oh-my-openagent` agent harness is absent.
 
-Per-package scripts today are `build` (`tsc`), `test` (`vitest run`), `pack` — uniform, but with
+Per-package scripts at proposal time were `build` (`tsc`), `test` (`vitest run`), `pack` — uniform, but with
 no `typecheck` / `lint`. Root `devDependencies` contains only `vitepress`.
 
 ## 2. Goals & Non-Goals
