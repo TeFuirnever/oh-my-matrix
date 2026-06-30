@@ -604,6 +604,10 @@ function register(api) {
             commandClass,
             outcome: decision.outcome,
             reason: decision.reason,
+            // F3: persist the per-call working dir so the audit trail is forensically
+            // useful — aligns with dynamic-workflows' audit entry. eventCwd already
+            // resolved above (params.workdir / cd / git -C); fall back to the workspace.
+            cwd: eventCwd ?? state.workspace?.path,
         };
         const MAX_AUDIT = 200;
         const prevAudit = withActivity.permissionAudit ?? [];
