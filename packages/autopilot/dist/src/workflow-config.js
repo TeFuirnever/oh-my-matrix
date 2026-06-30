@@ -90,44 +90,76 @@ const ALLOWED_VALIDATION_BINARIES = new Set([
     'gradle', 'mvn', 'rake', 'bundle', 'swift', 'xcodebuild',
 ]);
 /**
- * Extract the binary (argv[0]) from a command string, honouring single/double
- * quotes the same way parseCommandArgs does at execution time, so the gate
- * decides on exactly the token that execFile will spawn.
+ * Quote-aware tokenizer shared by the binary gate and the argument gate.
+ * Mirrors parseCommandArgs (command-runner.ts) at execution time: quotes toggle
+ * state and are stripped, unquoted space splits tokens. One tokenizer here so
+ * the two gates decide on exactly the argv execFile will spawn.
  */
-function extractBinary(command) {
+function tokenizeCommand(command) {
     const s = command.trim();
-    if (!s)
-        return undefined;
-    let bin = '';
+    const tokens = [];
+    let cur = '';
     let inSingle = false;
     let inDouble = false;
     for (let i = 0; i < s.length; i++) {
         const c = s[i];
-        if (c === '"' && !inSingle)
+        if (c === '"' && !inSingle) {
             inDouble = !inDouble;
-        else if (c === "'" && !inDouble)
+            continue;
+        }
+        if (c === "'" && !inDouble) {
             inSingle = !inSingle;
-        else if (c === ' ' && !inSingle && !inDouble)
-            break;
-        else
-            bin += c;
+            continue;
+        }
+        if (c === ' ' && !inSingle && !inDouble) {
+            if (cur) {
+                tokens.push(cur);
+                cur = '';
+            }
+            continue;
+        }
+        cur += c;
     }
-    return bin || undefined;
+    if (cur)
+        tokens.push(cur);
+    return tokens;
 }
+/** S1-B: interpreters that can execute an arbitrary string passed as a flag. */
+const INTERPRETER_BINARIES = new Set(['node', 'python', 'python3']);
+/** S1-B: flags that make those interpreters run an arbitrary string. */
+const DANGEROUS_EVAL_FLAGS = new Set([
+    '-e', '--eval', '-c', '--command', '--exec', '-p', '--print',
+]);
 /**
- * S1: drop validation commands whose binary is not on the allowlist.
- * Mutates `warnings` with one entry per dropped command for observability.
+ * S1: drop validation commands whose binary is not on the allowlist, and
+ * (S1-B) drop interpreter commands that pass an eval flag (-e/-c/--eval…)
+ * even when the binary itself is allowlisted. Mutates `warnings` with one
+ * entry per dropped command for observability.
+ *
+ * Note: this cannot stop `npm run <script>` / `node script.js` where the
+ * workspace owns the script — that path is gated by the trustWorkspace opt-in
+ * in applyWorkflowConfig (the root-cause boundary), not by this filter.
  */
 function filterValidationCommands(commands, warnings) {
     const kept = [];
     for (const cmd of commands) {
-        const bin = extractBinary(cmd.command)?.toLowerCase();
-        if (bin && ALLOWED_VALIDATION_BINARIES.has(bin)) {
-            kept.push(cmd);
-        }
-        else {
+        const tokens = tokenizeCommand(cmd.command);
+        const bin = tokens[0]?.toLowerCase();
+        if (!bin || !ALLOWED_VALIDATION_BINARIES.has(bin)) {
             warnings.push(`Disallowed validation binary "${bin ?? '(empty)'}" in command "${cmd.command.substring(0, 80)}" — dropped (S1 fail-closed)`);
+            continue;
         }
+        if (INTERPRETER_BINARIES.has(bin)) {
+            const hasEvalFlag = tokens.slice(1).some((a) => {
+                const flag = a.split('=')[0];
+                return DANGEROUS_EVAL_FLAGS.has(flag) || DANGEROUS_EVAL_FLAGS.has(a);
+            });
+            if (hasEvalFlag) {
+                warnings.push(`Disallowed eval flag on ${bin} in "${cmd.command.substring(0, 80)}" — dropped (S1-B)`);
+                continue;
+            }
+        }
+        kept.push(cmd);
     }
     return kept;
 }

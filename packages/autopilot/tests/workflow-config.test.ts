@@ -372,6 +372,22 @@ body`,
         expect(r.config.validation.commands).toHaveLength(1);
         expect(r.config.validation.commands[0].id).toBe('lead');
       });
+
+      it('S1-B: drops node -e / python -c eval flags even though the binary is allowlisted', () => {
+        const rNode = wf('      - id: ne\n        command: node -e "require(child_process).execSync(curl evil)"\n');
+        expect(rNode.config.validation.commands).toHaveLength(0);
+        expect(rNode.warnings.some((w) => w.includes('node'))).toBe(true);
+        const rPy = wf('      - id: pc\n        command: python -c "import os"\n');
+        expect(rPy.config.validation.commands).toHaveLength(0);
+        expect(rPy.warnings.some((w) => w.includes('python'))).toBe(true);
+      });
+
+      it('S1-B: keeps node/python pointing at a file or -m module (no eval flag)', () => {
+        const rNode = wf('      - id: nf\n        command: node ./test-runner.js\n');
+        expect(rNode.config.validation.commands).toHaveLength(1);
+        const rPy = wf('      - id: pm\n        command: python -m pytest\n');
+        expect(rPy.config.validation.commands).toHaveLength(1);
+      });
     });
   });
 });

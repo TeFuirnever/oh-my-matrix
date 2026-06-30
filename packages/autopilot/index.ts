@@ -277,6 +277,7 @@ export function register(api: OpenClawPluginApi): void {
       ? { thinkingIntensity: uc.thinkingIntensity as 'low' | 'medium' | 'high' }
       : {}),
     ...(modelRouting ? { modelRouting } : {}),
+    ...(typeof uc.trustWorkspace === 'boolean' ? { trustWorkspace: uc.trustWorkspace } : {}),
   };
   log(`[autopilot] config: maxAttemptsPerTurn=${config.maxAttemptsPerTurn} maxTotalContinuations=${config.maxTotalContinuations} toolErrorThreshold=${config.toolErrorThreshold} excludedAgents=${JSON.stringify(config.excludedAgents)} highRiskTools=${JSON.stringify(config.highRiskTools)} tokenBudget=${config.tokenBudget}`);
 
@@ -866,6 +867,10 @@ export function register(api: OpenClawPluginApi): void {
       const payloadWorkspacePath = validateWorkspacePath(ctx.workspacePath as string | undefined);
       const payloadTokenBudget: number | undefined =
         typeof ctx.tokenBudget === 'number' && ctx.tokenBudget > 0 ? ctx.tokenBudget : undefined;
+      // S1-residual A: per-activate opt-in to execute workspace-sourced validation
+      // commands. Undefined → fall back to plugin config; both undefined → false.
+      const payloadTrustWorkspace: boolean | undefined =
+        typeof ctx.trustWorkspace === 'boolean' ? ctx.trustWorkspace : undefined;
 
       // Concurrency guard: count sessions with status === 'running'
       const maxConcurrent = config.maxConcurrentAutopilot ?? 5;
@@ -889,21 +894,34 @@ export function register(api: OpenClawPluginApi): void {
 
       // GAP-6: Load workflow config from WORKFLOW.md
       const applyWorkflowConfig = (s: AutopilotState): AutopilotState => {
+        // S1-residual A: workspace-sourced validation commands (WORKFLOW.md +
+        // auto-detected `npm test` / `node …`) are NOT executed unless the operator
+        // trusts this workspace. Untrusted → commands empty + warning. This is the
+        // root-cause boundary: the binary allowlist cannot stop `npm run <script>` /
+        // `node evil.js` when the workspace owns the script.
+        const trustWorkspace = payloadTrustWorkspace ?? config.trustWorkspace ?? false;
         try {
           // Use payloadWorkspacePath (validated in outer scope by validateWorkspacePath) rather than
           // re-reading ctx.workspacePath raw — prevents path-traversal via WORKFLOW.md loading.
           const result = loadWorkflowConfig(process.cwd(), payloadWorkspacePath);
-          // R-3: Auto-fill validation commands when WORKFLOW.md has none.
-          // Only auto-detect when an explicit workspace path is provided (not cwd fallback)
-          // to avoid running project tests in unexpected directories during tests/CI.
-          const autoCommands = result.config.validation.commands.length === 0 && payloadWorkspacePath
-            ? detectValidationCommands(payloadWorkspacePath)
-            : result.config.validation.commands;
+          let commands = result.config.validation.commands;
+          if (!trustWorkspace) {
+            commands = [];
+          } else if (commands.length === 0 && payloadWorkspacePath) {
+            // R-3: Auto-fill validation commands when WORKFLOW.md has none.
+            // Only auto-detect when an explicit workspace path is provided AND trusted
+            // (not cwd fallback) to avoid running project tests in unexpected dirs.
+            commands = detectValidationCommands(payloadWorkspacePath);
+          }
+          const warnings = trustWorkspace
+            ? result.config.warnings
+            : [...result.config.warnings, 'untrusted workspace — validation commands disabled (enable via trustWorkspace:true)'];
           return {
             ...s,
             workflow: {
               ...result.config,
-              validation: { ...result.config.validation, commands: autoCommands },
+              validation: { ...result.config.validation, commands },
+              warnings,
             },
             maxTotalContinuations: s.maxTotalContinuations,
           };

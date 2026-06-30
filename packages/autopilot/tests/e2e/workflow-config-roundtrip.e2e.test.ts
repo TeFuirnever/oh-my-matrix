@@ -244,10 +244,10 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
     register(mock.api as any);
   });
 
-  async function activateWithWorkspace(sessionKey: string, workspacePath: string) {
+  async function activateWithWorkspace(sessionKey: string, workspacePath: string, trustWorkspace?: boolean) {
     const activateHandler = mock.gatewayMethods.get('autopilot.activate')!;
     const respond = vi.fn();
-    await activateHandler({ params: { sessionKey, workspacePath }, respond });
+    await activateHandler({ params: { sessionKey, workspacePath, ...(trustWorkspace !== undefined ? { trustWorkspace } : {}) }, respond });
     expect(respond.mock.calls[0][0]).toBe(true);
     // session_start maps sessionId→sessionKey (mirrors plugin-entry.test.ts pattern)
     const sessionStartHandler = mock.hooks.get('session_start')!;
@@ -287,10 +287,10 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
     expect(workflow!.destructiveGit.allow).toBe(false);
   });
 
-  it('validation commands from WORKFLOW.md reach state.workflow (consumed by evidence gate)', async () => {
-    // S1: the command binary must be on the validation allowlist (echo is a shell
-    // builtin, not a validation tool, and is filtered fail-closed). Use eslint —
-    // an allowlisted linter — so the round-trip still exercises the wiring.
+  it('validation commands reach state.workflow when trustWorkspace:true (consumed by evidence gate)', async () => {
+    // S1 + S1-residual A: the binary must be allowlisted (echo → eslint), AND the
+    // operator must opt in via trustWorkspace:true — otherwise workspace-sourced
+    // validation commands are not loaded (untrusted-workspace RCE boundary).
     writeWorkflowMd(`autopilot:
   version: 1
   validation:
@@ -298,15 +298,61 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
       - id: lint
         command: eslint .
         required: true`);
-    await activateWithWorkspace('wf-sess-3', tmpDir);
+    await activateWithWorkspace('wf-sess-3', tmpDir, true);
     const workflow = await getStatusWorkflow('wf-sess-3');
 
-    // These are the exact commands index.ts:386 reads at complete-time to feed
+    // These are the exact commands index.ts reads at complete-time to feed
     // runValidationCommands. Pinning them here guards the evidence-gate wiring.
     expect(workflow!.validation.commands).toHaveLength(1);
     expect(workflow!.validation.commands[0]).toEqual({
       id: 'lint', command: 'eslint .', timeoutMs: 120_000, required: true,
     });
+  });
+
+  it('S1-residual A: default (trustWorkspace unset) → validation commands empty + warning', async () => {
+    // Untrusted workspace: even with an allowlisted command in WORKFLOW.md, the
+    // commands are NOT loaded — the operator has not opted in, so the would-be
+    // RCE path (workspace-controlled validation execution) stays closed.
+    writeWorkflowMd(`autopilot:
+  version: 1
+  validation:
+    commands:
+      - id: lint
+        command: eslint .
+        required: true`);
+    await activateWithWorkspace('wf-sess-3b', tmpDir);
+    const workflow = await getStatusWorkflow('wf-sess-3b');
+    expect(workflow!.validation.commands).toHaveLength(0);
+    expect(workflow!.warnings.some((w) => w.includes('untrusted workspace'))).toBe(true);
+  });
+
+  it('S1-residual A: payload trustWorkspace:false overrides pluginConfig trustWorkspace:true', async () => {
+    // Guards the ?? chain (payload ?? config ?? false): an explicit `false` must
+    // win over a pluginConfig `true`. A mistaken `||` would treat false as falsy
+    // and fall through to the trusted config — re-opening the RCE surface.
+    _resetForTest();
+    const trustedMock = createMockApi();
+    (trustedMock.api as { pluginConfig: Record<string, unknown> }).pluginConfig = { trustWorkspace: true };
+    register(trustedMock.api as unknown as Parameters<typeof register>[0]);
+    writeWorkflowMd(`autopilot:
+  version: 1
+  validation:
+    commands:
+      - id: lint
+        command: eslint .
+        required: true`);
+    const activateHandler = trustedMock.gatewayMethods.get('autopilot.activate')!;
+    const respond = vi.fn();
+    await activateHandler({ params: { sessionKey: 'wf-sess-false', workspacePath: tmpDir, trustWorkspace: false }, respond });
+    await trustedMock.hooks.get('session_start')!({ sessionId: 'sid-false', sessionKey: 'wf-sess-false' });
+
+    const statusHandler = trustedMock.gatewayMethods.get('autopilot.status')!;
+    const srespond = vi.fn();
+    await statusHandler({ params: { sessionKey: 'wf-sess-false' }, respond: srespond });
+    const wf = srespond.mock.calls[0][1]?.workflow as WorkflowConfig | undefined;
+    // Explicit false wins → commands empty despite pluginConfig:true.
+    expect(wf!.validation.commands).toHaveLength(0);
+    expect(wf!.warnings.some((w) => w.includes('untrusted workspace'))).toBe(true);
   });
 });
 
