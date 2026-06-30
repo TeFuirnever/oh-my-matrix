@@ -45,7 +45,7 @@ Gates: `pnpm lint` (eslint), `pnpm lint:md` (markdownlint), `pnpm typecheck` (`t
 3. Add or update tests for code behavior changes.
 4. For docs changes, update every public surface that would otherwise contradict the new claim.
 5. Do not claim host deployment is complete unless the host dist was actually refreshed and smoke-tested.
-6. Use Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` (enforced by commitlint — local hook + CI).
+6. Use Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` (enforced by commitlint — local hook + CI; **body lines must stay ≤ 100 chars**).
 7. `master` is protected: PRs need the `test` check green and use squash-merge; direct pushes and force-pushes are blocked.
 
 ## Repository Setup
