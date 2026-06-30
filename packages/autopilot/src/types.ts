@@ -61,6 +61,14 @@ export function toBlockedReason(value: string, fallback: BlockedReason = 'valida
 
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
 
+/**
+ * Graduated thinking intensity levels for effort injection.
+ * - 'low': standard effort, prefer direct efficient responses
+ * - 'medium': moderate extended thinking
+ * - 'high': full extended thinking (default, backward compatible)
+ */
+export type ThinkingIntensity = 'low' | 'medium' | 'high';
+
 // ─── Shared permission types (now in @oh-my-matrix/permission-policy, ADR-012) ───
 // decidePermission + classifyCommand + audit-persister moved to
 // @oh-my-matrix/permission-policy; autopilot is now a CONSUMER of those primitives.
@@ -209,6 +217,7 @@ export interface AutopilotConfig {
   highRiskTools?: string[];
   tokenBudget?: number;
   maxConcurrentAutopilot?: number;
+  thinkingIntensity?: ThinkingIntensity;
 }
 
 export const DEFAULT_CONFIG: AutopilotConfig = {

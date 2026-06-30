@@ -1,4 +1,5 @@
-import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult } from './types';
+import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity } from './types';
+import { resolveThinkingIntensity } from './effort-injection';
 
 export interface AutopilotProjection {
   status: AutopilotState['status'];
@@ -35,6 +36,8 @@ export interface AutopilotProjection {
   lastEvidenceCommands?: EvidenceCommandResult[];
   workflowSource?: 'workflow_md' | 'default' | 'last_valid';
   workflowConfigError?: string;
+  /** Current resolved thinking intensity (observability only) */
+  thinkingIntensity?: ThinkingIntensity;
 }
 
 /**
@@ -90,5 +93,8 @@ export function projectState(state: AutopilotState | undefined): AutopilotProjec
     lastEvidenceCommands: state.evidence?.commands,
     workflowSource: state.workflow?.source,
     workflowConfigError: state.workflowConfigError,
+    thinkingIntensity: state.status === 'running'
+      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status)
+      : undefined,
   };
 }

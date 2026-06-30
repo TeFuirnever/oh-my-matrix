@@ -56,6 +56,12 @@
         "type": "number",
         "default": 5,
         "description": "Max concurrent autopilot sessions"
+      },
+      "thinkingIntensity": {
+        "type": "string",
+        "enum": ["low", "medium", "high"],
+        "default": "high",
+        "description": "Thinking intensity for autopilot turns. 'high' = extended thinking (default), 'medium' = moderate, 'low' = standard effort."
       }
     }
   }

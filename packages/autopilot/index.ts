@@ -1,7 +1,7 @@
 import { decideContinuation, buildRetryInstruction } from './src/continuation-engine';
 import { trackToolError } from './src/tool-error-tracker';
 import { checkStall } from './src/stall-detector';
-import { buildEffortInjection } from './src/effort-injection';
+import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-injection';
 import { log, warn, error, logWithContext } from './src/logger';
 import {
   activate,
@@ -271,6 +271,9 @@ export function register(api: OpenClawPluginApi): void {
     ...(Array.isArray(uc.highRiskTools) ? { highRiskTools: uc.highRiskTools as string[] } : {}),
     ...(numOrUndefined(uc.tokenBudget) != null ? { tokenBudget: numOrUndefined(uc.tokenBudget) } : {}),
     ...(numOrUndefined(uc.maxConcurrentAutopilot) != null ? { maxConcurrentAutopilot: numOrUndefined(uc.maxConcurrentAutopilot)! } : {}),
+    ...(typeof uc.thinkingIntensity === 'string' && ['low', 'medium', 'high'].includes(uc.thinkingIntensity)
+      ? { thinkingIntensity: uc.thinkingIntensity as 'low' | 'medium' | 'high' }
+      : {}),
   };
   log(`[autopilot] config: maxAttemptsPerTurn=${config.maxAttemptsPerTurn} maxTotalContinuations=${config.maxTotalContinuations} toolErrorThreshold=${config.toolErrorThreshold} excludedAgents=${JSON.stringify(config.excludedAgents)} highRiskTools=${JSON.stringify(config.highRiskTools)} tokenBudget=${config.tokenBudget}`);
 
@@ -525,8 +528,13 @@ export function register(api: OpenClawPluginApi): void {
 
     if (parts.length === 0) return;
 
-    // Effort injection: ensure high effort for every autopilot turn (TD-1)
-    const effortCtx = buildEffortInjection(updated.status);
+    // Effort injection: graduated intensity by execution phase (TD-1)
+    const intensity = resolveThinkingIntensity(
+      updated.totalContinuations,
+      updated.evidence?.status,
+      config.thinkingIntensity,
+    );
+    const effortCtx = buildEffortInjection(updated.status, intensity);
     if (effortCtx) parts.push(effortCtx);
 
     // Completion awareness instruction
