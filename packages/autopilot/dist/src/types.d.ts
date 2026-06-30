@@ -231,6 +231,15 @@ export interface AutopilotConfig {
     maxConcurrentAutopilot?: number;
     thinkingIntensity?: ThinkingIntensity;
     modelRouting?: ModelRoutingConfig;
+    /**
+     * S1 residual (audit 2026-06-30): when false/undefined (default), validation
+     * commands sourced from WORKFLOW.md or auto-detected from the workspace are
+     * NOT executed. An untrusted workspace cannot reach RCE via the evidence gate
+     * (this also covers `npm run <tampered script>` / `node evil.js`, which the
+     * binary allowlist alone cannot stop). Operators opt in per-activate (payload)
+     * or via plugin config to enable workspace-sourced validation.
+     */
+    trustWorkspace?: boolean;
 }
 export declare const DEFAULT_CONFIG: AutopilotConfig;
 export declare function createInitialState(sessionKey: string, runId: string, config?: AutopilotConfig): AutopilotState;
