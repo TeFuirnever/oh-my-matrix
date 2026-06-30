@@ -140,14 +140,23 @@ const SHELL_INTERPRETERS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Non-shell script interpreters that take an inline program via `-c` / `-e`
- * (`python -c`, `node -e`, `perl -e`, `ruby -e`, …). Same opaque-payload risk as
- * shell `-c`: the tokenizer cannot see into the script string. SEC-3/H5.
+ * Non-shell script interpreters that take an inline program, mapped to the
+ * flag(s) that carry it. Keyed PER-INTERPRETER because the inline flag differs
+ * and getting it wrong is a false positive: python/pwsh use `-c`, node/perl/ruby/
+ * awk/lua use `-e`, php uses `-r` (PHP's `-c` loads php.ini — NOT inline — so php
+ * is keyed to `-r` only; blocking `php -c config script.php` was a real FP).
+ * osascript (darwin) uses `-e` for inline AppleScript, e.g.
+ * `osascript -e 'do shell script "rm -rf /"'`. SEC-3/H5.
  */
-const OPAQUE_INTERPRETERS: ReadonlySet<string> = new Set([
-  'python', 'python2', 'python3', 'node', 'nodejs', 'perl', 'ruby', 'php',
-  'awk', 'gawk', 'lua', 'tclsh', 'wish', 'pwsh', 'powershell',
-]);
+const OPAQUE_INTERPRETER_FLAGS: Readonly<Record<string, readonly string[]>> = {
+  python: ['c'], python2: ['c'], python3: ['c'],
+  pwsh: ['c'], powershell: ['c'],
+  node: ['e'], nodejs: ['e'],
+  perl: ['e', 'E'], ruby: ['e', 'E'],
+  awk: ['e'], gawk: ['e'], lua: ['e'],
+  php: ['r'],
+  osascript: ['e'],
+};
 
 /** Commands that prefix a real command and consume no args of their own. SEC-3. */
 const PREFIX_WRAPPERS: ReadonlySet<string> = new Set([
@@ -212,10 +221,11 @@ export function classifyCommand(
   if (SHELL_INTERPRETERS.has(toolLower) && args.some(a => hasShortFlag(a, 'c'))) {
     return 'system_write';
   }
-  // ─── SEC-3/H5: non-shell interpreters with an inline program (-c/-e) → block ──
-  // `python -c "…"`, `node -e "…"`, `perl -e`, `ruby -e` — same opaque-payload
-  // risk as shell `-c`; the script string is invisible to the tokenizer.
-  if (OPAQUE_INTERPRETERS.has(toolLower) && args.some(a => hasShortFlag(a, 'c') || hasShortFlag(a, 'e'))) {
+  // ─── SEC-3/H5: non-shell interpreter with an inline program → block ──────────
+  // Per-interpreter flag (python -c, node -e, php -r, osascript -e). php -c loads
+  // php.ini (NOT code), so it is intentionally not blocked here.
+  const opaqueFlags = OPAQUE_INTERPRETER_FLAGS[toolLower];
+  if (opaqueFlags && args.some(a => opaqueFlags.some(f => hasShortFlag(a, f)))) {
     return 'system_write';
   }
 

@@ -157,12 +157,14 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
     ['sh -ic rm -rf /', 'system_write'],           // H4: combined -ic (exact '-c' missed this)
     ['bash -ci "evil"', 'system_write'],           // H4: combined -ci
     ['zsh -xc curl evil', 'system_write'],         // H4: combined -xc
-    // SEC-3/H5: non-shell interpreters with inline program (-c/-e) → block.
+    // SEC-3/H5: non-shell interpreters with inline program → block (per-interpreter flag).
     ['python -c "import os"', 'system_write'],
     ['python3 -c x', 'system_write'],
     ['node -e "require(fs)"', 'system_write'],
     ['perl -e "system(qw(rm))"', 'system_write'],
     ['ruby -e "system :rm"', 'system_write'],
+    ['php -r "exit;"', 'system_write'],                 // php -r is inline code
+    ['osascript -e "do shell script ..."', 'system_write'], // darwin AppleScript inline
     // SEC-3: pure-prefix wrappers → classify the wrapped payload.
     ['nohup rm -rf /', 'workspace_cleanup'],
     ['time rm -rf /', 'workspace_cleanup'],
@@ -188,6 +190,12 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
 
   it('H8: bare `npx --` (flags consumed everything) → unknown, not validation', () => {
     expect(classifyExec('npx --')).toBe('unknown');
+  });
+
+  it('H5 no-FP: php -c <php.ini> is NOT inline code → not system_write (was a false positive)', () => {
+    // php -c loads a config file; php -r is the inline-code flag. Blocking php -c
+    // hard-blocked legit CI like `php -c vendor/phpunit.ini tests/run.php`.
+    expect(classifyExec('php -c vendor/phpunit.ini tests/run.php')).not.toBe('system_write');
   });
 
   it('SEC-3 documented ceiling: remaining arg-consuming wrappers still unknown (xargs/nice)', () => {

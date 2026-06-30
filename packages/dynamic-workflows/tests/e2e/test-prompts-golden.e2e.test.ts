@@ -65,50 +65,13 @@ describe('E2E golden-file contract — test-prompts.json driven through the real
     }
   });
 
-  /**
-   * Case 1 — workflow wanted (fan-out audit). The prompt is natural-language
-   * planning text; it contains NO executable destructive command. The guard
-   * only fires on tool calls, and only blocks destructive ops. So if a
-   * subagent emitted this exact prompt text as an exec command, the guard's
-   * defaultDeny path would classify it as an unclassified shell command.
-   *
-   * Golden says "Use workflow: yes" — that is a SKILL-layer decision the guard
-   * neither makes nor sees. Frozen actual behavior at the guard layer: the
-   * natural-language prompt is not a destructive op, so it is not blocked as
-   * destructive git / credential access. The golden "workflow: yes" prose is
-   * out-of-scope for the guard (flagged stale for this package).
-   */
-  it('case 1 (fan-out audit): prompt text contains no destructive op — guard does not block on destructive classification', () => {
-    const case1 = goldenCases.find((c) => c.id === 1)!;
-    expect(case1.prompt).toMatch(/fan-out/);
-    // Guard invariant: the prompt carries no `git reset`, `rm -rf`, or credential op.
-    // The golden "workflow: yes" classification is a skill-layer concern, NOT the guard's.
-    expect(case1.prompt).not.toMatch(/git\s+reset\s+--hard|rm\s+-rf|git\s+push\s+--force/);
-  });
-
-  /**
-   * Case 2 — bounded fallback (OpenProse unavailable, 4-agent review). Same
-   * reasoning as case 1: planning prose, no destructive op embedded. The
-   * "≤4 sessions, no recursion/tournament" ceiling is a skill-layer constraint
-   * the guard does not enforce. Frozen: not blocked as destructive.
-   */
-  it('case 2 (bounded fallback): prompt text contains no destructive op', () => {
-    const case2 = goldenCases.find((c) => c.id === 2)!;
-    expect(case2.prompt).toMatch(/OpenProse/);
-    expect(case2.prompt).not.toMatch(/git\s+reset\s+--hard|rm\s+-rf|git\s+push\s+--force/);
-  });
-
-  /**
-   * Case 3 — below workflow threshold (rename function). This is a benign
-   * refactor with no destructive op. Golden says "Use workflow: no" — handled
-   * directly. At the guard layer a `sed`/`mv` style rename would be a
-   * workspace_write (allow); the prompt itself is natural language.
-   */
-  it('case 3 (below threshold): rename prompt contains no destructive op', () => {
-    const case3 = goldenCases.find((c) => c.id === 3)!;
-    expect(case3.prompt).toMatch(/重命名|rename/i);
-    expect(case3.prompt).not.toMatch(/git\s+reset\s+--hard|rm\s+-rf|git\s+push\s+--force/);
-  });
+  // Cases 1-3 are natural-language planning prose with NO embedded destructive
+  // op. The guard fires on tool calls, not on prompt text, so there is nothing
+  // guard-layer to assert for them — a "prompt does not contain `git reset`"
+  // regex would pass with the guard deleted. Their skill-layer "Use workflow:
+  // yes/no" classification lives in the dynamic-workflows SKILL (not this npm
+  // package), which the scope-canary test below already pins. Only case 4
+  // embeds a destructive op and is guard-assertable.
 
   /**
    * Case 4 — the LOAD-BEARING golden case for the guard. The prompt explicitly
