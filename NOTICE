@@ -5,5 +5,5 @@ skills, package names, tool names, and generated runtime resources use the omm
 namespace.
 
 Third-party provenance and license attribution are maintained separately in
-THIRD_PARTY_NOTICES.md and omm-provenance.json. Legal attribution files may
+THIRD_PARTY_NOTICES.md. Legal attribution files may
 contain upstream project names when required for accurate source attribution.

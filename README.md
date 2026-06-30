@@ -188,4 +188,4 @@ pnpm --filter @oh-my-matrix/permission-policy publish --access public
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — 版权归 oh-my-matrix contributors。本项目人工主导、AI 辅助开发,所有贡献经人工审查并由维护者持有。

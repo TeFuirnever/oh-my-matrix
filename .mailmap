@@ -1,0 +1,9 @@
+# Consolidate historical commit identities into the canonical maintainer.
+# Cleans `git shortlog` / `git log --format='%an'` author display for clones.
+#
+# NOTE: GitHub's Contributors page aggregates by email→account mapping, NOT by
+# .mailmap. To also merge the 3 identities on the GitHub UI, add the gitcode +
+# qq emails below to the TeFuirnever account under Settings → Emails.
+TeFuirnever <42903364+TeFuirnever@users.noreply.github.com> <woshiguanxiaoliang@noreply.gitcode.com>
+TeFuirnever <42903364+TeFuirnever@users.noreply.github.com> 504897664@qq.com <GuanXL199628..>
+TeFuirnever <42903364+TeFuirnever@users.noreply.github.com> 阿舟的AI小站（超级个体） <42903364+TeFuirnever@users.noreply.github.com>
