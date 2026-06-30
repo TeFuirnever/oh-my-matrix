@@ -75,8 +75,14 @@ export type ThinkingIntensity = 'low' | 'medium' | 'high';
  * - 'budget': cheapest viable (haiku / deepseek)
  * - 'standard': default balance (sonnet)
  * - 'premium': highest capability (opus)
+ *
+ * MODEL_TIERS is the single source of truth: the runtime allowlist (used by
+ * parseModelRouting / asTier) and the ModelTier union are both derived from
+ * it, so adding a tier is a compile-checked one-place edit — no parallel
+ * array to keep in sync by hand.
  */
-export type ModelTier = 'budget' | 'standard' | 'premium';
+export const MODEL_TIERS = ['budget', 'standard', 'premium'] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
 
 /**
  * Model routing configuration. Determines tier per execution phase.

@@ -1,4 +1,4 @@
-import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier } from './types';
+import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier, ModelRoutingConfig } from './types';
 import { resolveThinkingIntensity } from './effort-injection';
 import { resolveModelTier, resolveModelId } from './model-routing';
 
@@ -57,14 +57,20 @@ export const AUTOPILOT_OUTPUT_COST_PER_M_USD = 15.0;
 const INPUT_COST_PER_M = AUTOPILOT_INPUT_COST_PER_M_USD;
 const OUTPUT_COST_PER_M = AUTOPILOT_OUTPUT_COST_PER_M_USD;
 
-export function projectState(state: AutopilotState | undefined): AutopilotProjection | undefined {
+export function projectState(
+  state: AutopilotState | undefined,
+  // config mirrors the before_model_resolve hook's effective config so the
+  // projection's observability fields match actual runtime routing/injection
+  // (otherwise thinkingIntensity/modelTier lied under non-default configs).
+  config?: { thinkingIntensity?: ThinkingIntensity; modelRouting?: ModelRoutingConfig },
+): AutopilotProjection | undefined {
   if (!state) return undefined;
   const now = Date.now();
   const inputTokens = state.inputTokensUsed ?? 0;
   const outputTokens = state.outputTokensUsed ?? 0;
   const estimatedCostUsd =
     (inputTokens * INPUT_COST_PER_M + outputTokens * OUTPUT_COST_PER_M) / 1_000_000;
-  const modelRouting = state.workflow?.modelRouting;
+  const modelRouting = state.workflow?.modelRouting ?? config?.modelRouting;
   const modelTier = state.status === 'running'
     ? resolveModelTier(state.totalContinuations, state.evidence?.status, false, modelRouting)
     : undefined;
@@ -103,7 +109,7 @@ export function projectState(state: AutopilotState | undefined): AutopilotProjec
     workflowSource: state.workflow?.source,
     workflowConfigError: state.workflowConfigError,
     thinkingIntensity: state.status === 'running'
-      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status)
+      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status, config?.thinkingIntensity)
       : undefined,
     modelTier,
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,

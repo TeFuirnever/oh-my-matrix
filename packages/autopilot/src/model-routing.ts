@@ -13,12 +13,12 @@
  * If modelIds[tier] is unset, resolveModelId returns undefined and no
  * modelOverride is emitted — the session inherits its declared model.
  */
-import type { ModelTier, ModelRoutingConfig, EvidenceStatus } from './types';
+import { MODEL_TIERS, type ModelTier, type ModelRoutingConfig, type EvidenceStatus } from './types';
 
-const VALID_TIERS: readonly ModelTier[] = ['budget', 'standard', 'premium'];
-
+// MODEL_TIERS (from types.ts) is the single source of truth for the tier set;
+// ModelTier is derived from it, so this allowlist cannot drift out of sync.
 function asTier(v: unknown): ModelTier | undefined {
-  return typeof v === 'string' && (VALID_TIERS as readonly string[]).includes(v)
+  return typeof v === 'string' && (MODEL_TIERS as readonly string[]).includes(v)
     ? (v as ModelTier)
     : undefined;
 }
@@ -71,6 +71,8 @@ export function isSubagentSession(sessionKey?: string): boolean {
 export function extractParentSessionKey(sessionKey?: string): string | undefined {
   if (!sessionKey) return undefined;
   const idx = sessionKey.indexOf(':subagent:');
+  // idx > 0 (not >= 0) is load-bearing: a malformed ':subagent:'-prefixed key
+  // has no parent prefix and must yield undefined, not an empty string.
   return idx > 0 ? sessionKey.substring(0, idx) : undefined;
 }
 
@@ -98,7 +100,7 @@ export function parseModelRouting(raw: unknown): ModelRoutingConfig | undefined 
   if (typeof idsRaw === 'object' && idsRaw !== null) {
     const ids = idsRaw as Record<string, unknown>;
     const parsed: Partial<Record<ModelTier, string>> = {};
-    for (const t of VALID_TIERS) {
+    for (const t of MODEL_TIERS) {
       if (typeof ids[t] === 'string') parsed[t] = ids[t] as string;
     }
     if (Object.keys(parsed).length > 0) result.modelIds = parsed;
