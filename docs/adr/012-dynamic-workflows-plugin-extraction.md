@@ -21,12 +21,12 @@ is a naming smell") and set extraction behind a revisit trigger: *"extract when 
 consumer of `decidePermission` materializes."*
 
 A second ralplan consensus loop (2026-06-27) was convened on the user's proposal:
-*"omm was designed as a single MA plugin but is becoming a plugin collection — split
+*"omm was designed as a single host plugin but is becoming a plugin collection — split
 `workflow` out into its own plugin now."* That loop's **Critic approved a middle path**
 (generalize the host-deploy step, **defer** extraction until the revisit trigger fires), on
 verified findings:
 
-- MA-side distribution is structurally per-plugin (3 copy-pasted
+- Host-side distribution is structurally per-plugin (3 copy-pasted
   `build-{autopilot,openviking,audit}-plugin.js` scripts; a 4th plugin = a 4th script).
 - No third consumer of `decidePermission` exists in code (team-orchestration /
   employee-bridge are ADR prose only).
@@ -61,13 +61,13 @@ short-circuits the lower-priority handlers.
   `@oh-my-matrix/dynamic-workflows`. Its `src/types.ts` re-exports `CommandClass` /
   `PermissionAuditEntry` so internal imports are unchanged.
 - The SKILL pack stays at `skill/dynamic-workflows/` (teaching material, distributed via
-  MA's `resources/skills/default/` skill sync). It is NOT inside the plugin package —
+  the host's `resources/skills/default/` skill sync). It is NOT inside the plugin package —
   content and runtime are separate distribution channels.
 
 > **Update (2026-06-29):** the SKILL pack **moved into** `packages/dynamic-workflows/skill/`
 > and now ships inside the `@oh-my-matrix/dynamic-workflows` npm package (added to `files`,
-> v0.1.1). MA/hosts pull it from the registry instead of the separate `resources/skills/default/`
-> hand-sync — single source of truth (the MA-side vendored copy had drifted to a stale
+> v0.1.1). Hosts pull it from the registry instead of the separate `resources/skills/default/`
+> hand-sync — single source of truth (the host-side vendored copy had drifted to a stale
 > `@openclaw/*` name). This **partially supersedes** the "NOT inside the plugin package /
 > separate distribution channels" claim above; the runtime-guard distribution is unchanged.
 
@@ -96,7 +96,7 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
    is a separate plugin; disabling autopilot does not affect it. The dynamic-workflows
    plugin's own `enabled: false` logs loudly (the one residual coupling).
 3. **User direction overrides the consensus recommendation.** The ralplan Critic's
-   middle-path verdict was evidence-based (MA per-plugin cost, no third consumer, ADR
+   middle-path verdict was evidence-based (host-side per-plugin cost, no third consumer, ADR
    recency). The user, informed of those costs, chose to pay them now for the coherent
    boundary + the suite positioning. This ADR honors that call.
 
@@ -110,10 +110,10 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 - Realizes ADR-010's "omm as plugin-hosting monorepo" vision with a second concrete plugin.
 
 **Negative:**
-- MA-side distribution tax paid: a 4th hand-rolled build script
+- Host-side distribution tax paid: a 4th hand-rolled build script
   (the host's), a 2nd `file:` dependency, a 2nd bundled-plugin directory,
   - plugin-discovery registration. This is the per-plugin cost the consensus flagged; it
-  will recur for each future plugin until MA-side build tooling is generalized.
+  will recur for each future plugin until host-side build tooling is generalized.
 - ~998 LOC of tests relocated/rewritten (`permission-policy.test`,
   `audit-persister.test` moved; `permission-wiring.test` split — subagent describe moved
   to the new package's `subagent-guard.test`; `tier4` + `m2-types-projection` re-pointed
@@ -132,18 +132,18 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
 - `@oh-my-matrix/autopilot`: 528 tests pass | 4 skipped (was 637; −109 moved to
   dynamic-workflows: 91 + 14 + 4 subagent describe). Zero regression — autopilot-run
   policy + WORKFLOW.md escape hatch intact.
-- MA distribution: (internal host-deploy step, not in this repo) produced a versioned file: tgz dependency,
-  MA installed `@oh-my-matrix/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
+- Host distribution: (internal host-deploy step, not in this repo) produced a versioned file: tgz dependency,
+  the host installed `@oh-my-matrix/dynamic-workflows 0.1.0`, `build:dynamic-workflows-plugin` copied to
   the host's bundled-plugin directory, the host's plugin-discovery module registers it.
 
 ## Follow-ups
 
-- Generalize MA-side plugin build into a parameterized helper (the consensus middle-path
+- Generalize host-side plugin build into a parameterized helper (the consensus middle-path
   win, still worth doing) once a 3rd plugin lands — amortizes the per-plugin script cost.
 - Rename `audit-persister`'s `.autopilot/` subdir to a neutral `.permission-audit/` (or
   parameterize) to remove the cosmetic wart.
-- Live e2e in MA: spawn an OpenProse subagent that issues `git reset --hard`, confirm the
-  dynamic-workflows plugin hard-blocks at the gateway (component tests pass; full MA e2e
+- Live e2e in the host: spawn an OpenProse subagent that issues `git reset --hard`, confirm the
+  dynamic-workflows plugin hard-blocks at the gateway (component tests pass; full host e2e
   is the final confirmation).
 
 ## Related ADRs
@@ -159,5 +159,5 @@ works (it runs in autopilot's handler, which the guard skips for non-subagent se
   directed Option B)
 - Implementation: `packages/dynamic-workflows/index.ts`, `packages/dynamic-workflows/src/`
 - Consumer refactor: `packages/autopilot/index.ts` (imports from `@oh-my-matrix/dynamic-workflows`)
-- MA distribution: the host's plugin build script,
+- Host distribution: the host's plugin build script,
   the host's plugin-discovery module

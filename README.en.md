@@ -22,7 +22,7 @@ oh-my-matrix serves OpenClaw hosts and integrators with three capabilities:
 
 It is not an end-user CLI, nor a standalone SaaS. It is a plugin / skill source repository for OpenClaw hosts to load, package, and validate. The root repo version is `0.8.0`; core package versions live in each `packages/*/package.json`.
 
-> Current maturity: WIP. The `@oh-my-matrix/*` packages are published to npm (public); `@oh-my-matrix/autopilot`, as a hosted plugin of an OpenClaw host, still requires an internal refresh / vendoring flow to deploy to MA. This README does not use unverified stars, download counts, or user testimonials as evidence of maturity.
+> Current maturity: WIP. The `@oh-my-matrix/*` packages are published to npm (public); `@oh-my-matrix/autopilot`, as a hosted plugin of an OpenClaw host, still requires an internal refresh / vendoring flow to deploy to a consuming host. This README does not use unverified stars, download counts, or user testimonials as evidence of maturity.
 
 ## Why it exists
 

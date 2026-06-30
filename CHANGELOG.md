@@ -21,7 +21,7 @@ All notable changes to oh-my-matrix (omm).
 - **Development harness (#14)** — per-package `typecheck` (`tsc --noEmit`, closes the gap where CI never ran `tsc`), ESLint flat config, markdownlint, commitlint (local `commit-msg` hook + CI), and a split CI (`lint` / `typecheck` / `commitlint` / `test` jobs with concurrency + job summaries). `pnpm check` / `pnpm verify` mirror CI locally; `.mcp.json` declares codegraph; new `work-with-pr` + `harness` skills. See [`docs/design/dev-harness.md`](docs/design/dev-harness.md).
 - **README + CONTRIBUTING sync (#15)** — 「本地开发」 now documents `pnpm verify` / `pnpm check`; new **Repository Setup** section documents `.github/` (CI / dependabot / CODEOWNERS / templates / branch protection).
 - **Hand-drawn landing page** — bilingual (zh/en) marketing site at the GitHub Pages root (`landing/`), omo.dev-style with rough.js animations; VitePress docs moved under `/docs/`. Live at https://tefuirnever.github.io/oh-my-matrix/.
-- **Host deploy runbook skeleton** — [`docs/runbooks/host-deploy.md`](docs/runbooks/host-deploy.md): the build → pack/cp dist → refresh MA → restart gateway → deployed-dist smoke path. Repo-side steps executable; host-internal steps marked `[TODO:host]`.
+- **Host deploy runbook skeleton** — [`docs/runbooks/host-deploy.md`](docs/runbooks/host-deploy.md): the build → pack/cp dist → refresh the host → restart gateway → deployed-dist smoke path. Repo-side steps executable; host-internal steps marked `[TODO:host]`.
 - **Dependabot + CODEOWNERS** — `.github/dependabot.yml` (npm + github-actions, weekly, minor/patch grouped) and `.github/CODEOWNERS`.
 
 ### Changed
@@ -59,22 +59,22 @@ All notable changes to oh-my-matrix (omm).
 
 ## [0.7.1] — 2026-06-19
 
-**`@oh-my-matrix/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@oh-my-matrix/autopilot` plugin source; MatrixAssistant consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).
+**`@oh-my-matrix/autopilot` source hosted in omm.** omm becomes a pnpm monorepo hosting the canonical `@oh-my-matrix/autopilot` plugin source; the host consumes it as an offline npm package. Hosting, not reimplementation — see [ADR-010](docs/adr/010-autopilot-source-hosting.md).
 
 ### Added
 
-- **`packages/autopilot/`** — canonical `@oh-my-matrix/autopilot@2.0.0` source migrated from MatrixAssistant (the host's plugin source tree). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
+- **`packages/autopilot/`** — canonical `@oh-my-matrix/autopilot@2.0.0` source migrated from the host (the host's plugin source tree). 18 source modules, 43 test files (633 tests), `openclaw.plugin.json`, `tsconfig`, `vitest.config`. SDK import fixed from relative `node_modules` path to bare `openclaw` module.
 - **`pnpm-workspace.yaml`** — omm is now a pnpm workspace (`packages/*`).
-- **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@oh-my-matrix/autopilot` in omm rather than keep it embedded in MA; documents compatibility with ADR-008.
+- **[ADR-010](docs/adr/010-autopilot-source-hosting.md)** — records the decision to host `@oh-my-matrix/autopilot` in omm rather than keep it embedded in the host; documents compatibility with ADR-008.
 
 ### Changed
 
-- **MA consumes autopilot as a package** — `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"`; MA is self-contained (tgz vendored into its bundled-plugin directory), plugin discovery resolves from `node_modules` in dev and the bundled-plugin directory when packaged.
+- **The host consumes autopilot as a package** — `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"`; the host is self-contained (tgz vendored into its bundled-plugin directory), plugin discovery resolves from `node_modules` in dev and the bundled-plugin directory when packaged.
 - omm `package.json` version bumped 0.6.0 → 0.7.1.
 
 ### Removed
 
-- (MA side, recorded here for cross-repo traceability) the host's autopilot plugin source tree and build script removed from MatrixAssistant.
+- (Host side, recorded here for cross-repo traceability) the host's autopilot plugin source tree and build script removed from the host repo.
 
 ## [0.7.0] — 2026-06-18
 
@@ -131,14 +131,14 @@ Two themes: tool-surface reduction (focus on `team` + employee bridge) and team 
 ### Changed
 
 - **`omm-team` SKILL.md rewritten** for persona-aware (`roleId`) task assignment, fork-join dispatch (write runIds to state immediately — LLM need not track UUIDs), and a result-synthesis phase (dispatch `critic` when `agent_count > 1`).
-- **MA dispatch-watcher spec** (`docs/plans/omm-ma-employee-bridge.md`) updated to mandate `Promise.all` concurrent processing of distinct runIds — without it, OMM-side parallel dispatch yields no wall-clock gain.
+- **Host dispatch-watcher spec** (`docs/plans/omm-ma-employee-bridge.md`) updated to mandate `Promise.all` concurrent processing of distinct runIds — without it, OMM-side parallel dispatch yields no wall-clock gain.
 - `pollSingleResult` no longer re-reads `resultPath` twice per poll tick (one read; `requestPath` read only when result is missing).
 - Version bumped to **0.5.0** across all three `package.json` files, `openclaw.plugin.json`, and the `omm-register.ts` `version` const.
 
 ### Docs synced to reality
 
 - `README.md` package table (removed memory/trace rows), `docs/architecture.md` (6 tools / 14 hooks), `docs/roadmap.md` (264 tests / v0.5.0), `CONTEXT.md` (phase list incl. `synthesizing`; hook count 14), `docs/contracts/{hooks,error-codes,mcp}.md`, `docs/adr/008` (v0.5 tool-count note).
-- `AGENTS.md` high-risk list corrected — it previously pointed at MatrixAssistant paths (`electron/main`, `packages/gateway`, `packages/bastion`) that do not exist in this repo; now references omm's actual risk surfaces (state validation, cross-process locking, plugin ABI, employee relay, inline MCP build).
+- `AGENTS.md` high-risk list corrected — it previously pointed at host paths (`electron/main`, `packages/gateway`, `packages/bastion`) that do not exist in this repo; now references omm's actual risk surfaces (state validation, cross-process locking, plugin ABI, employee relay, inline MCP build).
 
 ### Test count
 
@@ -151,19 +151,19 @@ Two themes: tool-surface reduction (focus on `team` + employee bridge) and team 
 - `omm-ma-seed.mjs` updated to OpenClaw native MCP format: targets
   `~/.openclaw/openclaw.json` with `mcp.servers` nested structure, uses
   `{ command, args, env? }` entries without `type`/`enabled`/`tags`.
-- `docs/contracts/ma-integration-snippets.md` rewritten to match MA's current
+- `docs/contracts/ma-integration-snippets.md` rewritten to match the host's current
   OpenClaw-native config format and path.
 - `SHIPPED_SKILLS` in `omm-build-suite.mjs` narrowed to 5 core skills
   (omm-ping, omm-cancel, omm-ralph, omm-team, omm-autopilot). The 9 extended
   skills (omm-deep-interview, omm-ralplan, omm-ultrawork, omm-ultraqa,
   omm-docs, omm-ui, omm-git, omm-research, omm-refactor) remain in
   v0.x skill bundles (since removed — see docs/archive/) but are excluded from the suite tarball to focus
-  MA integration testing on the core workflow engine.
+  host integration testing on the core workflow engine.
 
 ### Added
 
-- `omm-scripts/omm-ma-seed.mjs` — dry-run-first MatrixAssistant MCP registry
-  seeder for user/project/local scopes. It writes MA-readable stdio server
+- `omm-scripts/omm-ma-seed.mjs` — dry-run-first host MCP registry
+  seeder for user/project/local scopes. It writes host-readable stdio server
   entries for `omm-state`, `omm-memory`, and `omm-trace` only when `--write`
   is provided.
 - `omm-scripts/omm-openclaw-seed.mjs` — dry-run-first OpenClaw plugin registry
@@ -227,7 +227,7 @@ Two themes: tool-surface reduction (focus on `team` + employee bridge) and team 
   verify phases. Mandates a domain check that overrides the model's
   editorial-leaning defaults for operational briefs (dashboards,
   fintech, healthcare, dev tools). Produces deliverable files for
-  the host (e.g., MatrixAssistant) — does not render UI itself
+  the host (e.g., an OpenClaw host) — does not render UI itself
   (ADR-001).
 - Skill count: 9 → 11.
 
@@ -256,7 +256,7 @@ ralplan-omm-next-best-practices (2026-05-08).
   `ast_grep_search`, `<External_Consultation>`, `mcp__plugin_oh-my-claudecode`)
   from leaking into ported prompts.
 - **MCP capability research**: `docs/research/mcp-capability-survey.md`
-  documents that the OpenClaw + MatrixAssistant client stack already
+  documents that the OpenClaw host client stack already
   supports `resources/list` and `prompts/list` via `@modelcontextprotocol/sdk`.
   Recommends R1 (upgrade omm MCP servers to advertise Resources + Prompts,
   ~140 LOC, additive, ADR-003 compliant) for a follow-up plan.
@@ -291,7 +291,7 @@ ralplan-omm-next-best-practices (2026-05-08).
   when omm-git / omm-research / omm-refactor skills are scheduled
 - ~~MCP R1 implementation~~ — **Done** (see "MCP R1" subsection below)
 - ~~`notifications/progress` capability verification~~ — **Done** (DEFER per
-  MA self-audit P6 evidence; see `docs/research/mcp-progress-notification-survey.md`)
+  host self-audit P6 evidence; see `docs/research/mcp-progress-notification-survey.md`)
 
 ### Added (MCP R1)
 
@@ -378,8 +378,8 @@ and expanded hook coverage).
 ## [0.3.0] — 2026-04-28
 
 First commercial GA release. Promotes 0.3.0-beta.1 to stable after host
-integration verification (MatrixAssistant `omm-bundle` + `omm-plugin-smoke`
-14/14 green; agent-prompts bundling gap closed in MA host).
+integration verification (host `omm-bundle` + `omm-plugin-smoke`
+14/14 green; agent-prompts bundling gap closed in the host).
 
 ### Highlights since 0.2.x
 
@@ -391,7 +391,7 @@ integration verification (MatrixAssistant `omm-bundle` + `omm-plugin-smoke`
   and MCP servers no longer last-write-wins on the same `stateRoot`.
 - Hook dispatcher (`omm-hook-loader.ts`) and lifecycle wiring complete.
   Auto-emit of lifecycle events depends on OpenClaw runtime support;
-  upstream PR drafted at `MatrixAssistant/docs/proposals/openclaw-lifecycle-events.md`.
+  upstream PR drafted at `host/docs/proposals/openclaw-lifecycle-events.md`.
 - Structured error codes (`OMM_E_*`) and `apiVersion: "0.3"` capability
   contract.
 - 5 bundled agent prompts (analyst / architect / critic / executor / verifier).
@@ -428,9 +428,9 @@ modelTier, purpose } }`. Throws on missing/invalid name.
     (`withCrossProcessLock` + ADR-005 + 3 MCP server adoption + Windows
     EPERM retry fix).
   - P0-2 plugin tool real-machine smoke — `scripts/omm-plugin-smoke.mjs`
-    in MatrixAssistant.
+    in the host.
   - P0-3 mcporter startup health check — `electron/main/services/mcp/
-omm-health.ts` in MatrixAssistant + dialog on miss + 30s retry.
+omm-health.ts` in the host + dialog on miss + 30s retry.
 
 ### Outstanding for 0.3.0 GA
 
@@ -577,7 +577,7 @@ fixture).
 ### Discovery context
 
 Real-Electron smoke 2026-04-26 surfaced the bug: the model in
-MatrixAssistant kept hallucinating "tool unavailable" after seeing
+the host kept hallucinating "tool unavailable" after seeing
 the wrong error string from omm_state_read. Architect + verifier +
 same-class-bug-sweep reviewer trio confirmed the diagnosis: 5
 instances all in `omm-register.ts`, 0 collateral elsewhere. SKILL.md
@@ -660,9 +660,9 @@ invariant. Multi-process locking is out of 0.2.x scope.
   filtering. Zero-dep. _(Phase 2/2)_
 - `omm-build-suite.mjs` bundles the two new MCP packages alongside
   `omm-mcp`. _(Phase 2/3)_
-- `MatrixAssistant/scripts/omm-bundle.mjs` extracts memory + trace MCP
+- `host/scripts/omm-bundle.mjs` extracts memory + trace MCP
   servers into `resources/mcp/`. _(Phase 2/3)_
-- `MatrixAssistant/resources/mcp/mcporter-default-config.json` registers
+- `host/resources/mcp/mcporter-default-config.json` registers
   `omm-memory` and `omm-trace` so mcporter discovers them at startup.
 
 ### Added — Phase 3: Polish & Extensibility

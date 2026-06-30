@@ -9,7 +9,7 @@
 > fictional event shape the host never emits. The "verified / works" claims in this ADR
 > and in the §11.3.3 / §11.8 B1 design-doc rows **predate this finding and are wrong**.
 > Fix spec: [`docs/fixes/runtime-guard-event-shape.md`](../fixes/runtime-guard-event-shape.md).
-> This bug is PRE-EXISTING (from MA's autopilot, migrated in `be05e49`); ADR-011/012/013
+> This bug is PRE-EXISTING (from the host's autopilot, migrated in `be05e49`); ADR-011/012/013
 > inherited it. The decoupling itself (the architectural work this ADR records) is sound;
 > the guard's event-shape plumbing is what's broken.
 
@@ -31,7 +31,7 @@ only, via peerDep, but a conceptual smell: dynamic-workflows wore two hats).
 A third ralplan consensus loop (Planner/Architect/Critic) evaluated decoupling. The
 **Critic returned ITERATE** on the first plan over a naming concern (which investigation
 resolved: there was no name-rewrite mechanism — the `@omm→@openclaw` rename was simply
-not yet distributed to MA). Direction was agreed by all three agents.
+not yet distributed to the host). Direction was agreed by all three agents.
 
 ## Decision
 
@@ -40,24 +40,24 @@ not yet distributed to MA). Direction was agreed by all three agents.
 (`CommandClass`, `PermissionAuditEntry`, `PermissionDecisionInput`) out of
 `@oh-my-matrix/dynamic-workflows` into the new package. Both `@oh-my-matrix/autopilot` and
 `@oh-my-matrix/dynamic-workflows` depend on it as a **peerDependency** (the proven pattern —
-a regular dep would 404 at MA install, the same failure that forced peerDep originally).
+a regular dep would 404 at host install, the same failure that forced peerDep originally).
 **Neither plugin depends on the other.**
 
 ### Why a library, not a plugin
 
-A library is ~2 MA distribution artifacts (root `file:` dep + vendored tgz) vs a plugin's
+A library is ~2 host distribution artifacts (root `file:` dep + vendored tgz) vs a plugin's
 ~4 (+ build script + bundled-plugin copy + discovery + openclaw.plugin.json + hooks). The
-library is `require()`d at runtime from the plugins' dist via Node's upward walk to MA
+library is `require()`d at runtime from the plugins' dist via Node's upward walk to the host
 root `node_modules` — verified by `require.resolve` from both
 the host's bundled-plugin directory for autopilot and for dynamic-workflows.
 
 ### Why peerDep, not regular dep (Architect's correction)
 
 `@oh-my-matrix/permission-policy` is not on the npm registry. A regular dep in autopilot's
-tgz would make pnpm try the registry (404) during MA install. peerDep + MA root `file:`
+tgz would make pnpm try the registry (404) during host install. peerDep + the host root `file:`
 dep is the arrangement that works (pnpm hoists the root instance into each plugin's
 scoped node_modules). Both plugins declare it peerDep `0.1.0` + devDep `workspace:*`
-(the devDep is stripped from the packed tgz, so MA only sees the peer).
+(the devDep is stripped from the packed tgz, so the host only sees the peer).
 
 ### SDK alternative — rejected
 
@@ -75,11 +75,11 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 - **Single source of truth.** The permission policy + audit primitives live in one place;
   both consumers import the same code (no drift).
 - **dynamic-workflows wears one hat** (the guard plugin), not two.
-- **Library distribution is light** — no MA build script, no claw-plugin copy, no
+- **Library distribution is light** — no host build script, no claw-plugin copy, no
   discovery registration.
 
 **Negative:**
-- A 3rd omm package (`@oh-my-matrix/permission-policy`) + a 3rd MA root `file:` dep.
+- A 3rd omm package (`@oh-my-matrix/permission-policy`) + a 3rd host root `file:` dep.
 - `AUDIT_SUBDIR = '.autopilot'` stays hardcoded in v1 (deferred parameterization — let
   a real 3rd consumer drive the API shape; avoid guessing now).
 
@@ -88,7 +88,7 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 - `@oh-my-matrix/permission-policy`: 105 tests pass (`permission-policy` 91 + `audit-persister` 14).
 - `@oh-my-matrix/dynamic-workflows`: 8 tests pass (subagent-guard; imports primitives from the lib).
 - `@oh-my-matrix/autopilot`: 528 pass | 4 skipped (imports primitives from the lib; zero regression).
-- MA: `require.resolve('@oh-my-matrix/permission-policy', {paths:['<MA>/<bundled-plugin-dir>/autopilot/dist']})`
+- Host: `require.resolve('@oh-my-matrix/permission-policy', {paths:['<host>/<bundled-plugin-dir>/autopilot/dist']})`
   AND from the dynamic-workflows bundled-plugin dist → both succeed.
 - `grep -c dynamic-workflows` in the host's autopilot plugin dist = **0**
   (full severance).
@@ -97,7 +97,7 @@ platform invariant. The OpenClaw SDK correctly refuses to own it.
 
 - When a 3rd consumer of the primitives appears: parameterize `AUDIT_SUBDIR`; review
   whether the v1 API (5 functions + 3 types) needs a config object.
-- Generalize the per-plugin MA build scripts (`build-{autopilot,dynamic-workflows,audit}-plugin.js`)
+- Generalize the per-plugin host build scripts (`build-{autopilot,dynamic-workflows,audit}-plugin.js`)
   into a parameterized helper once a 4th plugin lands.
 
 ## Related ADRs

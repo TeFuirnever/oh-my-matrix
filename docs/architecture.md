@@ -102,11 +102,11 @@ The workspace packages are private and source-hosted here. Host consumption stil
 4. restart the host gateway
 5. run deployed-dist smoke checks
 
-Do not claim a source change is active in MatrixAssistant/OpenClaw until that host deploy path has been verified.
+Do not claim a source change is active in a consuming OpenClaw host until that host deploy path has been verified.
 
 ## Current Gaps
 
-- Host deploy: reproducible runbook scaffolded at [`docs/runbooks/host-deploy.md`](runbooks/host-deploy.md) — repo-side steps executable, host-internal steps marked `[TODO:host]` pending the MA team.
+- Host deploy: reproducible runbook scaffolded at [`docs/runbooks/host-deploy.md`](runbooks/host-deploy.md) — repo-side steps executable, host-internal steps marked `[TODO:host]` pending the host team.
 - README/docs now represent autopilot as first-class, but release packaging still needs a public policy.
 - Permission policy needs a stronger shell model for redirect and quote-edge cases.
 - Workflow observability needs a UI contract for branch graph, blocked calls, and evidence state.

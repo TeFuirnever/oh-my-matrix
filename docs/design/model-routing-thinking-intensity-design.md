@@ -1076,7 +1076,7 @@ OpenProse 解析 .prose model → spawn subagent with model
 | OMC 功能 | 跳过理由 |
 |----------|----------|
 | `OMC_MODEL_HIGH/MEDIUM/LOW` 环境变量链 | omm 是打包插件，不是 dotfile CLI。用 plugin configSchema + WORKFLOW.md |
-| `OMC_MODEL_ALIAS_*` tier 别名覆盖 | 只有 MatrixAssistant 一个消费者，configSchema 够用 |
+| `OMC_MODEL_ALIAS_*` tier 别名覆盖 | 当前只有一个消费者，configSchema 够用 |
 | `forceInherit` 全局开关 | .prose `model:` 已可选，不配 modelIds = 继承 |
 | per-agent definitions file | omm 没有 `src/agents/*.md` 概念，agent role 在 .prose 中定义 |
 | `ultrathink` 魔术关键词检测 | 分级 effort injection 已覆盖 |
@@ -1130,7 +1130,7 @@ pnpm --filter @oh-my-matrix/autopilot build
 | 6 | 启动 dynamic workflow（.prose 扇出多 subagent） | subagent session 的 before_model_resolve 使用 `subagentTier` 路由 |
 | 7 | WORKFLOW.md 配置 model_routing | WORKFLOW.md 配置覆盖 plugin config |
 
-### 9.3 同步到 MatrixAssistant
+### 9.3 同步到宿主
 
 (internal host-deploy step, not in this repo)
 
