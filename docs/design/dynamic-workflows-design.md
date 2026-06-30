@@ -106,20 +106,20 @@ OpenProse VM 执行（parallel / pipeline / loop / agent spawn / 错误处理）
 
 | 阶段 | 内容 | 状态 | 说明 |
 |------|------|------|------|
-| **P0** | 确认 MA 环境 OpenProse 可启用 + skill 可发现 + 端到端冒烟 | ✅ 完成 | 2026-06-25 验证通过：`openclaw plugins enable open-prose` 成功；skill symlinked 到 `~/.openclaw/skills/`；Gateway 重启后加载 |
+| **P0** | 确认宿主环境 OpenProse 可启用 + skill 可发现 + 端到端冒烟 | ✅ 完成 | 2026-06-25 验证通过：`openclaw plugins enable open-prose` 成功；skill symlinked 到 `~/.openclaw/skills/`；Gateway 重启后加载 |
 | **P1** | 写 SKILL.md + 编排模式库 | ✅ 完成 | `skill/dynamic-workflows/SKILL.md`（388 行，8 种模式 + 语法指南 + 生成-验证-修复循环 + 触发关键词）|
 | **P2** | 端到端验证：自然语言 → agent 生成 .prose → 执行 → 结果 | ✅ 完成 | 真实任务验证：agent 自动生成 `error_audit.prose`（3 agent fan-out + 合成），正确 .prose 语法，端到端跑通 |
 | **P3** | 分发：ADR-009 + 文档 + spine 更新 | ✅ 完成 | ADR-009 + spine + CHANGELOG 0.7.0 完成；本地验证路线 A 完成（正式集成路线 B 待定） |
 
 ### P0/P2 验证结论（2026-06-25，真实任务端到端通过）
 
-**验证方式**：本地路线 A（不改 MA 仓，可逆）
+**验证方式**：本地路线 A（不改宿主仓，可逆）
 
 | 步骤 | 执行 | 结果 |
 |------|------|------|
 | S1 启用 OpenProse | `~/.openclaw/openclaw.json` 的 `plugins.allow` 加 `open-prose` | ✅ config-audit.jsonl 记录 `openclaw plugins enable open-prose` |
 | S2 放进 skill | `ln -s .../oh-my-matrix/skill/dynamic-workflows ~/.openclaw/skills/dynamic-workflows` | ✅ SKILL.md 可读 |
-| S3 重启 MA | Gateway PID 37263，启动时间与 config 修改时间一致 | ✅ 新 config 已生效 |
+| S3 重启宿主 | Gateway PID 37263，启动时间与 config 修改时间一致 | ✅ 新 config 已生效 |
 | **真实任务** | 对 `<test-workspace>` 做错误处理审计 | ✅ agent 自动生成 `error_audit.prose`（27 行） |
 
 **生成的 .prose 证据**（`<test-workspace>/error_audit.prose`）：
@@ -133,7 +133,7 @@ OpenProse VM 执行（parallel / pipeline / loop / agent spawn / 错误处理）
 
 ### 路线 B 正式集成（2026-06-25 完成）
 
-已将 dynamic-workflows 集成进 MA 仓，所有用户默认拿到：
+已将 dynamic-workflows 集成进宿主仓，所有用户默认拿到：
 
 | 步骤 | 改动 | 文件 |
 |------|------|------|
@@ -171,7 +171,7 @@ TypeScript 编译通过（无新增报错）。
 | 风险 | 缓解 |
 |------|------|
 | AI 生成 .prose 不可靠 | compiler 校验 + generate→validate→repair 循环（3 轮）+ 49 个示例作 few-shot |
-| OpenProse 在 MA 未启用/不可用 | P0 首先确认；若不可用则需 MA 侧启用或贡献上游 |
+| OpenProse 在宿主未启用/不可用 | P0 首先确认；若不可用则需宿主侧启用或贡献上游 |
 | .prose 语法变更 | OpenProse 是 OpenClaw bundled plugin，版本锁定；compiler.md 为权威文档 |
 | 规模上限 | OpenProse 示例含 pairwise O(n²)；真实并发受 gateway maxConcurrent 约束 |
 
@@ -185,11 +185,11 @@ TypeScript 编译通过（无新增报错）。
 | v8 | 路线选定 B：AI 生成 .prose + OpenProse 执行（OpenProse 8/8 全覆盖，不重复建设） | 实现前计划 |
 | v9 | 实现完成：SKILL.md + ADR-009 + spine + CHANGELOG 0.7.0 已 ship；P0/P2 待运行环境验证 | 实现态 |
 | v10 | P0/P2 验证通过：OpenProse 启用 + skill 发现 + 真实任务端到端（agent 自动生成 `error_audit.prose`，3 agent fan-out + 合成） | 验证态 |
-| **v11** | **路线 B 正式集成**：MA 仓 3 处改动（openclaw-defaults.json + default skill + init-skills 迁移），所有 MA 用户默认拿到 dynamic-workflows | 集成态 |
+| **v11** | **路线 B 正式集成**：宿主仓 3 处改动（openclaw-defaults.json + default skill + init-skills 迁移），所有宿主用户默认拿到 dynamic-workflows | 集成态 |
 | **v12** | **Darwin 5 轮优化**：progressive disclosure 重构（575→404 行核心+208 行 references）、3 人对抗审查修复 20+ issues、组合模式示例（discover→fan-out→verify）、引用路径分组。Darwin 评分 ~61→84.4/100，HL-4 触顶。| 优化态 |
-| **v13** | **MA 实测闭环 + 执行模型修正**：实测发现 agent 跳过 `prose compile`/`prose run` 直接 `sessions_spawn`；溯源 OpenProse SKILL.md 确认"You ARE the VM"——`prose run` 不是 CLI 是 skill activation。重写 Step 3-4-5 为双模式（OpenProse primary + fallback direct）；frontmatter 加 dual-mode 描述+中文触发词；重组节顺序（Pattern selection → Core patterns → Composing → Repair loop）。Darwin 评分 88.7/100，首个 full_test 轮次。 | 优化态 |
-| **v14** | **MA 二轮实测 + 证据驱动修复**：4 条测试提示实测（fan-out 审计/bounded fallback/负例/破坏性 git），发现两个问题：(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行——根因是 OpenProse 接管后绕过 dynamic-workflows 的检查点流程；(2) 安全类问题不触发 skill——根因是 skill 加载机制对非 workflow-creation 查询不敏感。修复：新增"Reuse path"拦截段（强制展示已有 .prose 并征得确认）、扩展触发词（"并行 agent"+安全查询）、更新 test expectations 标注 skill 触发限制。复测确认：agent 不再盲目执行已有 .prose，改为展示已有结果。554 行核心。 | 优化态 |
-| **v15** | **业界对标 + 对抗审查 + 结构性修复**：3 路科学家调研（OpenProse 80+ 能力 / OpenClaw 扩展机制 / Claude Code 可迁移模式）+ 2 轮 3 人 opus 对抗审查团。A1-A5 已实施：Reuse Path 🔴 CHECKPOINT 升级 + Step 2 删 reuse 从句 + 启动 banner（仅 mode）+ 按模式拆分执行期进度 + templates/ 目录（3 模板）+ 质量模式 9-11 追加。SKILL.md 578 行。MA 实测：对强模型有效，弱模型（MiniMax/glm）仍跳 CHECKPOINT——prompt 级方案天花板（后续由运行时守卫根治，见 v16 + §11.8 B1）。| 实施态 |
+| **v13** | **宿主实测闭环 + 执行模型修正**：实测发现 agent 跳过 `prose compile`/`prose run` 直接 `sessions_spawn`；溯源 OpenProse SKILL.md 确认"You ARE the VM"——`prose run` 不是 CLI 是 skill activation。重写 Step 3-4-5 为双模式（OpenProse primary + fallback direct）；frontmatter 加 dual-mode 描述+中文触发词；重组节顺序（Pattern selection → Core patterns → Composing → Repair loop）。Darwin 评分 88.7/100，首个 full_test 轮次。 | 优化态 |
+| **v14** | **宿主二轮实测 + 证据驱动修复**：4 条测试提示实测（fan-out 审计/bounded fallback/负例/破坏性 git），发现两个问题：(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行——根因是 OpenProse 接管后绕过 dynamic-workflows 的检查点流程；(2) 安全类问题不触发 skill——根因是 skill 加载机制对非 workflow-creation 查询不敏感。修复：新增"Reuse path"拦截段（强制展示已有 .prose 并征得确认）、扩展触发词（"并行 agent"+安全查询）、更新 test expectations 标注 skill 触发限制。复测确认：agent 不再盲目执行已有 .prose，改为展示已有结果。554 行核心。 | 优化态 |
+| **v15** | **业界对标 + 对抗审查 + 结构性修复**：3 路科学家调研（OpenProse 80+ 能力 / OpenClaw 扩展机制 / Claude Code 可迁移模式）+ 2 轮 3 人 opus 对抗审查团。A1-A5 已实施：Reuse Path 🔴 CHECKPOINT 升级 + Step 2 删 reuse 从句 + 启动 banner（仅 mode）+ 按模式拆分执行期进度 + templates/ 目录（3 模板）+ 质量模式 9-11 追加。SKILL.md 578 行。宿主实测：对强模型有效，弱模型（MiniMax/glm）仍跳 CHECKPOINT——prompt 级方案天花板（后续由运行时守卫根治，见 v16 + §11.8 B1）。| 实施态 |
 | **v16** | **运行时守卫落地（根治弱模型绕过）——✅ fail-open bug 已修（2026-06-28）**：B1 经 3 轮 ralplan 共识演进——ADR-011 守卫 ship 在 autopilot plugin（Design 2）；ADR-012 提取为 `@oh-my-matrix/dynamic-workflows` plugin（priority 11）；ADR-013 原语抽成 `@oh-my-matrix/permission-policy` 库，两 plugin 解耦。**2026-06-27 对抗审查发现 P0 bug**（守卫读 `event.args`/`event.toolKind`，真实事件是 `params` 对象 → 生产 fail-open；测试用虚构事件形状所以"绿"），**2026-06-28 修复并验证**：真实事件形状 live capture、测试改真实形状、evasion 路径封堵（force-push / `&` background / `$(...)` substitution / `npx` wrapper-exec）、编译期事件形状契约、部署 dist 直驱验证（deployed-dist smoke check, run in the host repo）。残留 tokenize-based 已知局限见 fix spec。修复 spec：`docs/fixes/runtime-guard-event-shape.md`（DONE）。| **当前（实施态，守卫已生效）** |
 
 ## 10. 关键参考文件
@@ -216,7 +216,7 @@ TypeScript 编译通过（无新增报错）。
 
 ### 11.1 调研背景与方法
 
-**动机**：v14 MA 实测暴露两个问题——(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行；(2) 安全类问题不触发 skill。用户提出增加"启动锚点"和"步骤预览"的需求。在设计方案前，需要先搞清楚：OpenProse 运行时有哪些我们尚未利用的能力？OpenClaw skill 机制支持哪些扩展点？Claude Code 的 workflow 系统有哪些可迁移的模式？
+**动机**：v14 宿主实测暴露两个问题——(1) agent 发现已有 .prose 后跳过 CHECKPOINT 直接执行；(2) 安全类问题不触发 skill。用户提出增加"启动锚点"和"步骤预览"的需求。在设计方案前，需要先搞清楚：OpenProse 运行时有哪些我们尚未利用的能力？OpenClaw skill 机制支持哪些扩展点？Claude Code 的 workflow 系统有哪些可迁移的模式？
 
 **调研方法**：3 路并行科学家调研（均 opus 级），独立执行后交叉验证。
 
@@ -494,7 +494,7 @@ hooks:
 - 6-15 sessions：在 `parallel:` 块完成后加 mid-execution CHECKPOINT
 - 16+ sessions：拆分为顺序 .prose 程序
 
-**差距分析**：这是我们最强的维度——比 Claude Code 更显式、更细粒度。但 v14 MA 实测暴露了结构性问题：Reuse Path 的文字门控（L107-116）虽然措辞正确，但缺乏 🔴 CHECKPOINT 格式标记，agent 不把它当 hard gate 对待。v15 A1 修复此问题。
+**差距分析**：这是我们最强的维度——比 Claude Code 更显式、更细粒度。但 v14 宿主实测暴露了结构性问题：Reuse Path 的文字门控（L107-116）虽然措辞正确，但缺乏 🔴 CHECKPOINT 格式标记，agent 不把它当 hard gate 对待。v15 A1 修复此问题。
 
 #### 11.5.4 维度四：失败处理
 
@@ -566,7 +566,7 @@ hooks:
 |---|------|--------|------|---------|
 | R2-1 | A1 新增独立 CHECKPOINT 与现有 Reuse Path L110-113 **措辞几乎相同** | CRITICAL | 3/3 | 三人一致列表对比：现有 Reuse Path 说"Read and display the full .prose / Ask: Found existing workflow... / Wait for confirmation"；A1 的 CHECKPOINT 说"Display the full .prose / Ask: Found existing workflow... / Wait for confirmation"。**完全重复**。强模型合并处理（CHECKPOINT 无增量价值）；弱模型可能重复询问用户。正确做法是升级现有 numbered list 的格式为 🔴 CHECKPOINT，而非新增一个 |
 | R2-2 | A3 "report branch completion as results arrive"在 OpenProse 模式下**架构上不可行** | MAJOR | 2/3 | 批评家和实践者：当 agent 调用 `prose run` 后，OpenProse 成为执行者，agent 在等待返回。agent 无法在 `prose run` 执行期间插入用户可见输出。A3 的进度指引在 OpenProse 模式和 direct fallback 模式下行为完全不同，但计划未区分 |
-| R2-3 | A4 模板硬编码 `model: sonnet` / `model: opus` | MAJOR | 2/3 | 批评家和实践者：MA 实测 agent 使用 `model: minimax-portal-cn/MiniMax-M2.7`。非 Anthropic 供应商上模板无法直接使用。应加注释提示替换或参数化 |
+| R2-3 | A4 模板硬编码 `model: sonnet` / `model: opus` | MAJOR | 2/3 | 批评家和实践者：宿主实测 agent 使用 `model: minimax-portal-cn/MiniMax-M2.7`。非 Anthropic 供应商上模板无法直接使用。应加注释提示替换或参数化 |
 | R2-4 | A5 新建第三个 reference 文件使模式目录分散为三处 | MAJOR | 2/3 | 架构师和批评家：patterns 1-3 在 SKILL.md、4-8 在 `patterns-advanced.md`、9-11 在新文件 `quality-patterns.md`——agent 找"所有模式"需查三处。patterns-advanced.md 就是为溢出模式设计的，9-11 应追加到那里 |
 | R2-5 | Banner 列 "Choose → Write" 但 Reuse Path 跳过这两步 | MEDIUM | 2/3 | 实践者：用户看到 banner 承诺 6 步，但 Reuse Path 上只走 4 步，造成困惑。应条件化显示或只显示 mode 不列步骤 |
 | R2-6 | A4 模板中 `[domain]`、`[role description]` 字符串内占位符弱模型不理解 | MEDIUM | 1/3 | 实践者：Haiku 级模型可能保留 `[domain]` 作为字面文本。应改用独立注释行（`# Customize: replace "specialist" with your domain expert`）而非字符串内 bracket |
@@ -599,7 +599,7 @@ hooks:
 
 #### 11.7.2 A1 详细设计：Reuse Path CHECKPOINT 升级
 
-**问题**：当前 Reuse Path（L105-116）有正确的"展示→询问→等确认"三步流程，但缺 🔴 CHECKPOINT 格式标记。MA 实测证明 agent 不把普通 numbered list 当 hard gate。
+**问题**：当前 Reuse Path（L105-116）有正确的"展示→询问→等确认"三步流程，但缺 🔴 CHECKPOINT 格式标记。宿主实测证明 agent 不把普通 numbered list 当 hard gate。
 
 **当前代码**（L105-116）：
 ```markdown
@@ -903,7 +903,7 @@ v15 实施后须逐项验证：
 | V10 | 模板 context 卫生 | `grep 'context:' templates/*.prose` | 所有用户数据走 context |
 | V11 | patterns-advanced.md 模式数 | `grep -cE '^##+' references/patterns-advanced.md` | = 8（5×H2 模式 4-8 + 3×H3 模式 9-11） |
 | V12 | Pattern selection table 行数 | `grep -c '|' SKILL.md`（table 区域） | 11 行（原 8 + 新 3） |
-| V13 | MA 副本一致 | `diff` skill/ vs MA resources/ | IDENTICAL |
-| V14 | MA 实测：Reuse Path 停下 | 跑 test prompt 1（项目已有 error_audit.prose） | Agent 在 🔴 CHECKPOINT 停下展示 .prose |
-| V15 | MA 实测：Banner 显示 | 同上 | Agent 显示 `**Dynamic Workflow** \| Mode: ...` |
-| V16 | MA 实测：执行期有进度 | 同上 | Agent 在 prose run 返回后立即报告分支结果 |
+| V13 | 宿主副本一致 | `diff` skill/ vs host resources/ | IDENTICAL |
+| V14 | 宿主实测：Reuse Path 停下 | 跑 test prompt 1（项目已有 error_audit.prose） | Agent 在 🔴 CHECKPOINT 停下展示 .prose |
+| V15 | 宿主实测：Banner 显示 | 同上 | Agent 显示 `**Dynamic Workflow** \| Mode: ...` |
+| V16 | 宿主实测：执行期有进度 | 同上 | Agent 在 prose run 返回后立即报告分支结果 |

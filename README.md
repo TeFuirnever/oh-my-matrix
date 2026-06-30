@@ -22,7 +22,7 @@ oh-my-matrix 面向 OpenClaw 宿主和集成者，交付三块能力：
 
 它不是终端用户 CLI，也不是独立 SaaS。它是给 OpenClaw 宿主加载、打包、验证的插件/skill 源码仓库。根仓库版本为 `0.8.0`，核心包版本见各 `packages/*/package.json`。
 
-> 当前成熟度: WIP。`@oh-my-matrix/*` packages 已发布到 npm（public）；其中 `@oh-my-matrix/autopilot` 作为 OpenClaw 宿主的 hosted plugin，部署到 MA 仍需内部 refresh / vendoring 流程。README 不使用未验证的 star、下载量、用户评价作为成熟度证据。
+> 当前成熟度: WIP。`@oh-my-matrix/*` packages 已发布到 npm（public）；其中 `@oh-my-matrix/autopilot` 作为 OpenClaw 宿主的 hosted plugin，部署到消费方宿主仍需内部 refresh / vendoring 流程。README 不使用未验证的 star、下载量、用户评价作为成熟度证据。
 
 ## 为什么需要它
 

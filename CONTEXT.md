@@ -53,7 +53,7 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 
 ### Host Deploy
 
-本仓库保存源码和测试。OpenClaw/MatrixAssistant 这类宿主加载的是打包后的 plugin dist。源码变更后必须走宿主内部部署刷新流程，不能只以仓库测试通过作为“线上已生效”的证据。
+本仓库保存源码和测试。OpenClaw 这类消费方宿主加载的是打包后的 plugin dist。源码变更后必须走宿主内部部署刷新流程，不能只以仓库测试通过作为“线上已生效”的证据。
 
 ## 设计原则
 

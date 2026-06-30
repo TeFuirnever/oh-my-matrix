@@ -15,7 +15,7 @@ Accepted (2026-06-27). **Reverses the B1 conclusion recorded in
 
 The `dynamic-workflows` SKILL teaches agents to generate `.prose` programs that
 OpenProse executes by spawning subagent sessions. The SKILL's destructive-git
-safety is a **prompt-level CHECKPOINT** (`SKILL.md:90-103`). MA real-world
+safety is a **prompt-level CHECKPOINT** (`SKILL.md:90-103`). Host real-world
 testing showed **weak models (MiniMax-M2.7, glm-5.2) bypass prompt CHECKPOINTs** —
 an inherent prompt-only ceiling. The original B1 investigation concluded
 "real interception needs an OpenClaw plugin, ROI insufficient" and accepted

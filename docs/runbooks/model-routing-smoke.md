@@ -1,8 +1,8 @@
 # Model Routing & Thinking Intensity — Host-Deploy Smoke
 
-> **状态:专项 smoke checklist。** 验证 `@oh-my-matrix/autopilot` 的分级思考强度 + 模型 tier 路由在 MA gateway 线上真实生效。
+> **状态:专项 smoke checklist。** 验证 `@oh-my-matrix/autopilot` 的分级思考强度 + 模型 tier 路由在 host gateway 线上真实生效。
 >
-> 这是 [host-deploy.md step 5](host-deploy.md) 的专项补充 —— 通用 smoke 聚焦 runtime guard;本文聚焦 model routing。两者都在 host-deploy 完成后、在 MA 仓库内执行。
+> 这是 [host-deploy.md step 5](host-deploy.md) 的专项补充 —— 通用 smoke 聚焦 runtime guard;本文聚焦 model routing。两者都在 host-deploy 完成后、在 host repo 内执行。
 >
 > **核心教训**(同 [fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md)):仓库单测全绿 ≠ 线上生效。尤其 **subagent 覆盖**目前只有源码推断(`runEmbeddedAgent` 同函数复用),无 e2e 测试钉死 —— 本 smoke 的 C 段是唯一的运行时证据。
 
@@ -17,8 +17,8 @@ autopilot 源码含以下变更之一,且 host-deploy(见 host-deploy.md step 1�
 ## 前置
 
 - host-deploy.md step 1–4 全部完成(尤其 **gateway 已重启**,否则加载旧 module)
-- 能看到 autopilot 日志输出(gateway log / MA 控制台)
-- 能修改 OpenClaw plugin config(MA 的 autopilot 配置)
+- 能看到 autopilot 日志输出(gateway log / host 控制台)
+- 能修改 OpenClaw plugin config(host 的 autopilot 配置)
 
 ---
 

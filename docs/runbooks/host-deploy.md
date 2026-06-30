@@ -1,20 +1,20 @@
-# Host Deploy Runbook
+# Host Integration Runbook
 
-> **状态:WIP 骨架。** 本仓库保存源码与测试;宿主(MatrixAssistant / OpenClaw Gateway)加载的是打包后的 plugin **dist**。源码变更必须走宿主内部部署刷新流程 —— **仓库测试通过 ≠ 线上已生效**。
+> **状态:WIP 骨架。** 本仓库发布 `@oh-my-matrix/*` npm 包;消费方(host / OpenClaw Gateway)从 npm 安装并在运行时加载。源码变更必须 publish 新版本并被 host 重新加载 —— **仓库测试通过 ≠ host 已生效**。
 >
-> 本 runbook 收拢 repo 内已知的步骤;标 `[TODO:host]` 的步骤在 MA 仓库内部执行,具体命令/路径需 host 团队补全。这是 [architecture.md Current Gaps](../architecture.md#current-gaps) 第一条("Host deploy remains internal and should be documented as a reproducible runbook")的兑现。
+> 本 runbook 收拢 OMM 侧步骤;标 `[TODO:host]` 的步骤在 host 仓库内部执行(具体由各 host 决定)。这是 [architecture.md](../architecture.md) "Host integration remains host-internal" 的兑现。
 >
-> 来源:[CONTEXT.md Host Deploy](../../CONTEXT.md)、[architecture.md Distribution Reality](../architecture.md)、[ADR-010](../adr/010-autopilot-source-hosting.md)、[ADR-012](../adr/012-dynamic-workflows-plugin-extraction.md)、[ADR-013](../adr/013-permission-policy-library.md)、[fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md)。
+> 来源:[CONTEXT.md](../../CONTEXT.md)、[architecture.md](../architecture.md)、[ADR-010](../adr/010-autopilot-source-hosting.md)、[ADR-012](../adr/012-dynamic-workflows-plugin-extraction.md)、[ADR-013](../adr/013-permission-policy-library.md)、[fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md)。
 
 ## 何时用
 
-任一 hosted package 源码变更后:
+任一发布包源码变更后:
 
 - `packages/autopilot/`(`@oh-my-matrix/autopilot`)
 - `packages/dynamic-workflows/`(`@oh-my-matrix/dynamic-workflows`)
 - `packages/permission-policy/`(`@oh-my-matrix/permission-policy`)
 
-三者共享 permission-policy —— **三者同改时,三个都要验**(见 fixes 文档"build 3 个 + cp dist into MA")。
+三者共享 permission-policy —— **三者同改时,三个都要 publish + 验**(见 fixes 文档)。
 
 ---
 
@@ -25,73 +25,76 @@
 逐包跑测试,全绿才继续:
 
 ```bash
-pnpm --filter @oh-my-matrix/permission-policy test    # 当前 ~111 tests
-pnpm --filter @oh-my-matrix/dynamic-workflows test    # 当前 ~12 tests
-pnpm --filter @oh-my-matrix/autopilot test            # 当前 ~520 tests
+pnpm --filter @oh-my-matrix/permission-policy test
+pnpm --filter @oh-my-matrix/dynamic-workflows test
+pnpm --filter @oh-my-matrix/autopilot test
 ```
 
-任一包红 → 先修,不进入部署。
+任一包红 → 先修,不进入发布。
 
-### 2. 本仓库:产出分发产物(已完整可执行)
+### 2. 本仓库:publish 到 npm(真实终端,2FA)
+
+OMM 包以 **npm registry 依赖** 被 host 消费(host `package.json`:`"@oh-my-matrix/<pkg>": "<ver>"`)。源码变更后 publish 新版本。
 
 ```bash
-# autopilot 走 tgz(MA 以 file: 协议 vendoring,见 ADR-010)
-pnpm --filter @oh-my-matrix/autopilot build
-pnpm --filter @oh-my-matrix/autopilot pack            # → packages/autopilot/openclaw-autopilot-<ver>.tgz
-
-# runtime guard 两包走 cp dist(ADR-012/013 + fixes 文档)
-pnpm --filter @oh-my-matrix/permission-policy build
-pnpm --filter @oh-my-matrix/dynamic-workflows build
+# bump 版本(feature→minor / fix→patch),再真实终端 publish(需 2FA)
+pnpm --filter @oh-my-matrix/<pkg> publish --access public
 ```
 
-产物:`packages/autopilot/openclaw-autopilot-<ver>.tgz` + 三个 `dist/`。
+- npm 版本 **immutable** —— 改了内容必须 bump。
+- `pnpm publish` 是 outward-facing,需 2FA(真实终端,非 agent)。
+- `pnpm --filter <pkg> pack` 可预览 tarball 内容,无需手动 cp dist。
 
-### 3. `[TODO:host]` 刷新 MA bundled-plugin copy
+### 3. `[TODO:host]` host:更新版本号 + 重新加载
 
-- 把 autopilot tgz 放进 MA 的 `resources/autopilot/`(ADR-010),并在 MA `package.json` 把 `"@oh-my-matrix/autopilot"` 版本 bump 到新 tgz 的版本号(tgz 文件名里的版本是合约)。
-- 把 permission-policy / dynamic-workflows 的 `dist/` cp 进 MA 的 bundled-plugin 目录。
-- `[TODO:host]`:MA 仓库内具体的 cp 目标路径、版本 bump 命令、是否需 `pnpm install` 重建 bundled-plugin 目录。
+host 通过 npm 依赖 OMM 包。publish 后 host 侧:
 
-### 4. `[TODO:host]` 重启 MA gateway
+1. host `package.json` 把 `@oh-my-matrix/<pkg>` 版本号改成新 publish 的版本。
+2. `pnpm install`(或等价)拉取新版到 `node_modules`。
+3. host 按**自己的方式**重建运行时加载的 plugin copy(如何 bundle 是 host 的实现,OMM 不规定)。
+4. 重启 host gateway(加载新代码,见 step 4)。
 
-运行中的 MA 进程**缓存了旧 module,必须重启才加载新 dist**(fixes 文档明确:"MA must restart to load")。不重启 = 部署等于没做。
+- `[TODO:host]`:各 host 的 bundle/加载机制(从 `node_modules`、打包资源、还是别处)。OMM 只保证 npm 包内容正确。
 
-- `[TODO:host]`:MA 的重启方式(launchd / 进程管理器 / 手动)。
+### 4. `[TODO:host]` 重启 host gateway
 
-### 5. `[TODO:host]` 跑 deployed-dist smoke check(在 host repo,不在本 repo)
+运行中的 host gateway 缓存了旧 module,**必须重启才加载新版本**(fixes 文档:"host must restart to load")。不重启 = 部署等于没做。
 
-**这是唯一的线上验证。** fixes 文档的核心教训:别用虚构 event shape 的单测冒充线上验证 —— 历史 runtime guard 就是这么成了 production placebo(单测全绿,线上 fail-open)。
+- `[TODO:host]`:各 host 的重启方式。
 
-- `verify-guard`(host repo)驱动**真实** event shape,确认:
+### 5. `[TODO:host]` 跑 deployed-dist smoke check(在 host 侧,不在本 repo)
+
+**这是唯一的线上验证。** fixes 文档核心教训:别用虚构 event shape 的单测冒充线上验证 —— 历史 runtime guard 就是这么成了 production placebo(单测全绿,线上 fail-open)。
+
+- 真实 event shape smoke,确认:
   - `destructive` / `cd <ws> && git reset --hard` / `rm -rf` → **blocked**
   - `git status` / main-session → **allowed**
-- `[TODO:host]`:`verify-guard` 脚本位置 + 一键调用方式。
+- `[TODO:host]`:各 host 的 smoke 脚本/方式。
 - **autopilot model-routing / thinking-intensity 变更**:另跑 [model-routing-smoke.md](model-routing-smoke.md)(分级 effort + tier override + subagent 覆盖 e2e + 不干预)—— subagent 覆盖目前只有源码推断,smoke 是唯一运行时证据。
 
 ---
 
 ## 诚实红线
 
-1. **仓库测试绿 ≠ 线上生效**。第 5 步 deployed-dist smoke 是唯一证据。任何 guard 相关变更都要真跑 MA live e2e,不再 defer(这正是历史 placebo bug 的根源)。
+1. **仓库测试绿 ≠ host 已生效**。第 5 步 deployed-dist smoke 是唯一证据。任何 guard 相关变更都要真跑 host live e2e,不再 defer(这正是历史 placebo bug 的根源)。
 2. **不重启 = 旧 module**。第 4 步不可省。
-3. **MA 是合约边界**。两个仓库(omm 源码 + MA vendored dist)必须保持同步,tgz 文件名里的版本号是合约(ADR-010 Negative)。
+3. **host 是合约边界**。OMM(publish 的 npm 版本)与 host 加载的版本必须同步 —— host `package.json` 版本号是同步手段。npm 版本 immutable,publish 前 bump 是硬要求。
 
 ## 已知限制(不藏)
 
-- runtime guard 是 **tokenize-based,非完整 shell parser**。redirect 写文件(`>file`)、未知非-shell 框架工具、引号内 operator 误伤是已知 gap(见 [fixes 文档 Known limitations](../fixes/runtime-guard-event-shape.md#已知限制-tokenize-based-post-review-2026-06-28))。smoke check 应覆盖这些边界。
+- runtime guard 是 **tokenize-based,非完整 shell parser**。redirect 写文件(`>file`)、未知非-shell 框架工具、引号内 operator 误伤是已知 gap(见 [fixes 文档](../fixes/runtime-guard-event-shape.md))。smoke 应覆盖这些边界。
 
 ## Release readiness 待补(把 `[TODO:host]` 填掉,即可视为 runbook 完整)
 
-- [ ] MA 仓库路径 + bundled-plugin 目录结构
-- [ ] autopilot tgz 放置 + MA `package.json` 版本 bump 的可执行命令
-- [ ] permission-policy / dynamic-workflows 的 `dist/` cp 目标路径
-- [ ] MA 重启命令
-- [ ] `verify-guard` 脚本位置 + 一键调用
-- [ ] (ADR-010 follow-up)把 tgz refresh 自动化(CI step 或脚本),消除手动同步税
+- [ ] 各 host 的 bundle/加载机制(从 `node_modules` / 打包资源 / 别处)
+- [ ] host `package.json` 版本更新的具体流程
+- [ ] host 重启命令
+- [ ] deployed-dist smoke 脚本/方式
+- [ ] (ADR-010 follow-up)bundle 自动化(消除手动同步税)
 
 ## 相关
 
-- [ADR-010](../adr/010-autopilot-source-hosting.md) — autopilot source hosting(tgz + `file:` vendoring)
+- [ADR-010](../adr/010-autopilot-source-hosting.md) — autopilot 源码托管(从 host 抽取到 OMM)
 - [ADR-012](../adr/012-dynamic-workflows-plugin-extraction.md) — dynamic-workflows 插件抽取
 - [ADR-013](../adr/013-permission-policy-library.md) — permission-policy 库解耦
 - [fixes/runtime-guard-event-shape.md](../fixes/runtime-guard-event-shape.md) — event-shape bug(fail-open 教训 + params-shape 真值)
