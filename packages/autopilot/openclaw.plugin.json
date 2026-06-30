@@ -18,7 +18,8 @@
     "agent_turn_prepare",
     "before_agent_run",
     "before_tool_call",
-    "llm_output"
+    "llm_output",
+    "before_model_resolve"
   ],
   "configSchema": {
     "type": "object",
@@ -62,6 +63,26 @@
         "enum": ["low", "medium", "high"],
         "default": "high",
         "description": "Thinking intensity for autopilot turns. 'high' = extended thinking (default), 'medium' = moderate, 'low' = standard effort."
+      },
+      "modelRouting": {
+        "type": "object",
+        "description": "Model tier routing per execution phase. Maps tiers to concrete model IDs via modelIds; tiers without a modelId inherit the declared model.",
+        "properties": {
+          "defaultTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "standard" },
+          "initialTurnTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "premium" },
+          "validationTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "standard" },
+          "subagentTier": { "type": "string", "enum": ["budget", "standard", "premium"] },
+          "modelIds": {
+            "type": "object",
+            "properties": {
+              "budget": { "type": "string" },
+              "standard": { "type": "string" },
+              "premium": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

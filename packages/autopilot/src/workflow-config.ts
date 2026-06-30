@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { WorkflowConfig, ValidationCommand } from './types';
+import { parseModelRouting } from './model-routing';
 
 export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   version: 1,
@@ -52,7 +53,7 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
   const knownKeys = new Set([
     'version', 'max_concurrent', 'max_retries',
     'stall_timeout_ms', 'max_retry_backoff_ms', 'workspace', 'validation',
-    'destructive_git',
+    'destructive_git', 'model_routing',
   ]);
   for (const key of Object.keys(raw)) {
     if (!knownKeys.has(key)) {
@@ -127,6 +128,11 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
     result.destructiveGit = {
       allow: dg.allow === true,
     };
+  }
+
+  if ('model_routing' in raw) {
+    const routing = parseModelRouting(raw.model_routing);
+    if (routing) result.modelRouting = routing;
   }
 
   return { config: result, warnings };

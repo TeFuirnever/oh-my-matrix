@@ -69,6 +69,32 @@ export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | '
  */
 export type ThinkingIntensity = 'low' | 'medium' | 'high';
 
+/**
+ * Model tier for cost-aware routing. Maps to concrete model IDs via
+ * ModelRoutingConfig.modelIds. Consumed via before_model_resolve hook.
+ * - 'budget': cheapest viable (haiku / deepseek)
+ * - 'standard': default balance (sonnet)
+ * - 'premium': highest capability (opus)
+ */
+export type ModelTier = 'budget' | 'standard' | 'premium';
+
+/**
+ * Model routing configuration. Determines tier per execution phase.
+ * If modelIds[tier] is unset, no modelOverride is emitted (inherit declared model).
+ */
+export interface ModelRoutingConfig {
+  /** Required: tier for implementation turns. */
+  defaultTier: ModelTier;
+  /** Tier for initial turns (totalContinuations <= 1). Default: 'premium'. */
+  initialTurnTier?: ModelTier;
+  /** Tier for validation turns (evidence.status === 'running'). Default: 'standard'. */
+  validationTier?: ModelTier;
+  /** Override tier for subagent sessions. Default: fall through to phase logic. */
+  subagentTier?: ModelTier;
+  /** Map tier -> concrete model ID string (e.g. "claude-opus-4-8"). */
+  modelIds?: Partial<Record<ModelTier, string>>;
+}
+
 // ─── Shared permission types (now in @oh-my-matrix/permission-policy, ADR-012) ───
 // decidePermission + classifyCommand + audit-persister moved to
 // @oh-my-matrix/permission-policy; autopilot is now a CONSUMER of those primitives.
@@ -141,6 +167,7 @@ export interface WorkflowConfig {
     allow: boolean;
   };
   warnings: string[];
+  modelRouting?: ModelRoutingConfig;
 }
 
 export type OrchestratorEvent =
@@ -218,6 +245,7 @@ export interface AutopilotConfig {
   tokenBudget?: number;
   maxConcurrentAutopilot?: number;
   thinkingIntensity?: ThinkingIntensity;
+  modelRouting?: ModelRoutingConfig;
 }
 
 export const DEFAULT_CONFIG: AutopilotConfig = {
