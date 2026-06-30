@@ -1,4 +1,6 @@
-import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult } from './types';
+import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier } from './types';
+import { resolveThinkingIntensity } from './effort-injection';
+import { resolveModelTier, resolveModelId } from './model-routing';
 
 export interface AutopilotProjection {
   status: AutopilotState['status'];
@@ -35,6 +37,12 @@ export interface AutopilotProjection {
   lastEvidenceCommands?: EvidenceCommandResult[];
   workflowSource?: 'workflow_md' | 'default' | 'last_valid';
   workflowConfigError?: string;
+  /** Current resolved thinking intensity (observability only) */
+  thinkingIntensity?: ThinkingIntensity;
+  /** Current resolved model tier (observability) */
+  modelTier?: ModelTier;
+  /** Recommended model ID for current tier (observability) */
+  recommendedModelId?: string;
 }
 
 /**
@@ -56,6 +64,10 @@ export function projectState(state: AutopilotState | undefined): AutopilotProjec
   const outputTokens = state.outputTokensUsed ?? 0;
   const estimatedCostUsd =
     (inputTokens * INPUT_COST_PER_M + outputTokens * OUTPUT_COST_PER_M) / 1_000_000;
+  const modelRouting = state.workflow?.modelRouting;
+  const modelTier = state.status === 'running'
+    ? resolveModelTier(state.totalContinuations, state.evidence?.status, false, modelRouting)
+    : undefined;
   return {
     status: state.status,
     enabled: state.enabled,
@@ -90,5 +102,10 @@ export function projectState(state: AutopilotState | undefined): AutopilotProjec
     lastEvidenceCommands: state.evidence?.commands,
     workflowSource: state.workflow?.source,
     workflowConfigError: state.workflowConfigError,
+    thinkingIntensity: state.status === 'running'
+      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status)
+      : undefined,
+    modelTier,
+    recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,
   };
 }

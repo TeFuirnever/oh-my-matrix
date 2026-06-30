@@ -1,7 +1,8 @@
 import { decideContinuation, buildRetryInstruction } from './src/continuation-engine';
 import { trackToolError } from './src/tool-error-tracker';
 import { checkStall } from './src/stall-detector';
-import { buildEffortInjection } from './src/effort-injection';
+import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-injection';
+import { resolveModelTier, resolveModelId, isSubagentSession, parseModelRouting, extractParentSessionKey } from './src/model-routing';
 import { log, warn, error, logWithContext } from './src/logger';
 import {
   activate,
@@ -262,6 +263,7 @@ export function register(api: OpenClawPluginApi): void {
   // pluginConfig is Record<string, unknown> — coerce values to expected types
   const uc = api.pluginConfig ?? {};
   const numOrUndefined = (v: unknown): number | undefined => typeof v === 'number' ? v : undefined;
+  const modelRouting = parseModelRouting(uc.modelRouting);
   const config: AutopilotConfig = {
     ...DEFAULT_CONFIG,
     ...(numOrUndefined(uc.maxAttemptsPerTurn) != null ? { maxAttemptsPerTurn: numOrUndefined(uc.maxAttemptsPerTurn)! } : {}),
@@ -271,6 +273,10 @@ export function register(api: OpenClawPluginApi): void {
     ...(Array.isArray(uc.highRiskTools) ? { highRiskTools: uc.highRiskTools as string[] } : {}),
     ...(numOrUndefined(uc.tokenBudget) != null ? { tokenBudget: numOrUndefined(uc.tokenBudget) } : {}),
     ...(numOrUndefined(uc.maxConcurrentAutopilot) != null ? { maxConcurrentAutopilot: numOrUndefined(uc.maxConcurrentAutopilot)! } : {}),
+    ...(typeof uc.thinkingIntensity === 'string' && ['low', 'medium', 'high'].includes(uc.thinkingIntensity)
+      ? { thinkingIntensity: uc.thinkingIntensity as 'low' | 'medium' | 'high' }
+      : {}),
+    ...(modelRouting ? { modelRouting } : {}),
   };
   log(`[autopilot] config: maxAttemptsPerTurn=${config.maxAttemptsPerTurn} maxTotalContinuations=${config.maxTotalContinuations} toolErrorThreshold=${config.toolErrorThreshold} excludedAgents=${JSON.stringify(config.excludedAgents)} highRiskTools=${JSON.stringify(config.highRiskTools)} tokenBudget=${config.tokenBudget}`);
 
@@ -525,14 +531,53 @@ export function register(api: OpenClawPluginApi): void {
 
     if (parts.length === 0) return;
 
-    // Effort injection: ensure high effort for every autopilot turn (TD-1)
-    const effortCtx = buildEffortInjection(updated.status);
+    // Effort injection: graduated intensity by execution phase (TD-1)
+    const intensity = resolveThinkingIntensity(
+      updated.totalContinuations,
+      updated.evidence?.status,
+      config.thinkingIntensity,
+    );
+    const effortCtx = buildEffortInjection(updated.status, intensity);
     if (effortCtx) parts.push(effortCtx);
 
     // Completion awareness instruction
     parts.push('[Autopilot] When all tasks are complete, explicitly state "All tasks completed".');
 
     return { appendContext: parts.join('\n') };
+  });
+
+  // Model routing: override model per execution phase. Consumed by Gateway via
+  // before_model_resolve -> { modelOverride }. No modelIds => no override (inherit).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  registerHook('before_model_resolve', (_event: any, ctx: any): any => {
+    const sessionKey = ctx?.sessionKey;
+    if (!sessionKey) return;
+
+    // Find the autopilot run: direct, or via parent session for subagents
+    // (subagent keys: agent:<main>:subagent:<sub>).
+    const direct = findRunBySession(sessionKey);
+    const entry = direct
+      ?? (isSubagentSession(sessionKey)
+        ? findRunBySession(extractParentSessionKey(sessionKey) ?? '')
+        : undefined);
+    if (!entry?.[1].enabled || entry[1].status !== 'running') return;
+
+    const [, state] = entry;
+    // WORKFLOW.md model_routing wins over plugin config when present.
+    const routing = state.workflow?.modelRouting ?? modelRouting;
+    if (!routing?.modelIds) return;
+
+    const tier = resolveModelTier(
+      state.totalContinuations,
+      state.evidence?.status,
+      isSubagentSession(sessionKey),
+      routing,
+    );
+    const modelId = resolveModelId(tier, routing);
+    if (modelId) {
+      log(`[autopilot] before_model_resolve: session=${sessionKey} tier=${tier} model=${modelId}`);
+      return { modelOverride: modelId };
+    }
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
