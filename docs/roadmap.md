@@ -41,7 +41,7 @@ Exit criteria:
 
 | Deliverable | Why | Status |
 |---|---|---|
-| Public package policy | Packages are private today; users need clear install story | Planned |
+| Public package policy | Packages are on npm public (autopilot / dynamic-workflows / permission-policy) but lack a documented consumer install + version policy | Planned |
 | `WORKFLOW.md` examples | Autopilot config exists but needs copy-pasteable examples | Planned |
 | Projection contract docs | Host UI needs stable fields and failure semantics | Planned |
 | Public type exports (`AutopilotProjection` from barrel) | Hosts deep-import `dist/src/projection` today, coupling to OMM's internal layout | Planned |
@@ -77,6 +77,26 @@ Exit criteria:
 Exit criteria:
 
 - Known limitations in [`docs/fixes/runtime-guard-event-shape.md`](fixes/runtime-guard-event-shape.md) are either fixed or explicitly accepted with tests.
+
+## P5: Model Routing & Thinking Intensity
+
+Detailed design: [`docs/design/model-routing-thinking-intensity-design.md`](design/model-routing-thinking-intensity-design.md).
+
+Two routing mechanisms that are **orthogonal and composable**: dynamic-workflows already has declarative `.prose model:` routing (compile-time); autopilot adds runtime tier routing layered on top.
+
+| Deliverable | Why | Status |
+|---|---|---|
+| Graduated thinking intensity (3-level `effort-injection`) | Binary "use high effort" wastes reasoning time in validation phase; `resolveThinkingIntensity()` adapts per phase | Planned |
+| Model tier routing via `before_model_resolve` hook | `appendContext` is advisory-only; only `modelOverride` is consumed by Gateway | Planned |
+| `WORKFLOW.md` `model_routing` config surface | Per-phase tier + `modelIds` map needs a user-facing config seam (reuses existing parser) | Planned |
+| Subagent routing (`subagentTier` + `isSubagentSession`) | Workflow subagents should route independently (e.g., screening on budget tier) | Planned |
+| SKILL.md tier guidance for `.prose` generation | Map budget/standard/premium into agent-definition guidance so AI picks models systematically — benefits pure-workflow runs without autopilot | Planned (separate task; orthogonal to autopilot code) |
+
+Exit criteria:
+
+- `before_model_resolve` hook registered; returns `modelOverride` per execution phase for main agent and subagents.
+- When `modelIds` is unconfigured, autopilot returns no override — `.prose` `model:` declarations fully win (no silent interference).
+- `pnpm --filter @oh-my-matrix/autopilot test` remains green (633 existing tests unaffected; backward compat via `'high'` default).
 
 ## Historical v0.x Snapshot
 

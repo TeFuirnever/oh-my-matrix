@@ -978,23 +978,96 @@ autopilot:
 
 ## 6. 与 Dynamic Workflows 的协同
 
-### 6.1 .prose `model:` 字段 vs autopilot `before_model_resolve`
+### 6.1 关键事实：Dynamic Workflow 已有声明式模型路由
 
-| 机制 | 来源 | 优先级 | 作用范围 |
-|------|------|--------|---------|
-| `.prose model: sonnet` | SKILL.md 中 AI 生成的 .prose 程序 | OpenProse 层面设置 | 单个 .prose agent 定义 |
-| `before_model_resolve` modelOverride | autopilot 插件 hook | Gateway 层面覆盖 | 所有 agent run（含 subagent） |
+dynamic-workflows **不需要 autopilot 就有模型路由** —— 这是 `.prose` 语言的内置能力，AI 生成 .prose 时就为每个 agent 决定好 model。autopilot 的 tier 路由是**叠加在已存在能力之上**的运行时层，不是从无到有。
 
-**优先级关系**：`before_model_resolve` 的 `modelOverride` 在 Gateway 层生效，**后于** OpenProse 的 `model:` 设置。如果 autopilot 返回 `modelOverride`，它**覆盖** .prose 中的 `model:` 声明。
+**OpenProse 源码证据**（`openclaw/extensions/open-prose/skills/prose/compiler.md`）：
 
-**设计选择**：如果 `modelRouting.modelIds` 未配置任何映射，`resolveModelId()` 返回 `undefined`，autopilot 不返回 `modelOverride`，.prose 的 `model:` 声明生效。这是正确的默认行为——不配模型路由 = 不干预。
+- `compiler.md:698` — Session Statement 定义："spawns a **subagent** to complete a task"
+- `compiler.md:702` — Execution："**Spawn a Subagent**: Create a new Claude subagent with the resolved configuration"
+- `compiler.md:553` — model 字段语义：`model | sonnet/opus/haiku | The Claude model to use`
+- `compiler.md:681` — "The agent's `model` property determines which Claude model is used"
+- `compiler.md:725` — session 级可覆盖：`model: opus  # Override the agent's model`
 
-### 6.2 思考强度对 .prose agent 的影响
+```prose
+agent specialist:
+  model: sonnet          # agent 定义级：每个 agent 固定 model
+session: specialist
+  model: opus            # session 覆盖级：单次调用可临时升 model
+```
 
-.prose agent 是由 OpenProse VM spawn 的 subagent。autopilot 的 `agent_turn_prepare` 对这些 subagent 也注入 effort injection 文本。效果：
+**这就是声明式模型路由**：编译时（生成 .prose 时）就为每个 agent 钉死 model，再 spawn 成 subagent。
+
+### 6.2 两套模型路由，正交互补
+
+| | Dynamic Workflow（声明式） | Autopilot（运行时 tier） |
+|---|---|---|
+| 机制 | `.prose` `model:` 字段 | `before_model_resolve` `modelOverride` |
+| 决策时机 | AI 生成 .prose 时（编译时） | autopilot 执行阶段（运行时） |
+| 决策维度 | **横向**（agent 间：screener/drafter/judge 各不同） | **纵向**（时间：初始/实现/验证阶段） |
+| 数据来源 | SKILL.md 的 tier guidance + 任务理解 | `totalContinuations` + `evidenceStatus` |
+| 生效场景 | 任何 dynamic workflow | 仅 autopilot `running` 时 |
+
+**正交**：.prose 解决"不同 agent 该用不同 model"（screening 用 haiku、drafting 用 sonnet、judging 用 opus）；autopilot 解决"同一段执行的不同阶段该用不同 model"（初始深度分析、实现快速出码、验证快速检查）。两者可独立存在，也可叠加。
+
+### 6.3 叠加时的优先级
+
+prose subagent 经 `sessions_spawn` → `embedded-agent-runner`（`run.ts:650`）→ 触发 `before_model_resolve`。叠加生效顺序：
+
+```
+OpenProse 解析 .prose model → spawn subagent with model
+  → embedded-agent-runner.run()
+    → resolveHookModelSelection()       (run/setup.ts:42)
+      → before_model_resolve hook       ← autopilot 在此介入
+          → 返回 modelOverride → 覆盖 .prose model（autopilot tier 胜出）
+          → 返回 undefined    → .prose model 完整生效（不干预）
+```
+
+**autopilot `modelOverride` 优先于 `.prose` `model:` 声明。** 但这是**有条件的**覆盖，不是无脑覆盖：
+
+- autopilot 配了 `modelIds` 且处于 `running` → 按 tier 路由返回 `modelOverride` → 覆盖 .prose
+- autopilot **没配** `modelIds` → `resolveModelId()` 返回 `undefined` → 不返回 `modelOverride` → `.prose` 的 `model:` 完整生效
+
+**正确的默认行为**：不配模型路由 = 不干预 = 继承 .prose 声明。这让两套机制可以和平共存 —— 想用 .prose 声明式路由就别配 autopilot `modelIds`，想要运行时 tier 覆盖才配。
+
+### 6.4 三种运行场景
+
+| 场景 | .prose model | autopilot 路由 | 实际 model |
+|------|-------------|----------------|-----------|
+| 纯 dynamic workflow（无 autopilot） | ✅ 生效 | 不触发（无 autopilot run） | .prose 声明 |
+| 纯 autopilot（无 workflow） | N/A | ✅ tier 路由 | autopilot tier |
+| autopilot 触发 workflow | ✅ 声明 | ✅ 覆盖 | **autopilot tier 胜出**（若配了 modelIds） |
+
+注意第三行：当 autopilot 在 running 状态下扇出 workflow subagent，subagent 的 sessionKey 含 `:subagent:`，autopilot 能关联到父 run → 路由覆盖生效（`subagentTier` 或阶段 tier）。
+
+### 6.5 思考强度对 .prose agent 的影响
+
+.prose agent 是 OpenProse VM spawn 的 subagent。autopilot 的 `agent_turn_prepare` 对这些 subagent 也注入 effort injection 文本（subagent turn 同样触发该 hook）：
 
 - 配置 `thinkingIntensity: 'medium'` → subagent 收到 "Use moderate effort" 指令
-- 动态解析：subagent 不在验证阶段（无 evidence gate），不在初始 turn（subagent 的 totalContinuations 与主 session 独立）→ 用 configIntensity
+- 动态解析：subagent 不在验证阶段（无 evidence gate），不在初始 turn（subagent 的 `totalContinuations` 与主 session 独立）→ 用 `configIntensity`
+
+**关键区分**：effort injection 是**文本指令**（影响 agent 思考深度），与 model 选择**独立** —— subagent 用什么 model 由 `.prose`/autopilot 路由决定，effort 只影响同一 model 的推理强度。两者正交，可分别配置。
+
+### 6.6 改进点：把 tier 思路反向喂给 SKILL.md
+
+当前 `skill/dynamic-workflows/SKILL.md:482` 只有一句笼统的模型 cost guidance：
+
+> "Use `haiku` for screening, `sonnet` for drafting, opus only for judgment"
+
+**改进**：把 autopilot 的 tier 心智模型（budget/standard/premium）映射进 SKILL.md 的 agent 定义指导，让 AI 生成 .prose 时按 tier 规则更系统地选 model。这不依赖 autopilot 运行时，**纯 dynamic workflow 场景也受益**：
+
+```prose
+# 改进后的 SKILL.md tier guidance（示意）：
+# screening/filter/OCR agent    → model: haiku    (budget tier: 高频、低风险、可并行)
+# drafting/implement/expand agent → model: sonnet  (standard tier: 主力产出、性价比)
+# judge/synthesize/verify agent   → model: opus    (premium tier: 关键决策、质量门)
+```
+
+这与 autopilot 的运行时 tier 路由形成**理念一致**：声明式（编译时）用 SKILL.md guidance 选 model，运行时用 autopilot tier 覆盖 —— 两套机制共享同一套 tier 心智模型（budget=haiku、standard=sonnet、premium=opus），用户只学一套概念。
+
+> **此改进属于 SKILL.md 文档增强，不在本设计的两个 PR 范围内。** 建议作为独立后续任务，因为它改动的是 `skill/dynamic-workflows/SKILL.md`（AI 指令），与 autopilot 代码（运行时）正交。
 
 ---
 

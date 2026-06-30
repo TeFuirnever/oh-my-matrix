@@ -64,6 +64,7 @@ Instructions for AI agents working. All content in English.
 
 ### Change Discipline
 
+- Before pushing, run `pnpm verify` (lint + markdownlint + typecheck + workspace tests + docs build) — the local mirror of CI. See `CONTRIBUTING.md` §Local Setup.
 - Match existing local style and patterns before introducing new structure.
 - Do not refactor adjacent code, comments, or formatting unless the current task requires it.
 - Remove dead code only when it is made obsolete by the current change. If unrelated cleanup is tempting, mention it separately.
