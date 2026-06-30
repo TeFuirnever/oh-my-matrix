@@ -232,12 +232,12 @@ describe('E2E: activate → loop → complete lifecycle', () => {
         stopHookActive: true, // user hit stop
         lastAssistantMessage: '所有任务已完成',
       });
-      // frozen to current behavior: decideContinuation returns {action:'finalize'}
-      // for stopHookActive, but the before_agent_finalize switch has no case for
-      // 'finalize' — it falls through to default ⇒ {action:'continue'}. The host
-      // treats continue/finalize the same way (no revision injected), so the run
-      // simply stops getting autopilot injections until the next turn.
-      expect(result.action).toBe('continue');
+      // S3 fix: decideContinuation returns {action:'finalize'} for stopHookActive
+      // and the switch now has an explicit case 'finalize' → {action:'finalize'}.
+      // Previously this fell through to default ('continue'), silently rewriting
+      // the user's stop intent; now finalize is preserved and the host stops
+      // injecting autopilot revisions for this turn.
+      expect(result.action).toBe('finalize');
       // status untouched (no state transition)
       const proj = await projectionFor(mock, 'sess-guard3');
       expect(proj.status).toBe('running');
