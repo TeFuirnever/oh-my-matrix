@@ -2,7 +2,7 @@
   "id": "autopilot",
   "name": "Autopilot Continuous Mode",
   "description": "OpenClaw-native continuous execution for long-running tasks",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
@@ -63,6 +63,11 @@
         "enum": ["low", "medium", "high"],
         "default": "high",
         "description": "Thinking intensity for autopilot turns. 'high' = extended thinking (default), 'medium' = moderate, 'low' = standard effort."
+      },
+      "trustWorkspace": {
+        "type": "boolean",
+        "default": false,
+        "description": "S1-residual (audit 2026-06-30): when false (default), validation commands sourced from WORKFLOW.md or auto-detected from the workspace are NOT executed — untrusted-workspace RCE boundary. Set true to enable workspace-sourced validation. Per-activate payload overrides this."
       },
       "modelRouting": {
         "type": "object",

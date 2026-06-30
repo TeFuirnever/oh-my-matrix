@@ -4,6 +4,9 @@ All notable changes to oh-my-matrix (omm).
 
 ## [Unreleased]
 
+### Security
+- **Autopilot 3.0.0 — WORKFLOW.md validation RCE closure (#44, #45)** — closes an attacker-controlled-WORKFLOW.md → RCE path via the autopilot evidence gate (`validation.commands` executed by `execFile` on `complete`). #44 adds a fail-closed binary allowlist and honors the `finalize` action so a user's stop intent is no longer swallowed. #45 closes the residual surface the binary allowlist cannot cover: a `trustWorkspace` opt-in (default **false**) plus an interpreter eval-flag block (`node -e` / `python -c` / `--eval`). Untrusted-workspace RCE via `node evil.js` / `npm run <tampered script>` / `python -c` is now unreachable. **BREAKING:** operators must set `trustWorkspace` (plugin config or per-activate payload) to keep workspace-sourced validation; the disable is observable via `workflow.warnings`. Reviewer-verified by a 4-agent adversarial audit with a live PoC (0 bypasses). Autopilot tests 654 → 667.
+
 ### Added
 - **Autopilot model routing + thinking intensity (#33)** — graduated effort injection (3 levels resolved per phase: validation→low, initial turns→high, else configured) and runtime model tier routing via the `before_model_resolve` hook (budget/standard/premium → `modelOverride`). Subagents (`sessions_spawn` / OpenProse `session:`) route via their parent run's sessionKey; when no `modelIds` are configured, no override is emitted and `.prose` `model:` declarations stay in effect. 31 new tests; full suite 650 passed | 4 skipped.
 - **Host-deploy smoke checklist (#34)** — [`docs/runbooks/model-routing-smoke.md`](docs/runbooks/model-routing-smoke.md): 4-dim verification (effort / override / subagent e2e / no-interference) + rollback table. The subagent-coverage e2e is the only runtime evidence (source-only guarantee via `runEmbeddedAgent` reuse).
@@ -12,6 +15,9 @@ All notable changes to oh-my-matrix (omm).
 ### Changed
 - **dynamic-workflows skill hardening (#28)** — generated `.prose` programs now route to `<cwd>/.openclaw/workflows/` (keeps the user workspace clean; root `.gitignore` covers `.openclaw/`); `.prose` keywords must stay ASCII-English even in Chinese workflows (closes a darwin-skill dim8 full-test gap where manual validation missed localized keywords).
 - **Model-routing design + spine docs (#29)** — expanded `model-routing-thinking-intensity-design.md` §6 (declarative `.prose` routing vs autopilot tier, orthogonal + overlap priority); `dev-harness.md` Proposed -> Implemented; `roadmap.md` adds P5 Model Routing; AGENTS adds `pnpm verify` push rule.
+
+### Security
+- **`@oh-my-matrix/permission-policy@0.1.1`** (#46) — adversarial 4-agent review closed 3 command-classifier bypasses + 2 audit bugs. CRITICAL: `npm/pnpm/yarn run <script>` is no longer `validation` (it defeated the subagent `defaultDeny` guard via unconditional allow); `git -C <path>` is now parsed into cwd so destructive-git containment can't be escaped (space + attached `-C<path>` forms). HIGH: `git restore` → `destructive_git`. Audit: `loadRecentAuditEntries` rotation ordering fixed (integer-suffix comparator; the old `.sort().reverse()` returned stale entries once the base file rolled); `appendAuditEntry` surfaces write failures via `console.error`. `@oh-my-matrix/autopilot` audit entry now carries `cwd`. Tests 210→220; consumers green (autopilot 667 / dynamic-workflows 26). Deferred findings tracked in #47.
 
 ## [0.8.0] — 2026-06-29
 
