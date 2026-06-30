@@ -3,7 +3,7 @@ import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime'
 export type { AutopilotProjection } from './src/projection';
 export declare const id = "autopilot";
 export declare const name = "Autopilot Continuous Mode";
-export declare const version = "2.0.0";
+export declare const version = "3.0.0";
 export declare function _resetForTest(): void;
 /** Test-only: inject a mock audit_setMode so the closed-over _auditSetMode reference is replaceable. */
 export declare function _setAuditSetModeForTest(fn: ((mode: 'active' | 'monitor' | 'passive') => void) | null): void;

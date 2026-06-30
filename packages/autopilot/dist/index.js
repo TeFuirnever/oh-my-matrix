@@ -49,7 +49,9 @@ function validateWorkspacePath(p) {
 }
 exports.id = 'autopilot';
 exports.name = 'Autopilot Continuous Mode';
-exports.version = '2.0.0';
+// S14 (audit 2026-06-30): keep in sync with package.json + openclaw.plugin.json.
+// These three are the release-time single source of truth for the plugin version.
+exports.version = '3.0.0';
 /** GAP-25: Maximum number of concurrent run states before eviction kicks in */
 const MAX_RUN_STATES = 50;
 /** GAP-26: Health check threshold — sessions inactive for 24h are orphaned */

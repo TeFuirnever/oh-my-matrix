@@ -32,5 +32,5 @@ behaviour via `WORKFLOW.md` (destructive-git policy, retry, evidence gates).
 
 ## Status
 
-v2.1.1. Tested with `vitest` (500+ tests). See the project
+v3.0.0. Tested with `vitest` (667+ tests). See the project
 [changelog](https://github.com/TeFuirnever/oh-my-matrix/blob/master/CHANGELOG.md).
