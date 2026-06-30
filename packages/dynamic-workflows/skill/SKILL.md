@@ -177,6 +177,11 @@ Key rules:
 
 - **Indentation is significant** (Python-like) — use 2 spaces per level.
   Tabs and mixed indentation are errors
+- **Keywords are ASCII English, never localized** — `input` `agent` `model`
+  `prompt` `session` `let` `context` `parallel` `for` `if` `elif` `else`
+  `try` `catch` `output` `block` `map` `filter` `reduce` `pmap` stay English
+  even in Chinese workflows; only descriptions, comments, and prompt bodies
+  may be Chinese. `模型:` / `会话:` / `并行:` fail compile.
 - `input name: "description"` declares a user input with a description
   (not a default value — it prompts the caller)
 - `agent name:` defines a specialized role (with indented `model:` and `prompt:`)
