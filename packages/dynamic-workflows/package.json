@@ -33,7 +33,7 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.5.28",
-    "@oh-my-matrix/permission-policy": "0.1.0"
+    "@oh-my-matrix/permission-policy": "0.1.1"
   },
   "devDependencies": {
     "openclaw": "2026.5.28",
