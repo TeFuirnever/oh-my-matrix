@@ -124,7 +124,7 @@ describe('Evidence Gate wiring', () => {
       register(mockWithCmd.api as unknown as Parameters<typeof register>[0]);
 
       const activateRespond = vi.fn();
-      await mockWithCmd.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-cmd' }, respond: activateRespond });
+      await mockWithCmd.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-cmd', trustWorkspace: true }, respond: activateRespond });
       await mockWithCmd.hooks.get('session_start')!({ sessionId: 'sid-cmd', sessionKey: 'sess-ev-cmd' });
 
       // P1-2: drive two non-completion turns so the completion signal is trusted.
@@ -172,7 +172,7 @@ describe('Evidence Gate wiring', () => {
       register(mockFail.api as unknown as Parameters<typeof register>[0]);
 
       const activateRespond = vi.fn();
-      await mockFail.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-fail' }, respond: activateRespond });
+      await mockFail.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-fail', trustWorkspace: true }, respond: activateRespond });
       await mockFail.hooks.get('session_start')!({ sessionId: 'sid-fail', sessionKey: 'sess-ev-fail' });
 
       // P1-2: drive two non-completion turns so the completion signal is trusted.
