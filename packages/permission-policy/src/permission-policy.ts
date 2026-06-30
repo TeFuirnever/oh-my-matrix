@@ -338,8 +338,8 @@ export function classifyCommand(
         i += tok.includes('=') ? 1 : 2; continue;
       }
       if (tok === '--') { i++; continue; }
-      if (/^(-y|--yes|-i|--install|--no-install|--quiet|-q|-h|--help|--version)$/.test(tok)) { i++; continue; }
-      if (tok.startsWith('-') && tok.length > 1) { i++; continue; } // any other npx -flag
+      // Any other npx flag (-y/--yes, -i, --no-install, --quiet, -h, etc.) — standalone, skip.
+      if (tok.startsWith('-') && tok.length > 1) { i++; continue; }
       break;
     }
     // H8: flags consumed everything (e.g. bare `npx --`) → unknown, not 'validation'.
