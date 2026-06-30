@@ -271,3 +271,43 @@ describe('E2E cross-plugin shared format — on-disk entry matches PermissionAud
     expect(loaded[0].commandSummary).toBeUndefined();
   });
 });
+
+// AUDIT-1 regression guard: numeric-suffix rotation sort.
+// A plain lexicographic `.sort().reverse()` mis-orders rotated files once a day
+// exceeds 9 rotations (`audit-DATE-10.jsonl` sorts BEFORE `audit-DATE-2.jsonl`)
+// and also puts the base file (suffix=0, OLDEST content) first. The fix sorts by
+// date desc, then NUMERIC suffix desc. This test would have FAILED under the old
+// lexicographic sort: it would return `-10` content before `-2`.
+describe('E2E AUDIT-1 — numeric-suffix rotation sort (true chronological order)', () => {
+  it('returns base (oldest) → -1 → ... → -10 (newest) in chronological order, NOT lexicographic', () => {
+    // FIXED date so the test is deterministic — do NOT rely on today.
+    const date = '2026-06-30';
+    const dir = path.join(tmpDir, AUDIT_SUBDIR);
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Base file = OLDEST content that day (suffix 0 by convention).
+    fs.writeFileSync(
+      path.join(dir, `audit-${date}.jsonl`),
+      JSON.stringify(makeEntry({ toolName: 'rm-base', at: 1 })) + '\n',
+      'utf-8',
+    );
+    // Rotated files -1 .. -10, each with a distinguishable entry and ascending `at`.
+    for (let i = 1; i <= 10; i++) {
+      fs.writeFileSync(
+        path.join(dir, `audit-${date}-${i}.jsonl`),
+        JSON.stringify(makeEntry({ toolName: `rm-${i}`, at: 1 + i })) + '\n',
+        'utf-8',
+      );
+    }
+
+    const loaded = loadRecentAuditEntries(tmpDir, 100);
+
+    // True chronological order: base first … -10 last (newest).
+    // Under the OLD lexicographic sort, files were ordered `-1, -10, -2, -3, ...`
+    // so `-10` content would appear BEFORE `-2`. This assertion catches that.
+    expect(loaded.map((e) => e.toolName)).toEqual([
+      'rm-base',
+      'rm-1', 'rm-2', 'rm-3', 'rm-4', 'rm-5', 'rm-6', 'rm-7', 'rm-8', 'rm-9', 'rm-10',
+    ]);
+  });
+});

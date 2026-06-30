@@ -13,6 +13,8 @@ import type { PermissionAuditEntry } from './types';
 
 const AUDIT_SUBDIR = '.autopilot';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Strict audit-file pattern: audit-YYYY-MM-DD(-N)?.jsonl (rotation starts at -1). M1/L1. */
+const AUDIT_FILE_RE = /^audit-\d{4}-\d{2}-\d{2}(-[1-9]\d*)?\.jsonl$/;
 
 /** Returns the audit directory path for a given workspace root. */
 function getAuditDir(workspaceDir: string): string {
@@ -76,6 +78,29 @@ export function appendAuditEntry(entry: PermissionAuditEntry, workspaceDir: stri
 }
 
 /**
+ * Parse the `-N` rotation suffix of an audit file; the base file
+ * (`audit-YYYY-MM-DD.jsonl`, no suffix) → 0 (it holds the oldest content that
+ * day). Higher suffix = written later = newer.
+ */
+function auditRotationSuffix(f: string): number {
+  const m = f.match(/^audit-\d{4}-\d{2}-\d{2}-(\d+)\.jsonl$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Sort comparator (newest file first). Primary key = date (YYYY-MM-DD sorts
+ * chronologically lexicographically; newer date first). Secondary key = rotation
+ * suffix within the same day (higher = newer = first; base = 0 = oldest = last).
+ * Fixes AUDIT-1: lexicographic sort put `audit-DATE-10` before `audit-DATE-2`.
+ */
+function compareAuditFilesNewestFirst(a: string, b: string): number {
+  const dateA = a.slice('audit-'.length, 'audit-'.length + 10); // YYYY-MM-DD
+  const dateB = b.slice('audit-'.length, 'audit-'.length + 10);
+  if (dateA !== dateB) return dateB < dateA ? -1 : 1; // newer date first
+  return auditRotationSuffix(b) - auditRotationSuffix(a); // higher suffix first
+}
+
+/**
  * Load the most recent `limit` audit entries from the audit directory.
  * Reads the current day's file (and yesterday's if needed to fill the limit).
  * Skips malformed lines gracefully.
@@ -89,13 +114,19 @@ export function loadRecentAuditEntries(
   const dir = getAuditDir(workspaceDir);
   if (!fs.existsSync(dir)) return [];
 
-  // Collect all audit JSONL files, sorted newest first
+  // Collect all audit JSONL files, sorted newest first.
+  // AUDIT-1: a plain lexicographic `.sort().reverse()` mis-orders rotated files once
+  // a day exceeds 9 rotations (`audit-DATE-10.jsonl` sorts before `audit-DATE-2.jsonl`)
+  // and also puts the base file (oldest content that day) first. Sort by date descending,
+  // then by numeric rotation suffix descending within the same day — the base file (no
+  // suffix = 0) is the oldest, the highest suffix is the newest (actively-written) file.
   let files: string[];
   try {
     files = fs.readdirSync(dir)
-      .filter(f => f.startsWith('audit-') && f.endsWith('.jsonl'))
-      .sort()
-      .reverse(); // newest date first
+      // M1: strict date pattern — a loose `audit-`/`.jsonl` filter let malformed
+      // names (e.g. `audit-broken.jsonl`) sort among real dates via the date slice.
+      .filter(f => AUDIT_FILE_RE.test(f))
+      .sort((a, b) => compareAuditFilesNewestFirst(a, b));
   } catch {
     return [];
   }

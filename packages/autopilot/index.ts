@@ -420,6 +420,16 @@ export function register(api: OpenClawPluginApi): void {
         setAuditMode('active');
         return { action: 'finalize' };
       }
+      case 'finalize': {
+        // BUG-3: decideContinuation returns 'finalize' for stopHookActive (user
+        // requested stop) and when status !== 'running'. Honor it — end the turn —
+        // instead of falling through to default 'continue' (which silently ignored
+        // the stop request and kept the loop alive). Audit-monitor release is
+        // intentionally NOT done here: it is tied to session-lifecycle transitions
+        // (pause/complete/stop gateway method), not to ending a single turn; the
+        // stop gateway method releases when the session is actually deactivated.
+        return { action: 'finalize' };
+      }
       default:
         return { action: 'continue' };
     }
@@ -619,6 +629,17 @@ export function register(api: OpenClawPluginApi): void {
     // pipeline which has no handler, causing 10s+ "Approval timed out" errors.
     if (decision.outcome === 'block') {
       logWithContext('info', 'before_tool_call BLOCKED', { sessionKey, runId, toolName, reason: decision.reason });
+      // BUG-1 (intentional design, documented): we do NOT dispatch the
+      // `permission_denied` reducer event here, even though orchestratorReducer
+      // handles it (running → blocked). That transition sets a NON-RESUMABLE
+      // blockedReason (`permission_denied` ∉ RESUMABLE_BLOCKED_REASONS), which would
+      // terminally kill the run on the FIRST denied tool. Autopilot is the TRUSTED
+      // main session: a veto should let the agent read the blockReason feedback and
+      // pivot to a safe approach on the next continuation, not permanently halt. The
+      // block is still enforced (hard veto returned to the host) and recorded in the
+      // audit trail (above) for operator visibility. The reducer branch remains as
+      // aspirational scaffolding for a future repetition-based pause if runaway
+      // destructive retries become a problem.
       return {
         block: true,
         blockReason: (decision as { outcome: 'block'; reason: string; message: string }).message,

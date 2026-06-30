@@ -22,6 +22,9 @@
  * comment marks it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { register, _resetForTest } from '../../index';
 
 // ─── Mock harness (copied from plugin-entry.test.ts — the proven template) ───
@@ -232,15 +235,33 @@ describe('E2E: activate → loop → complete lifecycle', () => {
         stopHookActive: true, // user hit stop
         lastAssistantMessage: '所有任务已完成',
       });
-      // frozen to current behavior: decideContinuation returns {action:'finalize'}
-      // for stopHookActive, but the before_agent_finalize switch has no case for
-      // 'finalize' — it falls through to default ⇒ {action:'continue'}. The host
-      // treats continue/finalize the same way (no revision injected), so the run
-      // simply stops getting autopilot injections until the next turn.
-      expect(result.action).toBe('continue');
-      // status untouched (no state transition)
+      // BUG-3 (fixed): decideContinuation returns {action:'finalize'} for
+      // stopHookActive, and the before_agent_finalize switch now honors it (case
+      // 'finalize') instead of falling through to default 'continue'. The host
+      // ends the turn, respecting the stop request.
+      expect(result.action).toBe('finalize');
+      // status untouched — finalize ends the turn but does not transition the
+      // session (deactivation + audit release happen via the stop gateway method).
       const proj = await projectionFor(mock, 'sess-guard3');
       expect(proj.status).toBe('running');
+    });
+
+    it('BUG-3 (2nd path): honors finalize when status is not running (e.g. after stop)', async () => {
+      // decideContinuation returns 'finalize' for status !== 'running' too. Pre-fix
+      // the switch fell through to default 'continue'; post-fix the case 'finalize'
+      // ends the turn. Independent coverage of the second finalize-producing branch.
+      await activateAndStart(mock, 'sess-guard4', 'sid-guard4');
+      const stop = mock.gatewayMethods.get('autopilot.stop')!;
+      await stop({ params: { sessionKey: 'sess-guard4' }, respond: vi.fn() });
+
+      const finalize = mock.hooks.get('before_agent_finalize')!;
+      const result = await finalize({
+        sessionId: 'sid-guard4',
+        sessionKey: 'sess-guard4',
+        stopHookActive: false,
+        lastAssistantMessage: 'still working...',
+      });
+      expect(result.action).toBe('finalize');
     });
   });
 
@@ -384,6 +405,52 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       const respond = vi.fn();
       await stop({ params: { sessionKey: 'never-seen' }, respond });
       expect(respond.mock.calls[0][0]).toBe(true);
+    });
+  });
+
+  // SEC: validateWorkspacePath (index.ts ~line 49) rejects renderer-supplied
+  // workspacePaths that are relative, non-existent, or files (not dirs). On
+  // rejection it returns undefined, and the activate handler falls back to
+  // process.cwd() (payloadWorkspacePath ?? process.cwd()). The projection
+  // exposes state.workspace?.path as workspacePath. So with an INVALID path the
+  // run silently falls back to cwd rather than storing the untrusted value —
+  // this is the security boundary that prevents a malicious renderer from
+  // pinning the containment boundary to an attacker-controlled path.
+  describe('validateWorkspacePath — invalid workspacePath falls back to process.cwd()', () => {
+    async function activateWithWorkspace(sessionKey: string, workspacePath: string) {
+      const activate = mock.gatewayMethods.get('autopilot.activate')!;
+      await activate({ params: { sessionKey, workspacePath }, respond: vi.fn() });
+      const sessionStart = mock.hooks.get('session_start')!;
+      await sessionStart({ sessionId: `sid-${sessionKey}`, sessionKey });
+    }
+
+    it('rejects a RELATIVE workspacePath and falls back to process.cwd()', async () => {
+      await activateWithWorkspace('sess-rel', 'relative/sub');
+      const proj = await projectionFor(mock, 'sess-rel');
+      // Falls back to cwd — NEVER stores the untrusted relative path.
+      expect(proj.workspacePath).toBe(process.cwd());
+      expect(proj.workspacePath).not.toBe('relative/sub');
+    });
+
+    it('rejects a NON-EXISTENT absolute workspacePath and falls back to process.cwd()', async () => {
+      await activateWithWorkspace('sess-noexist', '/nonexistent-xyz-123/path');
+      const proj = await projectionFor(mock, 'sess-noexist');
+      expect(proj.workspacePath).toBe(process.cwd());
+      expect(proj.workspacePath).not.toBe('/nonexistent-xyz-123/path');
+    });
+
+    it('rejects a FILE (not a dir) workspacePath and falls back to process.cwd()', async () => {
+      // Create a real temp file — statSync().isDirectory() returns false.
+      const tmpFile = path.join(os.tmpdir(), `autopilot-notadir-${Date.now()}.txt`);
+      fs.writeFileSync(tmpFile, 'i am a file not a dir', 'utf-8');
+      try {
+        await activateWithWorkspace('sess-file', tmpFile);
+        const proj = await projectionFor(mock, 'sess-file');
+        expect(proj.workspacePath).toBe(process.cwd());
+        expect(proj.workspacePath).not.toBe(tmpFile);
+      } finally {
+        fs.rmSync(tmpFile, { force: true });
+      }
     });
   });
 });

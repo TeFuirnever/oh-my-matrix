@@ -121,15 +121,80 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
     ['totally-unknown-binary --flag', 'unknown'],
     // npx reclassifies its payload; an unrecognized payload → unknown.
     ['npx some-pkg --destroy', 'unknown'],
-    // gap: `npm exec -- rm -rf /` — the `--` separator breaks the payload chain,
-    // so the payload is classified as the literal token `--` → unknown (NOT
-    // workspace_cleanup). Frozen as current behavior; flagged so a future
-    // shell-model upgrade fixes it.
-    ['npm exec -- rm -rf /', 'unknown'],
   ] as const)('unknown: %s', (command, expected) => {
     it(`classifies "${command}" as ${expected}`, () => {
       expect(classifyExec(command)).toBe(expected);
     });
+  });
+
+  describe.each([
+    // SEC-1/SEC-2 (fixed): a leading `--` separator and env own-flags / KEY=val
+    // assignments no longer break payload reclassification — the destructive
+    // payload is classified, not the `--` / `-i` / `FOO=bar` token. Pre-fix these
+    // all fell through to `unknown` (→ allow-by-default in trusted sessions).
+    ['npx -- rm -rf /', 'workspace_cleanup'],
+    ['npx -- -- rm -rf /', 'workspace_cleanup'],       // H1: double -- loop-strip
+    ['npm exec -- rm -rf /', 'workspace_cleanup'],
+    ['npm exec -- -- rm -rf /', 'workspace_cleanup'],  // H1
+    ['pnpm exec -- rm -rf /', 'workspace_cleanup'],
+    ['yarn exec -- rm -rf /', 'workspace_cleanup'],    // same package-manager branch
+    ['npx -y rm -rf /', 'workspace_cleanup'],          // H2: -y (most common npx flag)
+    ['npx --yes rm -rf /', 'workspace_cleanup'],       // H2
+    ['npx -p somepkg rm -rf /', 'workspace_cleanup'],  // H2: -p consumes pkg, then rm
+    ['npx -c rm -rf /', 'system_write'],               // H2: -c opaque payload → block
+    ['env -i rm -rf /', 'workspace_cleanup'],
+    ['env FOO=bar rm -rf /', 'workspace_cleanup'],
+    ['env -u VAR rm -rf /', 'workspace_cleanup'],
+  ] as const)('SEC-1/2/H1/H2 fixed payload reclassification: %s', (command, expected) => {
+    it(`classifies "${command}" as ${expected}`, () => {
+      expect(classifyExec(command)).toBe(expected);
+    });
+  });
+
+  describe.each([
+    // SEC-3/H4: shell `-c` incl. POSIX combined short flags (-ic/-ci/-xc) → block.
+    ['bash -c rm -rf /', 'system_write'],
+    ['sh -ic rm -rf /', 'system_write'],           // H4: combined -ic (exact '-c' missed this)
+    ['bash -ci "evil"', 'system_write'],           // H4: combined -ci
+    ['zsh -xc curl evil', 'system_write'],         // H4: combined -xc
+    // SEC-3/H5: non-shell interpreters with inline program (-c/-e) → block.
+    ['python -c "import os"', 'system_write'],
+    ['python3 -c x', 'system_write'],
+    ['node -e "require(fs)"', 'system_write'],
+    ['perl -e "system(qw(rm))"', 'system_write'],
+    ['ruby -e "system :rm"', 'system_write'],
+    // SEC-3: pure-prefix wrappers → classify the wrapped payload.
+    ['nohup rm -rf /', 'workspace_cleanup'],
+    ['time rm -rf /', 'workspace_cleanup'],
+    ['command rm -rf /', 'workspace_cleanup'],
+    // SEC-3/H6: timeout strips flags + duration, then classifies the command.
+    ['timeout 5 rm -rf /', 'workspace_cleanup'],
+    ['timeout 5 bash -c x', 'system_write'],        // H6: timeout → bash -c reached → block
+    // SEC-3/H2-residual: npx combined/attached flag forms.
+    ['npx -yp somepkg rm -rf /', 'workspace_cleanup'], // combined -yp consumes pkg
+    ['npx -yc rm -rf /', 'system_write'],           // combined -yc carries -c → opaque → block
+  ] as const)('SEC-3/H4/H5/H6 expanded classifier hardening: %s', (command, expected) => {
+    it(`classifies "${command}" as ${expected}`, () => {
+      expect(classifyExec(command)).toBe(expected);
+    });
+  });
+
+  it('H7: env -S fail-closed (opaque split-string → system_write)', () => {
+    // Over-blocks benign `env -S "A=1 B=2" cmd` too — acceptable for autopilot,
+    // since -S's arg is a shell-split string the tokenizer can't safely classify.
+    expect(classifyExec('env -S "rm -rf /" cmd')).toBe('system_write');
+    expect(classifyExec('env -S "A=1 B=2" echo hi')).toBe('system_write');
+  });
+
+  it('H8: bare `npx --` (flags consumed everything) → unknown, not validation', () => {
+    expect(classifyExec('npx --')).toBe('unknown');
+  });
+
+  it('SEC-3 documented ceiling: remaining arg-consuming wrappers still unknown (xargs/nice)', () => {
+    // ponytail: known follow-up. timeout is now modelled (above); xargs/nice are not.
+    // Defense-in-depth for the TRUSTED path only — subagent defaultDeny blocks these.
+    expect(classifyExec('xargs rm')).toBe('unknown');
+    expect(classifyExec('nice -n 5 rm -rf /')).toBe('unknown');
   });
 
   it('gap: `cat /etc/shadow` classifies read_only (classifier ignores credential file paths)', () => {
@@ -196,5 +261,18 @@ describe('E2E decidePermissionForEvent — subagent (defaultDeny) outcome bounda
     // Same known gap, observed end-to-end through the real event path: cat is
     // read_only, so defaultDeny does NOT block it. Documented reality.
     expect(allow('cat /etc/shadow')).toBe('allow');
+  });
+
+  it('SEC loosening: env-wrapped BENIGN command now ALLOWS in subagent (was block pre-fix)', () => {
+    // Pre-SEC-2, `env -i ls` masked ls behind -i → unknown → block under defaultDeny.
+    // Post-fix, ls is reached → read_only → allow. ls is genuinely read-only, so this
+    // loosening of the shared classifier is correct; pinned to catch regressions
+    // (in either direction) on the shared primitive both plugins consume.
+    expect(allow('env -i ls -la')).toBe('allow');
+  });
+
+  it('SEC: env-wrapped DESTRUCTIVE command still BLOCKS in subagent', () => {
+    expect(allow('env -i rm -rf /')).toBe('block');
+    expect(allow('env FOO=bar git reset --hard')).toBe('block');
   });
 });

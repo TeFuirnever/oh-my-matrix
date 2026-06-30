@@ -124,6 +124,52 @@ export type PermissionDecision =
   | { outcome: 'block'; reason: string; message: string; commandClass?: CommandClass };
 
 /**
+ * Strip ALL leading `--` option-terminator tokens so the real payload after them
+ * is reached. A single strip was bypassable (`npx -- -- rm`); this loops to mirror
+ * the env handler. SEC-1/H1.
+ */
+function stripLeadingDashDash(args: string[]): string[] {
+  let i = 0;
+  while (i < args.length && args[i] === '--') i++;
+  return args.slice(i);
+}
+
+/** Shell interpreters whose `-c <string>` form runs an opaque script string. SEC-3. */
+const SHELL_INTERPRETERS: ReadonlySet<string> = new Set([
+  'bash', 'sh', 'zsh', 'dash', 'ksh', 'ash', 'fish', 'csh', 'tcsh',
+]);
+
+/**
+ * Non-shell script interpreters that take an inline program via `-c` / `-e`
+ * (`python -c`, `node -e`, `perl -e`, `ruby -e`, …). Same opaque-payload risk as
+ * shell `-c`: the tokenizer cannot see into the script string. SEC-3/H5.
+ */
+const OPAQUE_INTERPRETERS: ReadonlySet<string> = new Set([
+  'python', 'python2', 'python3', 'node', 'nodejs', 'perl', 'ruby', 'php',
+  'awk', 'gawk', 'lua', 'tclsh', 'wish', 'pwsh', 'powershell',
+]);
+
+/** Commands that prefix a real command and consume no args of their own. SEC-3. */
+const PREFIX_WRAPPERS: ReadonlySet<string> = new Set([
+  'nohup', 'time', 'command',
+]);
+
+/**
+ * Does token `tok` carry short flag `f`? Handles exact (`-c`) AND POSIX combined
+ * short flags (`-ic`, `-ci`, `-xc` — POSIX lets shells/tools combine flags). H4:
+ * exact `=== '-c'` was bypassable via `sh -ic`. This is the root-cause fix for the
+ * recurring exact-match evasion class (H1/H4/H2-residual). SEC-3.
+ */
+function hasShortFlag(tok: string, f: string): boolean {
+  return tok === `-${f}` || (/^-[a-z]+$/i.test(tok) && tok.includes(f));
+}
+
+/** Does token `tok` carry long flag `name`, including the `--name=value` form? */
+function hasLongFlag(tok: string, name: string): boolean {
+  return tok === `--${name}` || tok.startsWith(`--${name}=`);
+}
+
+/**
  * Classify a command/tool call into a CommandClass category.
  */
 export function classifyCommand(
@@ -154,6 +200,23 @@ export function classifyCommand(
         return kindNormalized as CommandClass;
       }
     }
+  }
+
+  // ─── SEC-3/H4: shell `-c <string>` is an opaque payload → always block ──────────
+  // Checked BEFORE generic-exec delegation: bash/sh/zsh ARE generic executors
+  // (next block) that would otherwise redelegate on the literal `-c` token →
+  // unknown → allow-by-default. hasShortFlag also catches POSIX combined forms
+  // (`-ic`, `-ci`, `-xc`) that exact `=== '-c'` missed (H4). It slips the subagent
+  // hasShellFeature gate (which catches $()/backticks but not `bash -c`), so block
+  // it at the classifier.
+  if (SHELL_INTERPRETERS.has(toolLower) && args.some(a => hasShortFlag(a, 'c'))) {
+    return 'system_write';
+  }
+  // ─── SEC-3/H5: non-shell interpreters with an inline program (-c/-e) → block ──
+  // `python -c "…"`, `node -e "…"`, `perl -e`, `ruby -e` — same opaque-payload
+  // risk as shell `-c`; the script string is invisible to the tokenizer.
+  if (OPAQUE_INTERPRETERS.has(toolLower) && args.some(a => hasShortFlag(a, 'c') || hasShortFlag(a, 'e'))) {
+    return 'system_write';
   }
 
   // ─── Generic exec tools: classify by first arg ────────────
@@ -237,14 +300,41 @@ export function classifyCommand(
     const sub = args[0];
     if (sub === 'install' || sub === 'add' || sub === 'update') return 'network';
     if (sub === 'test' || sub === 'run') return 'validation';
-    // `exec` runs an ARBITRARY wrapped command — classify the payload, not 'validation'
-    if (sub === 'exec' && args.length > 1) return classifyCommand(args[1], args.slice(2), toolKind);
+    // `exec` runs an ARBITRARY wrapped command — classify the payload, not 'validation'.
+    // SEC-1/H1: strip ALL leading `--` separators so the real payload is classified
+    // (a single strip was bypassable via `npm exec -- -- rm`).
+    if (sub === 'exec' && args.length > 1) {
+      const payload = stripLeadingDashDash(args.slice(1));
+      return payload.length > 0 ? classifyCommand(payload[0], payload.slice(1), toolKind) : 'validation';
+    }
     if (sub === 'exec') return 'validation';
     return 'unknown';
   }
 
-  // `npx <cmd>` runs an arbitrary command — classify the payload, not 'validation'
-  if (toolLower === 'npx' && args.length > 0) return classifyCommand(args[0], args.slice(1), toolKind);
+  // `npx <cmd>` runs an arbitrary command — classify the payload, not 'validation'.
+  // SEC-1/H1: strip ALL leading `--` separators. H2: strip npx own flags first
+  // (-y/--yes, -p/--package <pkg>, -n/--node, -i, --no-install, --quiet, …) so
+  // `npx -y rm` classifies the rm. `-c`/`--call <cmdstring>` carries an OPAQUE
+  // command string the tokenizer cannot safely classify → system_write (always
+  // blocked), matching the bash -c rule below.
+  if (toolLower === 'npx' && args.length > 0) {
+    let i = 0;
+    while (i < args.length) {
+      const tok = args[i];
+      // -c / --call (incl. combined -yc and attached --call=) → opaque payload → block.
+      if (hasShortFlag(tok, 'c') || hasLongFlag(tok, 'call')) return 'system_write';
+      // -p/--package / -n/--node (incl. combined -yp and attached) consume the next token.
+      if (hasShortFlag(tok, 'p') || hasLongFlag(tok, 'package') || hasShortFlag(tok, 'n') || hasLongFlag(tok, 'node')) {
+        i += tok.includes('=') ? 1 : 2; continue;
+      }
+      if (tok === '--') { i++; continue; }
+      if (/^(-y|--yes|-i|--install|--no-install|--quiet|-q|-h|--help|--version)$/.test(tok)) { i++; continue; }
+      if (tok.startsWith('-') && tok.length > 1) { i++; continue; } // any other npx -flag
+      break;
+    }
+    // H8: flags consumed everything (e.g. bare `npx --`) → unknown, not 'validation'.
+    return i < args.length ? classifyCommand(args[i], args.slice(i + 1), toolKind) : 'unknown';
+  }
   if (toolLower === 'npx') return 'validation';
 
   // ─── Network tools ───────────────────────────────────────
@@ -260,9 +350,58 @@ export function classifyCommand(
   }
 
   // ─── B-4: env <cmd> passes through to the actual command ────
+  // SEC-2: skip env's own flags (-i/-u/-C/-S/-), `--`, and `KEY=VALUE` assignments
+  // before the passthrough command, so `env -i rm -rf /` and `env FOO=bar rm` classify
+  // the rm payload (workspace_cleanup), not the `-i`/`FOO=bar` token (→ unknown →
+  // allow-by-default in trusted sessions). Bare `env` (print env) stays read_only below.
   if (toolLower === 'env' && args.length > 0) {
+    let i = 0;
+    while (i < args.length) {
+      const tok = args[i];
+      if (tok === '--' || tok === '-' || tok === '-i') { i++; continue; }      // clean-env / end-of-opts
+      // H7: `-S <string>` splits a quoted string into tokens at runtime
+      // (`env -S "A=1 B=2" cmd`, or attackively `env -S "rm -rf /" cmd`). The arg
+      // is opaque to the tokenizer → fail-closed to system_write rather than risk
+      // swallowing a destructive payload as the -S argument.
+      if (tok === '-S') return 'system_write';
+      if (tok === '-u' || tok === '-C') { i += 2; continue; }                  // flag + its argument
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) { i++; continue; }             // KEY=VALUE assignment
+      if (tok.startsWith('-') && tok.length > 1) { i++; continue; }            // any other -flag
+      break;
+    }
+    return i < args.length ? classifyCommand(args[i], args.slice(i + 1), toolKind) : 'read_only';
+  }
+
+  // ─── SEC-3: pure-prefix command wrappers (passthrough) ──────────────────
+  // These prefix a real command with no args of their own to consume, so
+  // reclassify the wrapped payload (e.g. `nohup rm -rf /` → rm).
+  if (PREFIX_WRAPPERS.has(toolLower) && args.length > 0) {
     return classifyCommand(args[0], args.slice(1), toolKind);
   }
+
+  // ─── SEC-3/H6: `timeout [flags] <duration> <cmd>` — strip flags + duration ──
+  // timeout is the most common arg-consuming wrapper; modelling it also closes
+  // `timeout 5 bash -c x` (the bash -c is reached and blocked by the shell check
+  // above). `-s`/`--signal`/`-k`/`--kill-after` consume the next token.
+  if (toolLower === 'timeout' && args.length > 0) {
+    let i = 0;
+    while (i < args.length) {
+      const tok = args[i];
+      if (hasLongFlag(tok, 'signal') || hasLongFlag(tok, 'kill-after') || tok === '-s' || tok === '-k') { i += 2; continue; }
+      if (tok === '--') { i++; continue; }
+      if (tok.startsWith('-') && tok.length > 1) { i++; continue; }
+      break;
+    }
+    // first non-flag token is the duration; the token after it is the command.
+    if (i + 1 < args.length) return classifyCommand(args[i + 1], args.slice(i + 2), toolKind);
+    return 'unknown';
+  }
+  // ponytail: known wrapper-bypass ceiling — `xargs cmd`, `stdbuf -oL cmd`,
+  // `nice -n 5 cmd`, `ionice -c 2 cmd` still classify as `unknown` (→ allow-by-
+  // default in trusted autopilot sessions). Each consumes its own flags before the
+  // command and needs a dedicated handler; upgrade path = a per-wrapper arg table.
+  // NOTE: this is defense-in-depth for the TRUSTED path only — the subagent guard
+  // (defaultDeny) blocks all of these. A perfect boundary needs a real shell parser.
 
   // find with -delete/-exec/-ok is destructive (deletes files or runs an arbitrary
   // command per match). Plain `find` (search) stays read_only below.

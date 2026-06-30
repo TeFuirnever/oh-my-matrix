@@ -97,3 +97,36 @@ describe('E2E workspace containment for destructive git (path-relative, not star
     expect(decidePermissionForEvent(ev('git reset --hard', '/anywhere'), subagent).outcome).toBe('block');
   });
 });
+
+// SEC-1/2 + worst-class loop: an `unknown` tail segment must block the whole
+// chain under defaultDeny, even though a benign head (`git status`) alone would
+// allow. This is the multi-segment worst-class-wins contract that the shell-split
+// loop enforces: ANY segment that blocks sinks the entire command. The reverse
+// counter proves it is defaultDeny doing the work — same command without
+// defaultDeny stays allow-by-default.
+describe('E2E multi-segment worst-class — unknown tail blocks under defaultDeny', () => {
+  it('BLOCKS "git status && unknown-binary --x" under defaultDeny (unknown tail sinks the chain)', () => {
+    // `git status` alone would allow (safe_git). But `unknown-binary` classifies
+    // as `unknown`, and under defaultDeny unknown → block (permission-policy.ts
+    // line ~423). The worst-class loop returns block on the FIRST blocking segment.
+    expect(
+      decidePermissionForEvent(
+        ev('git status && unknown-binary --x'),
+        { defaultDeny: true, workflowAllowsDestructiveGit: false },
+      ).outcome,
+    ).toBe('block');
+  });
+
+  it('ALLOWS the same chain WITHOUT defaultDeny (trusted main session, allow-by-default)', () => {
+    // Reverse counter: same command, no defaultDeny → both segments allow
+    // (git status = safe_git, unknown-binary = unknown-but-allow-by-default).
+    // Proves it is defaultDeny flipping the unknown segment to block, not the
+    // command itself being inherently destructive.
+    expect(
+      decidePermissionForEvent(
+        ev('git status && unknown-binary --x'),
+        { workflowAllowsDestructiveGit: false },
+      ).outcome,
+    ).toBe('allow');
+  });
+});
