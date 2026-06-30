@@ -188,4 +188,4 @@ Contributions are welcome — start with docs, tests, the host-integration runbo
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — copyright oh-my-matrix contributors. This project is human-led and developed with AI assistance; all contributions are reviewed and owned by the maintainers.
