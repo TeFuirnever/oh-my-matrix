@@ -116,10 +116,21 @@ After completing preflight, announce the workflow to the user:
 
 Then proceed to check for existing .prose files (Reuse path) or Step 1.
 
+### Workflow artifact directory
+
+All `.prose` programs this skill generates are written under
+`<cwd>/.openclaw/workflows/` — never loose in the workspace root. The Reuse
+path scans that directory only. This keeps the user's project tree clean and
+prevents accidental commits (the repo root `.gitignore` covers `.openclaw/`).
+
+OpenProse execution state defaults to `<cwd>/.prose/runs/` at the host's
+discretion — this skill cannot relocate it. If the host exposes a state
+backend config, point it at `.openclaw/runs/` for the same reason.
+
 ### Reuse path: existing .prose found
 
-If the project already has a `.prose` file that matches the task, do NOT
-skip to execution.
+If `.openclaw/workflows/` already has a `.prose` file that matches the task,
+do NOT skip to execution.
 
 **🔴 CHECKPOINT · 🛑 STOP**:
 1. Read and display the full `.prose` program to the user
@@ -159,10 +170,18 @@ For ready-to-use starting points, read a template from `templates/`
 (fan-out-reduce, adversarial-verify, pipeline) and use it as the
 Step 2 skeleton. Replace all commented customization points.
 
+Write the finished program to `<cwd>/.openclaw/workflows/<name>.prose` —
+never to the workspace root (see Workflow artifact directory).
+
 Key rules:
 
 - **Indentation is significant** (Python-like) — use 2 spaces per level.
   Tabs and mixed indentation are errors
+- **Keywords are ASCII English, never localized** — `input` `agent` `model`
+  `prompt` `session` `let` `context` `parallel` `for` `if` `elif` `else`
+  `try` `catch` `output` `block` `map` `filter` `reduce` `pmap` stay English
+  even in Chinese workflows; only descriptions, comments, and prompt bodies
+  may be Chinese. `模型:` / `会话:` / `并行:` fail compile.
 - `input name: "description"` declares a user input with a description
   (not a default value — it prompts the caller)
 - `agent name:` defines a specialized role (with indented `model:` and `prompt:`)
@@ -256,8 +275,8 @@ is partial or missing: check if sessions timed out (switch to `haiku`),
 if context was too large (use `| map:` instead), or if the program crashed
 mid-run (check `.prose/runs/` logs if using OpenProse, or check session
 results if executing directly). For the full diagnostic table, read
-`references/failure-recovery.md`. If the user wants to reuse this workflow,
-save the `.prose` file.
+`references/failure-recovery.md`. The generated `.prose` already lives under `.openclaw/workflows/`; point back
+to that file when the user wants to rerun it.
 
 ## .prose syntax essentials
 
