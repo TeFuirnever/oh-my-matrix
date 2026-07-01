@@ -16,7 +16,7 @@ import { logWithContext } from './src/logger';
 
 export const id = 'dynamic-workflows';
 export const name = 'Dynamic Workflows Guard';
-export const version = '0.1.0';
+export const version = '0.1.2';
 
 /**
  * before_tool_call priority — higher than autopilot (10) and

@@ -89,3 +89,38 @@ jobs:
         if: always()
         run: |
           printf '### Test (all workspaces)\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  hook-priority:
+    name: Hook priority ordering (DW > autopilot > 9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert DW priority > autopilot priority > audit priority
+        run: |
+          DW=$(grep -oP 'BEFORE_TOOL_CALL_PRIORITY\s*=\s*\K\d+' packages/dynamic-workflows/index.ts) || { echo "ERROR: DW priority constant not found"; exit 1; }
+          AP=$(grep -oP 'BEFORE_TOOL_CALL_PRIORITY\s*=\s*\K\d+' packages/autopilot/index.ts) || { echo "ERROR: autopilot priority constant not found"; exit 1; }
+          echo "DW priority: $DW, Autopilot priority: $AP"
+          [ "$DW" -gt "$AP" ] || (echo "ERROR: DW priority ($DW) must be > autopilot priority ($AP)" && exit 1)
+          [ "$AP" -gt 9 ] || (echo "ERROR: Autopilot priority ($AP) must be > 9 (audit plugin)" && exit 1)
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Hook priority ordering\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+  audit:
+    name: Security audit (pnpm audit --prod)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=moderate
+      - name: Summary
+        if: always()
+        run: |
+          printf '### Security audit\nstatus: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
