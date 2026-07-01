@@ -163,7 +163,7 @@ pnpm --filter @oh-my-matrix/permission-policy publish --access public
 |---|---|
 | Root public release | v0.8.0 (GitHub Release) |
 | npm public package | published `@oh-my-matrix/*` (permission-policy 0.1.1 / autopilot 3.0.0 / dynamic-workflows 0.1.2) |
-| CI / Harness | GitHub Actions, 4 gates (lint / typecheck / commitlint / test) + local `pnpm verify` mirror |
+| CI / Harness | GitHub Actions, 6 gates (lint / typecheck / commitlint / test / hook-priority / audit) + local `pnpm verify` mirror |
 | Dependency scanning | Dependabot enabled (`.github/dependabot.yml`) |
 | Docs site | https://tefuirnever.github.io/oh-my-matrix/ — hand-drawn landing (root) + docs (`/docs/`, VitePress source in [`website/`](website/)) |
 | Security policy | [`SECURITY.md`](SECURITY.md) |

@@ -86,8 +86,8 @@ Two routing mechanisms that are **orthogonal and composable**: dynamic-workflows
 
 | Deliverable | Why | Status |
 |---|---|---|
-| Graduated thinking intensity (3-level `effort-injection`) | Binary "use high effort" wastes reasoning time in validation phase; `resolveThinkingIntensity()` adapts per phase | Planned |
-| Model tier routing via `before_model_resolve` hook | `appendContext` is advisory-only; only `modelOverride` is consumed by Gateway | Planned |
+| Graduated thinking intensity (3-level `effort-injection`) | Binary "use high effort" wastes reasoning time in validation phase; `resolveThinkingIntensity()` adapts per phase | Done 2026-06-29 (#33) |
+| Model tier routing via `before_model_resolve` hook | `appendContext` is advisory-only; only `modelOverride` is consumed by Gateway | Done 2026-06-29 (#33) |
 | `WORKFLOW.md` `model_routing` config surface | Per-phase tier + `modelIds` map needs a user-facing config seam (reuses existing parser) | Planned |
 | Subagent routing (`subagentTier` + `isSubagentSession`) | Workflow subagents should route independently (e.g., screening on budget tier) | Planned |
 | SKILL.md tier guidance for `.prose` generation | Map budget/standard/premium into agent-definition guidance so AI picks models systematically — benefits pure-workflow runs without autopilot | Planned (separate task; orthogonal to autopilot code) |
@@ -96,7 +96,7 @@ Exit criteria:
 
 - `before_model_resolve` hook registered; returns `modelOverride` per execution phase for main agent and subagents.
 - When `modelIds` is unconfigured, autopilot returns no override — `.prose` `model:` declarations fully win (no silent interference).
-- `pnpm --filter @oh-my-matrix/autopilot test` remains green (633 existing tests unaffected; backward compat via `'high'` default).
+- `pnpm --filter @oh-my-matrix/autopilot test` remains green (667 existing tests unaffected; backward compat via `'high'` default).
 
 ## Historical v0.x Snapshot
 
