@@ -17,11 +17,11 @@
 - [ ] `pnpm build` succeeds
 - [ ] `pnpm test` passes
 - [ ] New/updated tests cover the changes
-- [ ] `pnpm omm:verify-bundle` passes (if build artifacts changed)
+- [ ] `pnpm verify` passes (lint + markdownlint + typecheck + tests + docs build)
 
 ## Checklist
 
-- [ ] Code follows the project's style (Biome)
+- [ ] Code follows the project's style (ESLint)
 - [ ] Self-review completed
-- [ ] Zero runtime dependencies added to MCP packages (ADR-003)
+- [ ] Zero runtime dependencies added to published packages (ADR-013)
 - [ ] Key inputs validated against path-traversal allowlist

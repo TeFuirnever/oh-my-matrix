@@ -162,7 +162,7 @@ pnpm --filter @oh-my-matrix/permission-policy publish --access public
 | 事项 | 状态 |
 |---|---|
 | 根仓库公开 release | v0.8.0（GitHub Release）|
-| npm public package | 已发布 `@oh-my-matrix/*`（permission-policy 0.1.0 / autopilot 2.1.1 / dynamic-workflows 0.1.1）|
+| npm public package | 已发布 `@oh-my-matrix/*`（permission-policy 0.1.1 / autopilot 3.0.0 / dynamic-workflows 0.1.2）|
 | CI / Harness | GitHub Actions 4 gate（lint / typecheck / commitlint / test）+ 本地 `pnpm verify` 镜像 |
 | 依赖扫描 | Dependabot 已启用（`.github/dependabot.yml`） |
 | 在线站点 | https://tefuirnever.github.io/oh-my-matrix/ — 手绘 landing（根）+ 文档（`/docs/`，VitePress 源见 [`website/`](website/)）|

@@ -20,7 +20,8 @@
     "build": "tsc",
     "test": "vitest run",
     "pack": "pnpm pack",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

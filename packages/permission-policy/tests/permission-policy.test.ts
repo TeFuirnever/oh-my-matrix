@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyCommand,
   decidePermission,
+  decidePermissionForEvent,
   extractCommandSegments,
 } from '../src/permission-policy';
 import type { PermissionDecisionInput } from '../src/permission-policy';
@@ -427,8 +428,10 @@ describe('decidePermission', () => {
     });
 
     it('ignores destructive_git toolKind when toolName is write_file (generic tool, not git)', () => {
-      // write_file has no name-based classifier → falls through to unknown (still safe: requires_approval)
-      expect(classifyCommand('write_file', [], 'destructive_git')).toBe('unknown');
+      // The cross-check rejects the destructive_git toolKind for write_file (not a git tool)
+      // and falls through to name-based classification. B9 fix: write_file is now explicitly
+      // classified as workspace_write (not unknown), so subagents can still use it.
+      expect(classifyCommand('write_file', [], 'destructive_git')).toBe('workspace_write');
     });
 
     it('still respects destructive_git toolKind when toolName is git.exe (Windows)', () => {
@@ -660,5 +663,45 @@ describe('S4: classifyCommand — git reset without --hard is safe_git', () => {
 
   it('git reset --hard is still destructive_git', () => {
     expect(classifyCommand('git', ['reset', '--hard'])).toBe('destructive_git');
+  });
+});
+
+describe('B9 — segments===0 framework tools respect defaultDeny', () => {
+  // B9 fix: decidePermissionForEvent now forwards defaultDeny in the segments===0 branch.
+  // Known agent-framework tools are explicitly classified (workspace_write / read_only)
+  // so they pass through. Unknown tools are blocked by defaultDeny in subagent sessions.
+  const frameworkEv = (toolName: string) =>
+    ({ toolName, params: {} as Record<string, unknown> });
+
+  const subagentOpts = {
+    workflowAllowsDestructiveGit: false,
+    defaultDeny: true as const,
+    workspacePath: '/ws',
+  };
+  const trustedOpts = {
+    workflowAllowsDestructiveGit: false,
+    workspacePath: '/ws',
+  };
+
+  it('blocks unknown framework tool with defaultDeny:true', () => {
+    expect(decidePermissionForEvent(frameworkEv('unknown_dangerous_tool'), subagentOpts).outcome).toBe('block');
+  });
+
+  it.each(['write_file', 'apply_patch', 'apply_diff', 'code_editor'] as const)(
+    'allows %s with defaultDeny:true (workspace_write)',
+    (tool) => {
+      expect(decidePermissionForEvent(frameworkEv(tool), subagentOpts).outcome).toBe('allow');
+    },
+  );
+
+  it.each(['read_file', 'sessions_spawn', 'sessions_view', 'process', 'todo_write'] as const)(
+    'allows %s with defaultDeny:true (read_only)',
+    (tool) => {
+      expect(decidePermissionForEvent(frameworkEv(tool), subagentOpts).outcome).toBe('allow');
+    },
+  );
+
+  it('allows unknown framework tool in TRUSTED session (no defaultDeny — unchanged)', () => {
+    expect(decidePermissionForEvent(frameworkEv('unknown_new_tool'), trustedOpts).outcome).toBe('allow');
   });
 });

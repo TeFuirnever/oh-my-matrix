@@ -8,6 +8,12 @@ website/.vitepress/dist/
 .DS_Store
 **/.DS_Store
 
+# 编译产物（不入库，通过 prepublishOnly 在发布时构建）
+packages/*/dist/
+
+# pnpm 本地存储（不入库）
+.pnpm-store/
+
 # pnpm pack 产物（构建产物，不入库；MA 引用各自仓内的副本）
 packages/*/*.tgz
 

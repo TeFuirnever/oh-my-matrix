@@ -182,6 +182,8 @@ export function classifyCommand(
   // the actual command is in the args array.
   const genericExecTools = ['code_mode_exec', 'shell_exec', 'terminal', 'bash', 'sh', 'exec'];
   if (genericExecTools.includes(toolLower) && args.length > 0) {
+    // B3 fix: Block bash/sh -c and -- (don't recurse into payload string)
+    if (args[0] === '-c' || args[0] === '--') return 'unknown';
     // Reclassify using the first arg as the actual tool
     const [actualTool, ...restArgs] = args;
     return classifyCommand(actualTool, restArgs, toolKind);
@@ -313,6 +315,12 @@ export function classifyCommand(
     return 'workspace_cleanup';
   }
 
+  // ─── Workspace write tools (B9 fix) ──────────────────────
+  const workspaceWriteTools = [
+    'write_file', 'apply_patch', 'apply_diff', 'code_editor',
+  ];
+  if (workspaceWriteTools.includes(toolLower)) return 'workspace_write';
+
   // ─── Read-only tools ─────────────────────────────────────
   const readOnlyTools = [
     'rg', 'grep', 'ls', 'find', 'cat', 'head', 'tail', 'wc', 'sort', 'uniq',
@@ -331,7 +339,7 @@ export function classifyCommand(
     // process poll/kill of the agent's own child sessions. Allow in subagent
     // sessions so defaultDeny doesn't break the workflow machinery itself.
     'process', 'update_plan', 'sessions_spawn', 'sessions_yield',
-    'sessions_get', 'sessions_list', 'todo_write',
+    'sessions_get', 'sessions_list', 'sessions_view', 'todo_write',
   ];
   if (readOnlyTools.includes(toolLower)) return 'read_only';
 
@@ -499,11 +507,11 @@ export function decidePermissionForEvent(
 
   if (segments.length === 0) {
     // Non-shell framework tool (read/write_file/sessions_*/process/update_plan):
-    // classify by toolName ONLY. These are agent-API tools, not shell-injection
-    // vectors, so they stay allow-by-default — defaultDeny applies only to the
-    // shell segments below (that's where destructive commands ride). Without
-    // this, defaultDeny would block write_file/apply_patch and subagents couldn't
-    // produce anything.
+    // classify by toolName ONLY. Known agent-API tools are explicitly classified
+    // as workspace_write or read_only (see classifyCommand above) so they pass
+    // through even with defaultDeny. Unknown/novel tools hit the defaultDeny gate
+    // and are blocked in subagent sessions. (B9 fix: defaultDeny now forwarded.)
+    const cls = classifyCommand(event.toolName, []);
     const d = decidePermission({
       toolName: event.toolName,
       command: [],
@@ -511,8 +519,10 @@ export function decidePermissionForEvent(
       workspacePath: opts.workspacePath,
       workspaceRoot: opts.workspaceRoot,
       workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
+      defaultDeny: opts.defaultDeny,
+      cmdClass: cls,
     });
-    return { ...d, commandClass: classifyCommand(event.toolName, []) };
+    return { ...d, commandClass: cls };
   }
 
   // Shell command: classify each segment ONCE, track the worst class for audit,
