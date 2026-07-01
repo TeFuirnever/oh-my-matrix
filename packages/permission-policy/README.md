@@ -24,5 +24,5 @@ Designed **fail-closed** for `:subagent:` destructive operations.
 
 ## Status
 
-v0.1.0. Tested with `vitest`. See the project
+v0.1.1. Tested with `vitest`. See the project
 [changelog](https://github.com/TeFuirnever/oh-my-matrix/blob/master/CHANGELOG.md).
