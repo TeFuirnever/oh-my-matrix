@@ -17,9 +17,10 @@ packages/*/dist/
 # pnpm pack 产物（构建产物，不入库；MA 引用各自仓内的副本）
 packages/*/*.tgz
 
-# 工具索引产物（codegraph / context engine），不入库
+# 工具索引产物（codegraph / context engine / graphify），不入库
 .codegraph/
 .context/
+graphify-out/
 
 # permission-policy audit 产物（测试/运行时 appendAuditEntry 写入 cwd），不入库
 .autopilot/
