@@ -42,6 +42,15 @@ describe('completion-detector', () => {
       expect(isTaskComplete('Everything is done, all tests pass.')).toBe(true);
     });
 
+    // R4: widened "X is complete" — the old pattern only matched "task is complete"
+    it('detects "the implementation is complete" (R4 widened)', () => {
+      expect(isTaskComplete('The implementation is complete. All tests pass.')).toBe(true);
+    });
+
+    it('detects "the feature is complete"', () => {
+      expect(isTaskComplete('Great — the feature is complete now.')).toBe(true);
+    });
+
     // Case insensitivity
     it('detects case-insensitive "ALL TASKS COMPLETED"', () => {
       expect(isTaskComplete('ALL TASKS COMPLETED!')).toBe(true);
@@ -50,6 +59,15 @@ describe('completion-detector', () => {
     // False positives rejection
     it('rejects negated mention: "not all tasks completed"', () => {
       expect(isTaskComplete('I have not all tasks completed yet, still working.')).toBe(false);
+    });
+
+    // R7: Chinese conditional completion is NOT a real completion
+    it('rejects Chinese conditional "所有任务已完成，但还需要验证"', () => {
+      expect(isTaskComplete('所有任务已完成，但还需要人工验证。')).toBe(false);
+    });
+
+    it('rejects "the implementation is almost complete" (widening must not over-match)', () => {
+      expect(isTaskComplete('The implementation is almost complete, one more step.')).toBe(false);
     });
 
     it('rejects "I will complete the task"', () => {
