@@ -140,4 +140,23 @@ describe('audit refCount lifecycle balance', () => {
 
     expect(countCalls(mockAuditSetMode, 'active')).toBe(monitorCount);
   });
+
+  // T-S9: cleanup must NOT over-release for already-paused sessions (RES-9).
+  // A paused session already released its refCount at pause time; cleanup
+  // releasing it again would push the audit refCount negative.
+  it('T-S9: cleanup does not over-release refCount for a paused session', async () => {
+    await activateFullYolo('sess-run');    // stays running
+    await activateFullYolo('sess-pause');  // driven to pause below
+    await driveToMaxContinuations('sess-pause'); // pause → releases its refCount
+
+    const monitorCount = countCalls(mockAuditSetMode, 'monitor'); // 2 acquired
+    expect(monitorCount).toBe(2);
+
+    const cleanup = mock.gatewayMethods.get('autopilot.cleanup')!;
+    await cleanup({ respond: vi.fn() });
+
+    // Only the still-running session is released by cleanup (1); the paused one
+    // was already released. Net balanced: monitor(2) === active(1 pause + 1 cleanup).
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(monitorCount);
+  });
 });

@@ -232,10 +232,13 @@ function setState(runId: string, state: AutopilotState): void {
 
 /** GAP-23: Cleanup all state on shutdown */
 function cleanupAll(): void {
-  // Release audit monitor refCount for every active run before clearing state.
-  // Each run acquired one refCount via setAuditMode('monitor'), so each needs a matching release.
-  for (let i = 0; i < stateByRun.size; i++) {
-    setAuditMode('active');
+  // Release audit monitor refCount ONLY for runs that still hold one. A run
+  // acquires it on activate and releases on pause/complete/stop, so only
+  // status==='running' runs still hold an unreleased refCount. Releasing for
+  // paused/done/idle runs would over-release — the audit plugin's refCount could
+  // go negative depending on its clamp semantics.
+  for (const state of stateByRun.values()) {
+    if (state.status === 'running') setAuditMode('active');
   }
   stateByRun.clear();
   sessionIdToKey.clear();
@@ -412,8 +415,12 @@ export function register(api: OpenClawPluginApi): void {
             now,
           });
         } catch (err) {
-          // Fail-open: if evidence evaluation throws, treat as skipped to avoid zombie sessions
-          warn(`[autopilot] evidence gate error (failing open): ${err} session=${sessionKey}`);
+          // Fail-open (skipped) to avoid zombie sessions — runValidationCommands
+          // never throws and evaluateEvidence is pure, so this only trips on a
+          // future bug. But do NOT let that bug pass silently: emit it at error
+          // level with the failureReason so a monitor can tell an evaluation
+          // failure apart from a normal no-commands skip (both end as 'skipped').
+          logWithContext('error', 'evidence gate evaluation error (failing open → skipped)', { sessionKey, runId, error: String(err) });
           evidenceSummary = { status: 'skipped' as const, diffSummary: '', commands: [], completedAt: now, failureReason: 'evaluation error' };
         }
         // Dispatch evidence events only when orchestration state machine is active (released state)
@@ -433,7 +440,7 @@ export function register(api: OpenClawPluginApi): void {
         setState(runId, updated.status === 'done'
           ? { ...updated, evidence: evidenceSummary }
           : complete({ ...updated, evidence: evidenceSummary }));
-        logWithContext('info', 'evidence gate result', { sessionKey, runId, evidenceStatus: evidenceSummary.status });
+        logWithContext('info', 'evidence gate result', { sessionKey, runId, evidenceStatus: evidenceSummary.status, failureReason: evidenceSummary.failureReason });
         // Release audit monitor when task completes — session is done, no more tool calls needed.
         setAuditMode('active');
         return { action: 'finalize' };
@@ -693,7 +700,15 @@ export function register(api: OpenClawPluginApi): void {
   registerHook('llm_output', (event: any, ctx: any) => {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
-    const entry = findRunBySession(sessionKey);
+    // Count subagent tokens toward the PARENT run's budget. before_model_resolve
+    // already resolves subagents via their parent (agent:<main>:subagent:<id>);
+    // token accounting must match, or a run's tokenBudget under-counts real spend
+    // (the budget is enforced at the parent's before_agent_finalize turn boundary).
+    const direct = findRunBySession(sessionKey);
+    const entry = direct
+      ?? (isSubagentSession(sessionKey)
+        ? findRunBySession(extractParentSessionKey(sessionKey) ?? '')
+        : undefined);
     if (!entry?.[1].enabled) return;
 
     const usage = event.usage;
@@ -979,7 +994,7 @@ export function register(api: OpenClawPluginApi): void {
           return;
         }
       } else {
-        const runId = `run-${Math.random().toString(36).slice(2, 10)}`;
+        const runId = generateRunId();
         let state = activate(createInitialState(sessionKey, runId, config));
         state = orchestratorReducer(state, { type: 'activate_requested', sessionKey, goal: payloadGoal, now: Date.now() });
         state = applyPayload(state);

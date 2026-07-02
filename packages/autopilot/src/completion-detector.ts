@@ -17,16 +17,23 @@ export function isTaskComplete(
   // agents commonly emit \r\n line endings and a bare \r would otherwise
   // prevent the trigger from firing.
   const boundary = '(^|[。！？\\r\\n，,；;：:])';
-  if (new RegExp(`${boundary}\\s*所有任务已完成`).test(lower)) return true;
-  if (new RegExp(`${boundary}\\s*任务全部完成`).test(lower)) return true;
-  if (new RegExp(`${boundary}\\s*全部步骤已完成`).test(lower)) return true;
+  // Negation guard: a completion phrase trailed by an explicit turn/residual word
+  // (但/还需/尚未…) is conditional, not a real completion ("所有任务已完成，但还需验证").
+  // Kept deliberately narrow — ambiguous words like 待 ("待处理" appears in genuine
+  // completions: "所有任务已完成，没有更多待处理的事项") or 需要 must NOT be here.
+  const zhConditional = /(?:所有任务已完成|任务全部完成|全部步骤已完成)[^。！？\n]{0,15}(?:但|不过|然而|还需|仍需|尚需|尚未|还要|仍要)/;
+  if (!zhConditional.test(stripped)) {
+    if (new RegExp(`${boundary}\\s*所有任务已完成`).test(lower)) return true;
+    if (new RegExp(`${boundary}\\s*任务全部完成`).test(lower)) return true;
+    if (new RegExp(`${boundary}\\s*全部步骤已完成`).test(lower)) return true;
+  }
 
   // English: word-boundary + negation guard
   if (/\ball\s+tasks\s+(?:have\s+)?been\s+completed\b/.test(lower)) return true;
   if (/\ball\s+tasks\s+completed\b/.test(lower) && !/\bnot\s+all\s+tasks\b/.test(lower)) return true;
   if (/\ball\s+steps\s+(?:have\s+)?been\s+completed\b/.test(lower)) return true;
   if (/\ball\s+steps\s+completed\b/.test(lower) && !/\bnot\s+all\s+steps\b/.test(lower)) return true;
-  if (/\btask\s+is\s+complete\b/.test(lower) && !/\bnot\s+(?:yet\s+)?complete\b/.test(lower)) return true;
+  if (/\b(?:the\s+)?(?:task|implementation|feature|work)\s+is\s+complete\b/.test(lower) && !/\bnot\s+(?:yet\s+)?complete\b/.test(lower)) return true;
   if (/\beverything\s+is\s+done\b/.test(lower) && !/\bnot\s+everything\b/.test(lower)) return true;
 
   return false;

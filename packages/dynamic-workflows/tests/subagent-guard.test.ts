@@ -131,6 +131,25 @@ describe('dynamic-workflows subagent guard', () => {
     expect(result).toBeUndefined();
   });
 
+  it('fails closed when sessionKey is missing (cannot confirm non-subagent)', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    const result = (await h(
+      { toolName: 'exec', params: { command: 'git reset --hard' } },
+      {}, // no sessionKey on ctx
+    )) as { block?: boolean; blockReason?: string };
+    expect(result.block).toBe(true);
+    expect(result.blockReason).toContain('missing sessionKey');
+  });
+
+  it('fails closed when the guard throws internally on a subagent call', async () => {
+    const h = mock.hooks.get('before_tool_call')!;
+    // event=null makes `event.toolName` throw inside the guard; a throwing guard
+    // must block, never silently pass the subagent's call through.
+    const result = (await h(null, { sessionKey: SUBAGENT_KEY })) as { block?: boolean; blockReason?: string };
+    expect(result.block).toBe(true);
+    expect(result.blockReason).toContain('internal error');
+  });
+
   it('respects highRiskTools config — blocks a configured tool even if otherwise safe', async () => {
     _resetForTest();
     const m2 = createMockApi({ highRiskTools: ['dangerous_tool'] });

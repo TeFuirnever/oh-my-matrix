@@ -186,8 +186,22 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
 
   if ('workspace' in raw && typeof raw.workspace === 'object' && raw.workspace !== null) {
     const ws = raw.workspace as Record<string, unknown>;
+    // Trust-boundary check: WORKFLOW.md is attacker-controllable workspace content.
+    // workspace.root is not consumed at runtime today (autopilot delegates worktree
+    // management to the host per ADR-008), but reject `..` traversal segments as
+    // defense-in-depth so a root cannot escape its base if a host ever resolves it
+    // via path.join. Absolute paths are left to the host's own containment check —
+    // they are explicit targets, not traversal.
+    let root = DEFAULT_WORKFLOW_CONFIG.workspace.root;
+    if (typeof ws.root === 'string') {
+      if (ws.root.split(/[\\/]/).includes('..')) {
+        warnings.push(`workspace.root "${ws.root}" contains ".." traversal — using default (${DEFAULT_WORKFLOW_CONFIG.workspace.root})`);
+      } else {
+        root = ws.root;
+      }
+    }
     result.workspace = {
-      root: typeof ws.root === 'string' ? ws.root : DEFAULT_WORKFLOW_CONFIG.workspace.root,
+      root,
       cleanup: ws.cleanup === 'delete_on_done' ? 'delete_on_done' : 'manual',
       branchPrefix: typeof ws.branch_prefix === 'string' ? ws.branch_prefix : 'autopilot',
       baseRef: typeof ws.base_ref === 'string' ? ws.base_ref : undefined,

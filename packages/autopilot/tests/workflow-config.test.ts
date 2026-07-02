@@ -206,6 +206,39 @@ Continue.`);
       expect(result.config.workspace.root).toBe('.matrix/worktrees');
     });
 
+    it('rejects workspace root with ".." traversal, falls back to default + warns', () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(`---
+autopilot:
+  version: 1
+  workspace:
+    root: ../../etc/passwd
+---
+
+Continue.`);
+
+      const result = loadWorkflowConfig('/home/user/myrepo');
+      // Traversal rejected → default root, warning emitted (defense-in-depth on an
+      // attacker-controllable field even though it is not consumed at runtime today).
+      expect(result.config.workspace.root).toBe(DEFAULT_WORKFLOW_CONFIG.workspace.root);
+      expect(result.config.warnings.some((w) => w.includes('traversal'))).toBe(true);
+    });
+
+    it('keeps an absolute workspace root as-is (explicit target, not traversal)', () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(`---
+autopilot:
+  version: 1
+  workspace:
+    root: /var/tmp/worktrees
+---
+
+Continue.`);
+
+      const result = loadWorkflowConfig('/home/user/myrepo');
+      expect(result.config.workspace.root).toBe('/var/tmp/worktrees');
+    });
+
     it('handles empty autopilot section with defaults', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(`---

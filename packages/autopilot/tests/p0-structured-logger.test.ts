@@ -59,6 +59,26 @@ describe('logger — JSON format mode', () => {
     expect(parsed.level).toBe('error');
     errorSpy.mockRestore();
   });
+
+  it('preserves object arg structure into ctx fields (not [object Object])', async () => {
+    const { log } = await import('../src/logger');
+    log('tool blocked', { sessionKey: 'sk-9', runId: 'run-9' });
+    const arg = consoleSpy.mock.calls[0][0] as string;
+    const parsed = JSON.parse(arg);
+    expect(parsed.msg).toContain('tool blocked');
+    expect(parsed.sessionKey).toBe('sk-9');
+    expect(parsed.runId).toBe('run-9');
+    expect(arg).not.toContain('[object Object]');
+  });
+
+  it('does not throw on a circular context object (logger must never crash a hook)', async () => {
+    const { log } = await import('../src/logger');
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    expect(() => log('circular', circular)).not.toThrow();
+    const arg = consoleSpy.mock.calls[0][0] as string;
+    expect(() => JSON.parse(arg)).not.toThrow(); // still valid JSON via fallback
+  });
 });
 
 describe('logger — logWithContext', () => {
