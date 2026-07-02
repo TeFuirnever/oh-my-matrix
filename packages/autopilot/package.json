@@ -52,7 +52,7 @@
   },
   "peerDependencies": {
     "@oh-my-matrix/permission-policy": "^0.1.1",
-    "openclaw": ">=2026.5.28"
+    "openclaw": ">=2026.5.28 <2027"
   },
   "devDependencies": {
     "@oh-my-matrix/permission-policy": "workspace:*",

@@ -302,9 +302,10 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
 
 // ponytail: production passes sessionKey on ctx, test mocks put it on event — one helper handles both
 function resolveSessionKey(event: unknown, ctx?: unknown): string | undefined {
-  const c = ctx as Record<string, any> | undefined;
-  const e = event as Record<string, any>;
-  return c?.sessionKey ?? e?.sessionKey ?? sessionIdToKey.get(c?.sessionId ?? e?.sessionId);
+  const c = ctx as { sessionKey?: string; sessionId?: string } | undefined;
+  const e = event as { sessionKey?: string; sessionId?: string } | undefined;
+  const sessionId = c?.sessionId ?? e?.sessionId;
+  return c?.sessionKey ?? e?.sessionKey ?? (sessionId != null ? sessionIdToKey.get(sessionId) : undefined);
 }
 
 const CROSS_TURN_FALLBACK_TEXT = 'Continue from where you left off.';
@@ -530,7 +531,7 @@ export function register(api: OpenClawPluginApi): void {
       error: (event.error ?? '').substring(0, 200),
     });
     setState(runId, withError);
-    log(`[autopilot] after_tool_call error: session=${sessionKey} tool=${event.toolName} errCount=${withError.toolErrorCount}/${state.toolErrorThreshold}`);
+    warn(`[autopilot] after_tool_call error: session=${sessionKey} tool=${event.toolName} errCount=${withError.toolErrorCount}/${state.toolErrorThreshold}`);
   });
 
   registerHook('before_compaction', (_event: PluginHookBeforeCompactionEvent, ctx: PluginHookAgentContext) => {
@@ -745,7 +746,7 @@ export function register(api: OpenClawPluginApi): void {
     // Using requireApproval+timeoutMs:1 was broken — it still walked the approval
     // pipeline which has no handler, causing 10s+ "Approval timed out" errors.
     if (decision.outcome === 'block') {
-      logWithContext('info', 'before_tool_call BLOCKED', { sessionKey, runId, toolName, reason: decision.reason });
+      logWithContext('warn', 'before_tool_call BLOCKED', { sessionKey, runId, toolName, reason: decision.reason });
       return {
         block: true,
         blockReason: (decision as { outcome: 'block'; reason: string; message: string }).message,
@@ -923,6 +924,10 @@ export function register(api: OpenClawPluginApi): void {
       if (ctx.sessionKey) {
         const entry = findRunBySession(ctx.sessionKey);
         if (entry) stateByRun.delete(entry[0]);
+        // PROD-2: clear the reverse-index and canary set too, else session-key
+        // teardown (without a session_end) leaves dangling map entries.
+        sessionKeyToRunId.delete(ctx.sessionKey);
+        canaryFired.delete(ctx.sessionKey);
       }
     },
   });
@@ -1224,4 +1229,7 @@ export function register(api: OpenClawPluginApi): void {
       }
     }
   }, stallCheckIntervalMs);
+  // PROD-6: don't let the stall timer keep the event loop alive if the host
+  // exits without calling cleanup — unref so the process can drain naturally.
+  stallInterval?.unref?.();
 }

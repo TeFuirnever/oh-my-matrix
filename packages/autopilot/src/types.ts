@@ -317,7 +317,3 @@ export interface InjectionResult {
   enqueued: boolean;
   reason?: string;
 }
-
-/** Hook registration function signature */
-export type HookHandler = (...args: unknown[]) => unknown;
-export type RegisterHookFn = (hookName: string, handler: HookHandler) => void;
