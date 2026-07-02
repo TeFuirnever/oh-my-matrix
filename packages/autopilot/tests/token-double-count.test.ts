@@ -87,4 +87,28 @@ describe('token double-count regression', () => {
 
     expect(projection.totalTokensUsed).toBe(100);
   });
+
+  it('counts subagent llm_output tokens toward the parent run budget', async () => {
+    // Parent key must be an `agent:<main>` shape so extractParentSessionKey can
+    // recover it from `agent:<main>:subagent:<id>`.
+    const activateHandler = mock.gatewayMethods.get('autopilot.activate')!;
+    await activateHandler({ params: { sessionKey: 'agent:main' }, respond: vi.fn() });
+
+    const sessionStartHandler = mock.hooks.get('session_start')!;
+    await sessionStartHandler({ sessionId: 'sid-main', sessionKey: 'agent:main' });
+
+    // A subagent emits tokens — they must land on the parent, not vanish (the
+    // subagent has no run of its own in stateByRun).
+    const llmOutputHandler = mock.hooks.get('llm_output')!;
+    await llmOutputHandler(
+      { usage: { total: 100, input: 30, output: 70 } },
+      { sessionKey: 'agent:main:subagent:abc' }
+    );
+
+    const ext = mock.getSessionExtension();
+    const projection = ext.project({ sessionKey: 'agent:main' });
+    expect(projection.totalTokensUsed).toBe(100);
+    expect(projection.inputTokensUsed).toBe(30);
+    expect(projection.outputTokensUsed).toBe(70);
+  });
 });
