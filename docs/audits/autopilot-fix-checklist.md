@@ -45,9 +45,9 @@
 ## Wave 4 — 跨包 + 文档
 
 - [ ] **#11 [P2] 三重 tokenizer 统一** ⚠️ **跨包** — permission-policy 导出 `tokenizeShell`，autopilot 两份 import。**触发 monorepo 版本链**：bump permission-policy → 更新 autopilot/dynamic-workflows peerDep。⚠️ npm publish 需真实终端 + 2FA OTP（Claude 跑不了）。对抗验证确认当前不分歧，纯维护性——可延后。
-- [ ] **#12 [P2] test helpers 移出 barrel** — 5 个 `_*ForTest` 移到 `testing.ts`；package.json 加 exports map；`generateRunId` 不再委托 `_generateRunIdForTest`（与 #1 呼应）。
-- [ ] **#13 [P2] README 扩充** — config 参考表、6 个 gateway method 合约、WORKFLOW.md 格式示例、env vars、AutopilotProjection 字段、troubleshooting。
-- [ ] **#14 [P2] hook handler 类型化** — 定义 narrow event interfaces 替代 14 处 `any`；启用已定义但未用的 HookContext/HookHandler。
+- [x] **#12 [P2] test helpers 移出 barrel** — package.json 加 `exports` map 阻止外部 deep import；`generateRunId()` 不再委托 `_generateRunIdForTest()`（直接内联 `run-${crypto.randomUUID()}`）。✅
+- [x] **#13 [P2] README 扩充** — 完整 README：plugin config 参考表（10 项）、6 个 gateway method 合约、WORKFLOW.md 格式示例、AutopilotProjection 字段表、troubleshooting。✅
+- [x] **#14 [P2] hook handler 类型化** — 12 个 hook handler 从 `event: any, ctx: any` 改为 OpenClaw SDK 类型（PluginHookBeforeAgentFinalizeEvent 等）；提取 `resolveSessionKey()` helper 兼容 production ctx 路径和 test mock event 路径。✅
 
 ---
 

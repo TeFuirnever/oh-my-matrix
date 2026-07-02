@@ -20,7 +20,7 @@ import { preserveGoalBeforeCompaction, restoreGoalAfterCompaction, captureGoal }
 import { projectState } from './src/projection';
 import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
-import type { OpenClawPluginApi, PluginJsonValue } from 'openclaw/dist/plugin-sdk/plugin-runtime';
+import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
@@ -256,6 +256,13 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
   return state ? [runId, state] : undefined;
 }
 
+// ponytail: production passes sessionKey on ctx, test mocks put it on event — one helper handles both
+function resolveSessionKey(event: unknown, ctx?: unknown): string | undefined {
+  const c = ctx as Record<string, any> | undefined;
+  const e = event as Record<string, any>;
+  return c?.sessionKey ?? e?.sessionKey ?? sessionIdToKey.get(c?.sessionId ?? e?.sessionId);
+}
+
 const CROSS_TURN_FALLBACK_TEXT = 'Continue from where you left off.';
 
 function buildCrossTurnReviseFallback(
@@ -281,7 +288,7 @@ export function _generateRunIdForTest(): string {
 }
 
 function generateRunId(): string {
-  return _generateRunIdForTest();
+  return `run-${crypto.randomUUID()}`;
 }
 
 export function register(api: OpenClawPluginApi): void {
@@ -314,8 +321,8 @@ export function register(api: OpenClawPluginApi): void {
     return;
   }
 
-  registerHook('before_agent_finalize', async (event: any) => {
-    const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
+  registerHook('before_agent_finalize', async (event: PluginHookBeforeAgentFinalizeEvent) => {
+    const sessionKey = resolveSessionKey(event);
     if (sessionKey) canaryFired.add(sessionKey);
     if (!sessionKey) return { action: 'continue' };
 
@@ -449,8 +456,8 @@ export function register(api: OpenClawPluginApi): void {
     }
   });
 
-  registerHook('after_tool_call', (event: any) => {
-    const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
+  registerHook('after_tool_call', (event: PluginHookAfterToolCallEvent, ctx: PluginHookAgentContext) => {
+    const sessionKey = resolveSessionKey(event, ctx);
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (!entry?.[1].enabled) return;
@@ -478,8 +485,8 @@ export function register(api: OpenClawPluginApi): void {
     log(`[autopilot] after_tool_call error: session=${sessionKey} tool=${event.toolName} errCount=${withError.toolErrorCount}/${state.toolErrorThreshold}`);
   });
 
-  registerHook('before_compaction', (event: any) => {
-    const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
+  registerHook('before_compaction', (_event: PluginHookBeforeCompactionEvent, ctx: PluginHookAgentContext) => {
+    const sessionKey = resolveSessionKey(_event, ctx);
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (entry?.[1].enabled) {
@@ -488,8 +495,8 @@ export function register(api: OpenClawPluginApi): void {
     }
   });
 
-  registerHook('after_compaction', (event: any) => {
-    const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
+  registerHook('after_compaction', (_event: PluginHookAfterCompactionEvent, ctx: PluginHookAgentContext) => {
+    const sessionKey = resolveSessionKey(_event, ctx);
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (entry?.[1].enabled) {
@@ -498,8 +505,8 @@ export function register(api: OpenClawPluginApi): void {
     }
   });
 
-  registerHook('agent_turn_prepare', (event: any, ctx: any) => {
-    const sessionKey = ctx?.sessionKey ?? event.sessionKey;
+  registerHook('agent_turn_prepare', (event: PluginAgentTurnPrepareEvent, ctx: PluginHookAgentContext) => {
+    const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (!entry?.[1].enabled) return;
@@ -572,7 +579,7 @@ export function register(api: OpenClawPluginApi): void {
   // straddling an evidence-status transition may pick the wrong tier for one turn.
   // Acceptable for a routing heuristic (no data loss, self-corrects next turn).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  registerHook('before_model_resolve', (_event: any, ctx: any): any => {
+  registerHook('before_model_resolve', (_event: PluginHookBeforeModelResolveEvent, ctx: PluginHookAgentContext): any => {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
 
@@ -604,7 +611,7 @@ export function register(api: OpenClawPluginApi): void {
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  registerHook('before_agent_run', (_event: any, ctx: any): any => {
+  registerHook('before_agent_run', (_event: PluginHookBeforeAgentRunEvent, ctx: PluginHookAgentContext): any => {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return { outcome: 'pass' as const };
     const entry = findRunBySession(sessionKey);
@@ -623,7 +630,7 @@ export function register(api: OpenClawPluginApi): void {
     return { outcome: 'pass' as const };
   });
 
-  registerHook('before_tool_call', (event: any, ctx: any) => {
+  registerHook('before_tool_call', (event: PluginHookBeforeToolCallEvent, ctx: PluginHookAgentContext) => {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
@@ -698,7 +705,7 @@ export function register(api: OpenClawPluginApi): void {
     }
   }, { priority: BEFORE_TOOL_CALL_PRIORITY });
 
-  registerHook('llm_output', (event: any, ctx: any) => {
+  registerHook('llm_output', (event: PluginHookLlmOutputEvent, ctx: PluginHookAgentContext) => {
     const sessionKey = ctx?.sessionKey;
     if (!sessionKey) return;
     // Count subagent tokens toward the PARENT run's budget. before_model_resolve
@@ -734,14 +741,14 @@ export function register(api: OpenClawPluginApi): void {
     log(`[autopilot] llm_output: session=${sessionKey} tokens=+${added} total=${updated.totalTokensUsed}${updated.tokenBudget ? `/${updated.tokenBudget}` : ''}`);
   });
 
-  registerHook('session_start', (event: any) => {
+  registerHook('session_start', (event: PluginHookSessionStartEvent) => {
     if (event.sessionId && event.sessionKey) {
       sessionIdToKey.set(event.sessionId, event.sessionKey);
       log(`[autopilot] session_start: ${event.sessionId} → ${event.sessionKey}`);
     }
   });
 
-  registerHook('session_end', (event: any) => {
+  registerHook('session_end', (event: PluginHookSessionEndEvent) => {
     const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
     sessionIdToKey.delete(event.sessionId);
     if (!sessionKey) return;
@@ -755,8 +762,8 @@ export function register(api: OpenClawPluginApi): void {
     log(`[autopilot] session_end: session=${sessionKey} state cleaned up`);
   });
 
-  registerHook('agent_end', async (event: any) => {
-    const sessionKey = event.sessionKey ?? sessionIdToKey.get(event.sessionId);
+  registerHook('agent_end', async (event: PluginHookAgentEndEvent, ctx: PluginHookAgentContext) => {
+    const sessionKey = resolveSessionKey(event, ctx);
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (!entry) return;
