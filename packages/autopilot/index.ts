@@ -256,6 +256,25 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
   return state ? [runId, state] : undefined;
 }
 
+const CROSS_TURN_FALLBACK_TEXT = 'Continue from where you left off.';
+
+function buildCrossTurnReviseFallback(
+  runId: string,
+  state: AutopilotState,
+  instruction: string | undefined,
+) {
+  const fallbackState = { ...incrementTotal(state), turnAttempts: 0 };
+  setState(runId, fallbackState);
+  return {
+    action: 'revise' as const,
+    retry: {
+      instruction: instruction || CROSS_TURN_FALLBACK_TEXT,
+      idempotencyKey: `autopilot-${runId}-${fallbackState.totalContinuations}`,
+      maxAttempts: fallbackState.maxAttemptsPerTurn,
+    },
+  };
+}
+
 /** Generate a unique run ID using crypto.randomUUID (exported for testing). */
 export function _generateRunIdForTest(): string {
   return `run-${crypto.randomUUID()}`;
@@ -355,44 +374,16 @@ export function register(api: OpenClawPluginApi): void {
             });
             if (result && typeof result === 'object' && result.enqueued === false) {
               warn(`[autopilot] enqueueNextTurnInjection rejected for session=${sessionKey}, falling back to revise`);
-              const fallbackState = { ...incrementTotal(state), turnAttempts: 0 };
-              setState(runId, fallbackState);
-              return {
-                action: 'revise',
-                retry: {
-                  instruction: decision.retryInstruction || 'Continue from where you left off.',
-                  idempotencyKey: `autopilot-${runId}-${fallbackState.totalContinuations}`,
-                  maxAttempts: fallbackState.maxAttemptsPerTurn,
-                },
-              };
+              return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
             }
             setState(runId, updated);
             return { action: 'finalize' };
           } catch (err) {
             warn(`[autopilot] enqueueNextTurnInjection failed for session=${sessionKey}: ${err}, falling back to revise`);
-            const fallbackState = { ...incrementTotal(state), turnAttempts: 0 };
-            setState(runId, fallbackState);
-            return {
-              action: 'revise',
-              retry: {
-                instruction: decision.retryInstruction || '请从上次中断的位置继续执行。',
-                idempotencyKey: `autopilot-${runId}-${fallbackState.totalContinuations}`,
-                maxAttempts: fallbackState.maxAttemptsPerTurn,
-              },
-            };
+            return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
           }
         }
-        // Fallback: injection API unavailable, use same-turn revise instead
-        const fallbackState = { ...incrementTotal(state), turnAttempts: 0 };
-        setState(runId, fallbackState);
-        return {
-          action: 'revise',
-          retry: {
-            instruction: decision.retryInstruction || '请从上次中断的位置继续执行。',
-            idempotencyKey: `autopilot-${runId}-${fallbackState.totalContinuations}`,
-            maxAttempts: fallbackState.maxAttemptsPerTurn,
-          },
-        };
+        return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
       }
       case 'pause': {
         setState(runId, pause(state, decision.pauseReason!));
@@ -425,10 +416,16 @@ export function register(api: OpenClawPluginApi): void {
           logWithContext('error', 'evidence gate evaluation error (failing open → skipped)', { sessionKey, runId, error: String(err) });
           evidenceSummary = { status: 'skipped' as const, diffSummary: '', commands: [], completedAt: now, failureReason: 'evaluation error' };
         }
-        // Dispatch evidence events only when orchestration state machine is active (released state)
+        // Dispatch orchestrator events to advance orchState to 'done'.
+        // Close the agent turn (running → released) so evidence events can fire.
         let updated = state;
-        if (state.orchestrationState === 'released') {
-          updated = orchestratorReducer(state, { type: 'evidence_started', runId, now });
+        if (updated.orchestrationState === 'running') {
+          updated = orchestratorReducer(updated, {
+            type: 'agent_turn_finished', runId, success: true, now,
+          });
+        }
+        if (updated.orchestrationState === 'released') {
+          updated = orchestratorReducer(updated, { type: 'evidence_started', runId, now });
           updated = orchestratorReducer(updated, {
             type: 'evidence_finished',
             runId,
@@ -516,6 +513,8 @@ export function register(api: OpenClawPluginApi): void {
       runId,
       now: Date.now(),
     });
+    // Persist the orchState transition (claimed → running) immediately.
+    if (updated !== state) setState(runId, updated);
 
     // Capture goal from first user prompt if not already set
     if (!updated.goal && event.prompt) {
