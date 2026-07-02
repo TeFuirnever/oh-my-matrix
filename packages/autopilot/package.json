@@ -18,7 +18,9 @@
     "openclaw.plugin.json"
   ],
   "openclaw": {
-    "extensions": ["./dist/index.js"],
+    "extensions": [
+      "./dist/index.js"
+    ],
     "plugin": true,
     "hooks": [
       "before_agent_finalize",
@@ -42,14 +44,15 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.5.28",
-    "@oh-my-matrix/permission-policy": "^0.1.1"
+    "@oh-my-matrix/permission-policy": "^0.1.1",
+    "openclaw": ">=2026.5.28"
   },
   "devDependencies": {
-    "openclaw": "2026.5.28",
     "@oh-my-matrix/permission-policy": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.6",
+    "openclaw": "2026.5.28",
     "typescript": "^5.0.0",
-    "vitest": "^3.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.0.0"
   }
 }

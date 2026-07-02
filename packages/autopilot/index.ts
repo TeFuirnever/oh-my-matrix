@@ -196,15 +196,17 @@ export function _triggerRetryCheckForTest(overrides: {
   return stateByRun.get(runId);
 }
 
-/** GAP-25: Evict oldest runs when Map exceeds MAX_RUN_STATES */
+/** GAP-25: Evict least-recently-active runs when Map exceeds MAX_RUN_STATES */
 function evictOldestRuns(): void {
   while (stateByRun.size > MAX_RUN_STATES) {
-    // Find the run with the earliest startedAt (FIFO eviction)
+    // Find the run with the earliest lastActivityAt (LRU eviction).
+    // Falls back to startedAt when lastActivityAt is unset (pre-orchestrator runs).
     let oldestRunId: string | null = null;
     let oldestAt = Infinity;
     for (const [runId, state] of stateByRun) {
-      if ((state.startedAt ?? Infinity) < oldestAt) {
-        oldestAt = state.startedAt ?? Infinity;
+      const at = state.lastActivityAt ?? state.startedAt ?? Infinity;
+      if (at < oldestAt) {
+        oldestAt = at;
         oldestRunId = runId;
       }
     }
@@ -349,7 +351,7 @@ export function register(api: OpenClawPluginApi): void {
               text: decision.retryInstruction || 'Continue from where you left off.',
               idempotencyKey: `autopilot-cross-${sessionKey}-${updated.totalContinuations}`,
               placement: 'prepend_context',
-              ttlMs: 300000,
+              ttlMs: DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs,
             });
             if (result && typeof result === 'object' && result.enqueued === false) {
               warn(`[autopilot] enqueueNextTurnInjection rejected for session=${sessionKey}, falling back to revise`);
@@ -784,7 +786,7 @@ export function register(api: OpenClawPluginApi): void {
               text: buildRetryInstruction(continued),
               idempotencyKey: `autopilot-degraded-${sessionKey}-${continued.totalContinuations}`,
               placement: 'prepend_context',
-              ttlMs: 300000,
+              ttlMs: DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs,
             });
             if (injectResult && typeof injectResult === 'object' && injectResult.enqueued === false) {
               warn(`[autopilot] agent_end: degraded fallback enqueue rejected for session=${sessionKey}`);
@@ -963,7 +965,7 @@ export function register(api: OpenClawPluginApi): void {
         // A stuck run would otherwise block every future activation until a
         // gateway restart, because the stall handler leaves status='running'.
         // Genuinely-active runs (recent activity) still fall through to reject.
-        const stuckRecovery = isRunStuck(state, Date.now(), config.tokenBudget ? 300_000 : 600_000);
+        const stuckRecovery = isRunStuck(state, Date.now(), config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
         if (state.status === 'idle' || state.status === 'done' || stuckRecovery) {
           if (stuckRecovery) {
             warn(`[autopilot] activate: recovering stuck session=${sessionKey} (status=${state.status}, orchState=${state.orchestrationState ?? 'none'}) — discarding stale run ${oldRunId}`);
@@ -1101,7 +1103,7 @@ export function register(api: OpenClawPluginApi): void {
   // Periodically check all active runs for stall (no activity for stallTimeoutMs).
   // When a stall is detected, dispatch stall_timeout through the orchestrator reducer.
   const stallCheckIntervalMs = 60_000; // Check every 60 seconds
-  const stallTimeoutMs = config.tokenBudget ? 300_000 : 600_000; // 5min or 10min default
+  const stallTimeoutMs = config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2;
 
   // M-7: Clear previous interval before creating new one (HMR / double-register safety)
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }

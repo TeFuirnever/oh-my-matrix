@@ -248,7 +248,7 @@ describe('E2E: resilience', () => {
     });
   });
 
-  describe('T18 — FIFO eviction at MAX_RUN_STATES (=50)', () => {
+  describe('T18 — LRU eviction at MAX_RUN_STATES (=50)', () => {
     beforeEach(() => {
       _resetForTest();
     });

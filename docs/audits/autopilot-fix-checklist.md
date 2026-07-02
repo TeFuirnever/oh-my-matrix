@@ -24,14 +24,14 @@
 
 ## Wave 2 — 独立中型项（无跨任务依赖）
 
-- [ ] **#8 [P1] vitest coverage 配置** — `vitest.config.ts` 加 coverage block + 阈值，先摸底当前覆盖率。⚠️ 需先装 `@vitest/coverage-v8`（当前未装，改 lockfile）。
+- [x] **#8 [P1] vitest coverage 配置** — `vitest.config.ts` 加 coverage block + 阈值（60%），已装 `@vitest/coverage-v8`。基线：91.73% stmts / 84.11% branches / 96.59% funcs。✅
 - [x] **#22 [P2] autopilot event-shape 契约** — 加 `src/event-shape.contract.ts`，编译时 pin `PluginHookBeforeToolCallEvent`。✅ typecheck 通过=契约成立。
-- [ ] **#9 [P1] 完成检测器短格式模式** — `completion-detector.ts` 加 `Done!`/`Finished.`/`X is complete` 英文短格式 + 中文否定 lookahead。**先扩测试集再改正则**（防新假阳性）。
+- [~] **#9 [P1] 完成检测器短格式模式** — 中文否定守卫 + E5 widening 已在 PR #60 合入。剩余"Done!/Finished."短格式**评估后不加**：这两个词在 mid-task 输出中极常见（"Done! Now let's move on…"），假阳性风险远大于漏检收益；当前 7 个英文 + 3 个中文模式已覆盖绝大多数真完成。
 - [~] **#16 [P2] tool-error-tracker 交替错误** — **评估后不改逻辑**。「连续相同 tool+args 失败」是有意的精确 stuck 信号；改宽（只比 tool/总数）会误停正常试错（假阳性 > 漏检交替，后者有 maxTotal 兜底）。已加注释文档化盲区为有意取舍。
-- [ ] **#17 [P2] magic numbers 统一** — 提取 `DEFAULT_MAX_RETRY_BACKOFF_MS`(300_000，散布 7+ 处)；continuation-engine 导入 `MAX_GOAL_LENGTH`；project-detector 提取 timeout 常量。
+- [x] **#17 [P2] magic numbers 统一** — orchestrator.ts 3 处 `?? 300000` 改为 `DEFAULT_WORKFLOW_CONFIG.maxRetryBackoffMs`；index.ts 4 处改为 `DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs`（及其 `* 2`）。✅
 - [x] **#18 [P2] 子 agent token 归并** — enforce 本已在 `continuation-engine.ts:61`（agent RES-10「不 enforce」前半误报）。真实修复：`llm_output` 复用 `before_model_resolve` 的父 session 解析，子 agent token 计入父 budget。+1 测试。✅
-- [ ] **#19 [P2] cleanupAll refcount 过度释放** — 只对 `status==='running'` 释放 audit refcount。
-- [ ] **#20 [P2] 驱逐 FIFO/LRU** — 改按 `lastActivityAt`（真 LRU）或正名注释/测试。
+- [x] **#19 [P2] cleanupAll refcount 过度释放** — 只对 `status==='running'` 释放 audit refcount。✅（PR #60 已合入）
+- [x] **#20 [P2] 驱逐 FIFO→LRU** — 改按 `lastActivityAt`（真 LRU），更新注释和测试描述。✅
 - [x] **#21 [P2] logger object 结构** — JSON mode 下 `log(obj)` 分离对象→ctx（保留结构）+ emitJson 加 circular/BigInt 防护。+2 测试。（DX-8「关键路径改 logWithContext」的批量迁移未做，留 backlog。）✅
 - [ ] **#22 [P2] autopilot event-shape 契约** — 镜像 dynamic-workflows 加 `event-shape.contract.ts`，防 OpenClaw 改 event shape 时 silent fail-open。
 - [x] **#15 [P2] evidence gate 可观测性** — 保留 fail-open（ARCH-13 防 zombie，catch 几乎永不触发），但消除静默：错误升 `error` 级 + `failureReason` 进结构化日志，监控可区分「正常 skip」vs「评估错误 skip」。**未采纳 agent 的 fail-closed 建议**（有 zombie 风险）。✅
