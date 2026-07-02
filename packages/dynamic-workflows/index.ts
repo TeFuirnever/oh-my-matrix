@@ -72,49 +72,63 @@ export function register(api: OpenClawPluginApi): void {
 
   on('before_tool_call', (event: any, ctx: any) => {
     const sessionKey = ctx?.sessionKey;
-    if (!sessionKey) return;
+    // Fail-closed: a missing sessionKey means we cannot confirm this is NOT a
+    // subagent. Blocking (with a clear reason) beats silently passing a possible
+    // subagent's destructive call through unguarded. Main sessions always carry a
+    // sessionKey, so normal interactive use is unaffected — this only trips if the
+    // host breaks the ctx contract, and then a visible block beats a silent leak.
+    if (!sessionKey) return { block: true, blockReason: 'dynamic-workflows guard: missing sessionKey — failing closed' };
     // Only enforce for subagent sessions. Main sessions and autopilot runs
     // keep their own behavior (autopilot's run-scoped handler covers its runs;
     // the main interactive session keeps normal approval-based behavior).
     if (!isSubagentSessionKey(sessionKey)) return;
 
-    const toolName = event.toolName as string;
-    // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
-    // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
-    // The command lives in params.command (shell string); cwd in params.workdir.
-    const { cwd: eventCwd } = extractCommandSegments(event);
-    const cwd = eventCwd ?? process.cwd();
+    // Fail-closed: any error while classifying/deciding a confirmed subagent's
+    // call blocks it. A guard that throws must not let the call through — that
+    // silent fail-open was the 2026-06-28 placebo bug. Scoped below the subagent
+    // check so main sessions (already returned above) are never affected.
+    try {
+      const toolName = event.toolName as string;
+      // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
+      // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
+      // The command lives in params.command (shell string); cwd in params.workdir.
+      const { cwd: eventCwd } = extractCommandSegments(event);
+      const cwd = eventCwd ?? process.cwd();
 
-    const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
-    const decision = isConfiguredHighRisk
-      ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-      : decidePermissionForEvent(event, {
+      const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
+      const decision = isConfiguredHighRisk
+        ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
+        : decidePermissionForEvent(event, {
+            cwd,
+            // No workspace context for ad-hoc subagents → destructive-git containment
+            // check is skipped (only runs when workflowAllowsDestructiveGit=true), so
+            // destructive git falls straight to block. Fail-closed by design.
+            workflowAllowsDestructiveGit: false,
+            defaultDeny: true, // subagent: unclassified SHELL commands are blocked
+          });
+
+      if (decision.outcome !== 'block') return; // allow (read_only / workspace_write / network)
+
+      logWithContext('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
+      appendAuditEntry(
+        {
+          at: Date.now(),
+          runId: `subagent:${sessionKey}`,
+          toolName,
+          commandClass: decision.commandClass ?? classifyCommand(toolName),
+          outcome: 'block',
+          reason: decision.reason,
           cwd,
-          // No workspace context for ad-hoc subagents → destructive-git containment
-          // check is skipped (only runs when workflowAllowsDestructiveGit=true), so
-          // destructive git falls straight to block. Fail-closed by design.
-          workflowAllowsDestructiveGit: false,
-          defaultDeny: true, // subagent: unclassified SHELL commands are blocked
-        });
-
-    if (decision.outcome !== 'block') return; // allow (read_only / workspace_write / network)
-
-    logWithContext('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
-    appendAuditEntry(
-      {
-        at: Date.now(),
-        runId: `subagent:${sessionKey}`,
-        toolName,
-        commandClass: decision.commandClass ?? classifyCommand(toolName),
-        outcome: 'block',
-        reason: decision.reason,
+        },
         cwd,
-      },
-      cwd,
-    );
-    return {
-      block: true,
-      blockReason: (decision as { outcome: 'block'; message: string }).message,
-    };
+      );
+      return {
+        block: true,
+        blockReason: (decision as { outcome: 'block'; message: string }).message,
+      };
+    } catch (err) {
+      logWithContext('error', 'before_tool_call subagent guard error — failing closed', { sessionKey, error: String(err) });
+      return { block: true, blockReason: 'dynamic-workflows guard: internal error — failing closed' };
+    }
   }, { priority: BEFORE_TOOL_CALL_PRIORITY });
 }
