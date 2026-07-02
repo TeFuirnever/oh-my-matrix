@@ -435,6 +435,8 @@ export function loadWorkflowConfig(baseRepoPath: string, workspacePath?: string)
     ? [path.join(workspacePath, 'WORKFLOW.md'), path.join(baseRepoPath, 'WORKFLOW.md')]
     : [path.join(baseRepoPath, 'WORKFLOW.md')];
 
+  const ioWarnings: string[] = [];
+
   for (const filePath of searchPaths) {
     if (!fs.existsSync(filePath)) continue;
 
@@ -472,11 +474,11 @@ export function loadWorkflowConfig(baseRepoPath: string, workspacePath?: string)
       };
 
       return { config: merged, warnings };
-    } catch {
-      // Parsing error — fallback to default
+    } catch (err) {
+      ioWarnings.push(`Failed to read/parse ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
       continue;
     }
   }
 
-  return { config: DEFAULT_WORKFLOW_CONFIG, warnings: [] };
+  return { config: DEFAULT_WORKFLOW_CONFIG, warnings: ioWarnings };
 }
