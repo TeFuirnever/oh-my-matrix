@@ -88,7 +88,8 @@ export function hasNoActionableTask(lastAssistantMessage?: string): boolean {
   if (/what (?:would|do) you (?:like|want|need) me to do/.test(lower)) return true;
   // (3) Explicit no-task. "task|thing" only (NOT "work") so "I don't have the
   //     workaround" cannot match on the "work" substring.
-  if (/i (?:don't|do not) (?:have|see).{0,15}(?:task|thing)/.test(lower)) return true;
+  // ponytail: negative lookahead blocks past-participles that flip meaning ("task finished" ≠ "no task")
+  if (/i (?:don't|do not) (?:have|see).{0,15}\b(?:task|thing)\b(?!\s+(?:finish|done|complet|work|ready|start|remain|left|assign))/i.test(lower)) return true;
   if (/there(?:'s| is| are) no (?:actionable |specific |concrete )?(?:task|tasks|work)/.test(lower)) return true;
   if (/nothing to (?:do|work on|implement|execute)/.test(lower)) return true;
 

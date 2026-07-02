@@ -173,6 +173,7 @@ export function orchestratorReducer(
       return {
         ...state,
         orchestrationState: 'claimed',
+        needsCrossTurnResume: true,
         lastActivityAt: event.now,
       };
     }
@@ -266,6 +267,7 @@ export function orchestratorReducer(
         ...state,
         orchestrationState: 'claimed',
         blockedReason: undefined,
+        needsCrossTurnResume: true,
         lastActivityAt: event.now,
       };
     }
