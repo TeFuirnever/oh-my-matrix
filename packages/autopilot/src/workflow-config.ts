@@ -255,14 +255,16 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
   let i = 0;
 
   function parseValue(indent: number): unknown {
+    // PROD-9: skip blank/comment lines iteratively — recursing once per line
+    // could blow the stack on a WORKFLOW.md with thousands of blank lines.
+    while (i < lines.length) {
+      const t = lines[i].trimStart();
+      if (t === '' || t.startsWith('#')) { i++; continue; }
+      break;
+    }
     if (i >= lines.length) return null;
     const line = lines[i];
     const trimmed = line.trimStart();
-
-    if (trimmed === '' || trimmed.startsWith('#')) {
-      i++;
-      return parseValue(indent);
-    }
 
     // Array item
     if (trimmed.startsWith('- ')) {
