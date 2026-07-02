@@ -1,7 +1,7 @@
 /**
  * Phase 4 TDD Tests: Production Hardening
  *
- * GAP-25: Map LRU limit — evict oldest runs when Map exceeds MAX_RUN_STATES
+ * GAP-25: Map LRU limit — evict least-recently-active runs when Map exceeds MAX_RUN_STATES
  * GAP-23: Cleanup on shutdown — clear all Maps + intervals
  * GAP-26: Health check — detect and clean up orphaned sessions
  * GAP-27: Cross-turn pending set race — clear after send completes

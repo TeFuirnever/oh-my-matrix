@@ -13,6 +13,7 @@ import type {
 } from './types';
 import { toBlockedReason } from './types';
 import { classifyRecoverability, shouldRetry, buildRetryEntry } from './retry-queue';
+import { DEFAULT_WORKFLOW_CONFIG } from './workflow-config';
 
 /** Recoverable blocked reasons that can be resumed */
 export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
@@ -112,7 +113,7 @@ export function orchestratorReducer(
       // Error path
       const classification = classifyRecoverability(event.error ?? 'unknown error');
       const maxRetries = state.workflow?.maxRetries ?? 3;
-      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? 300000;
+      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? DEFAULT_WORKFLOW_CONFIG.maxRetryBackoffMs;
       const currentAttempt = (state.retry?.attempt ?? 0) + 1;
 
       if (!shouldRetry({ attempt: currentAttempt, maxRetries, recoverable: classification.recoverable })) {
@@ -141,7 +142,7 @@ export function orchestratorReducer(
     case 'stall_timeout': {
       if (state.orchestrationState !== 'running') return state;
       const maxRetries = state.workflow?.maxRetries ?? 3;
-      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? 300000;
+      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? DEFAULT_WORKFLOW_CONFIG.maxRetryBackoffMs;
       const currentAttempt = (state.retry?.attempt ?? 0) + 1;
 
       if (!shouldRetry({ attempt: currentAttempt, maxRetries, recoverable: true })) {
@@ -207,7 +208,7 @@ export function orchestratorReducer(
 
       // Failed → check retry
       const maxRetries = state.workflow?.maxRetries ?? 3;
-      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? 300000;
+      const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? DEFAULT_WORKFLOW_CONFIG.maxRetryBackoffMs;
       const currentAttempt = (state.retry?.attempt ?? 0) + 1;
 
       if (shouldRetry({ attempt: currentAttempt, maxRetries, recoverable: true })) {
