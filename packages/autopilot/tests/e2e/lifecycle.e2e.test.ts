@@ -134,9 +134,13 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       await activateAndStart(mock, 'sess-life3', 'sid-life3');
 
       const finalize = mock.hooks.get('before_agent_finalize')!;
+      const turnPrepare = mock.hooks.get('agent_turn_prepare')!;
       // Drive past the guard (needs totalContinuations >= 2).
       await driveTurns(finalize, 'sid-life3', 'sess-life3', 2);
 
+      // Simulate real host: agent_turn_prepare fires before each before_agent_finalize,
+      // advancing orchState claimed → running so the complete path can reach done.
+      await turnPrepare({}, { sessionKey: 'sess-life3' });
       const completeResult = await finalize({
         sessionId: 'sid-life3',
         sessionKey: 'sess-life3',
@@ -149,11 +153,9 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       const proj = await projectionFor(mock, 'sess-life3');
       expect(proj.status).toBe('done');
       expect(proj.enabled).toBe(false);
-      // frozen to current behavior: the complete path only runs the evidence
-      // reducer when orchState==='released'. Without a real agent_turn cycle the
-      // run never leaves 'claimed', so complete() flips status→done but leaves
-      // orchState untouched at 'claimed'.
-      expect(proj.orchestrationState).toBe('claimed');
+      // With agent_turn_prepare firing before completion, the orchestrator path
+      // running → released → done now completes correctly.
+      expect(proj.orchestrationState).toBe('done');
       expect(proj.canStop).toBe(true); // done ⇒ canStop true
     });
 
