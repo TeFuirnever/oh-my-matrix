@@ -218,3 +218,26 @@ describe('PROD-2: cleanup removes sessionKeyToRunId, not just stateByRun', () =>
     expect(_getInternalStateForTest().stateByRunSize).toBe(0);
   });
 });
+
+// ── P2: PROD-9 — YAML parser robust to many blank/comment lines ────
+
+describe('PROD-9: parseSimpleYaml handles heavy blank/comment noise', () => {
+  it('parses a config with thousands of interspersed blank + comment lines', () => {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-prod9-'));
+    // 5000 comment+blank pairs between two real keys — exercises the iterative
+    // skip that replaced the per-line recursion (would risk a stack blow-up).
+    const noise = Array(5000).fill('  # note\n\n').join('');
+    const md = `---\nautopilot:\n  version: 1\n${noise}  max_retries: 9\n---\n`;
+    fs.writeFileSync(path.join(dir, 'WORKFLOW.md'), md);
+    try {
+      const { config } = loadWorkflowConfig(dir);
+      expect(config.source).toBe('workflow_md');
+      expect(config.maxRetries).toBe(9);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

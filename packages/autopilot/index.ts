@@ -1048,7 +1048,7 @@ export function register(api: OpenClawPluginApi): void {
           });
           setState(runId, newState);
           sessionKeyToRunId.set(sessionKey, runId);
-          log(`[autopilot] activate: session=${sessionKey} new run=${runId} (was ${state.status}, goal=${goalForEvent ?? 'none'})`);
+          log(`[autopilot] activate: session=${sessionKey} new run=${runId} (was ${state.status}, goalLen=${goalForEvent?.length ?? 0})`);
         } else {
           warn(`[autopilot] activate rejected: session=${sessionKey} status=${state.status}`);
           respond(false, undefined, { code: 'INVALID_REQUEST', message: `cannot activate from status "${state.status}", must be "idle" or "done"` });
@@ -1149,7 +1149,7 @@ export function register(api: OpenClawPluginApi): void {
 
       const [runId, state] = entry;
       setState(runId, setGoal(state, goal));
-      log(`[autopilot] setGoal: session=${sessionKey} goal="${goal.substring(0, 80)}"`);
+      log(`[autopilot] setGoal: session=${sessionKey} goalLen=${goal.length}`);
       respond(true, { ok: true });
   });
 
