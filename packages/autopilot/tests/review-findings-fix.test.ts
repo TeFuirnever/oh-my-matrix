@@ -6,11 +6,32 @@
  * P1: PROD-1  — loadWorkflowConfig must surface I/O errors in warnings
  * P1: LOGIC-4 — resume gateway must set needsCrossTurnResume
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { register, _resetForTest, _triggerRetryCheckForTest } from '../index';
 import { orchestratorReducer } from '../src/orchestrator';
 import { hasNoActionableTask } from '../src/completion-detector';
 import { loadWorkflowConfig } from '../src/workflow-config';
 import type { AutopilotState } from '../src/types';
+
+/** Minimal register() mock exposing session.workflow.enqueueNextTurnInjection as a spy. */
+function makeApiWithEnqueue() {
+  const enqueue = vi.fn(async (inj: { sessionKey: string }) => ({
+    enqueued: true,
+    id: 'inj-1',
+    sessionKey: inj.sessionKey,
+  }));
+  const api = {
+    pluginConfig: {} as Record<string, unknown>,
+    on: vi.fn(),
+    registerGatewayMethod: vi.fn(),
+    registerSessionExtension: vi.fn(),
+    session: {
+      workflow: { enqueueNextTurnInjection: enqueue },
+      state: { registerSessionExtension: vi.fn() },
+    },
+  };
+  return { api, enqueue };
+}
 
 // ── P0: PROD-7 — stall recovery needsCrossTurnResume ──────────────
 
@@ -121,5 +142,48 @@ describe('LOGIC-4: resume_requested sets needsCrossTurnResume', () => {
     const updated = orchestratorReducer(state, { type: 'resume_requested', runId: 'r1', now });
     expect(updated.orchestrationState).toBe('claimed');
     expect(updated.needsCrossTurnResume).toBe(true);
+  });
+});
+
+// ── P0: PROD-7 actuator — stall recovery must KICK a new turn ─────
+// The reducer marking needsCrossTurnResume is not enough: a claimed run has no
+// way to start an agent turn on its own. The stall interval must call
+// enqueueNextTurnInjection so a genuinely dead agent actually restarts.
+
+describe('PROD-7 actuator: retry_due→claimed kicks a new agent turn', () => {
+  beforeEach(() => { _resetForTest(); });
+  afterEach(() => { _resetForTest(); });
+
+  it('calls enqueueNextTurnInjection when backoff expires and run becomes claimed', () => {
+    const { api, enqueue } = makeApiWithEnqueue();
+    register(api as never);
+
+    const now = Date.now();
+    const result = _triggerRetryCheckForTest({
+      sessionKey: 'sess-kick',
+      orchestrationState: 'retry_queued',
+      retry: { attempt: 1, nextRetryAt: now - 1000, lastError: 'stalled', recoverable: true },
+    });
+
+    expect(result?.orchestrationState).toBe('claimed');
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionKey: 'sess-kick' }),
+    );
+  });
+
+  it('does NOT enqueue when backoff has not expired (stays retry_queued)', () => {
+    const { api, enqueue } = makeApiWithEnqueue();
+    register(api as never);
+
+    const now = Date.now();
+    const result = _triggerRetryCheckForTest({
+      sessionKey: 'sess-wait',
+      orchestrationState: 'retry_queued',
+      retry: { attempt: 1, nextRetryAt: now + 60_000, lastError: 'stalled', recoverable: true },
+    });
+
+    expect(result?.orchestrationState).toBe('retry_queued');
+    expect(enqueue).not.toHaveBeenCalled();
   });
 });
