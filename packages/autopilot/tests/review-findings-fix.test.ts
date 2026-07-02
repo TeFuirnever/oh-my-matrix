@@ -7,7 +7,7 @@
  * P1: LOGIC-4 — resume gateway must set needsCrossTurnResume
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { register, _resetForTest, _triggerRetryCheckForTest } from '../index';
+import { register, _resetForTest, _triggerRetryCheckForTest, _getInternalStateForTest } from '../index';
 import { orchestratorReducer } from '../src/orchestrator';
 import { hasNoActionableTask } from '../src/completion-detector';
 import { loadWorkflowConfig } from '../src/workflow-config';
@@ -185,5 +185,36 @@ describe('PROD-7 actuator: retry_due→claimed kicks a new agent turn', () => {
 
     expect(result?.orchestrationState).toBe('retry_queued');
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+// ── P2: PROD-2 — sessionExtension.cleanup clears reverse-index maps ─
+
+describe('PROD-2: cleanup removes sessionKeyToRunId, not just stateByRun', () => {
+  beforeEach(() => { _resetForTest(); });
+  afterEach(() => { _resetForTest(); });
+
+  it('clears both maps when the session extension is torn down', () => {
+    let capturedExt: { cleanup: (ctx: { sessionKey?: string }) => void } | undefined;
+    const api = {
+      pluginConfig: {},
+      on: vi.fn(),
+      registerGatewayMethod: vi.fn(),
+      session: {
+        workflow: { enqueueNextTurnInjection: vi.fn(async () => ({ enqueued: true })) },
+        state: { registerSessionExtension: vi.fn((ext: typeof capturedExt) => { capturedExt = ext; }) },
+      },
+    };
+    register(api as never);
+
+    // Seed a run so both stateByRun and sessionKeyToRunId hold an entry.
+    _triggerRetryCheckForTest({ sessionKey: 'sess-cleanup', orchestrationState: 'running' });
+    expect(_getInternalStateForTest().sessionKeyToRunIdSize).toBe(1);
+
+    capturedExt!.cleanup({ sessionKey: 'sess-cleanup' });
+
+    // Before the fix, sessionKeyToRunId kept a dangling entry (size stayed 1).
+    expect(_getInternalStateForTest().sessionKeyToRunIdSize).toBe(0);
+    expect(_getInternalStateForTest().stateByRunSize).toBe(0);
   });
 });
