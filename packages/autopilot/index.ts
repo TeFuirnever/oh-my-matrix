@@ -75,6 +75,47 @@ let canaryFired = new Set<string>();
 let stallInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
+ * PROD-7 / LOGIC-4 actuator handle. The stall interval and the retry-check test
+ * helper run OUTSIDE the register() closure that owns `api`, so they cannot read
+ * `api.session.workflow.enqueueNextTurnInjection` directly. We stash it at module
+ * scope on register() so both paths can kick a new agent turn via kickResumedTurn.
+ */
+type EnqueueInjectionFn = (injection: {
+  sessionKey: string;
+  text: string;
+  idempotencyKey: string;
+  placement?: string;
+  ttlMs?: number;
+}) => Promise<{ enqueued?: boolean } | void>;
+let enqueueInjectionFn: EnqueueInjectionFn | undefined;
+
+/**
+ * PROD-7 / LOGIC-4: actuator for stall / programmatic-resume recovery. The
+ * reducer moves a run to `claimed` (retry_due or resume_requested) and marks
+ * needsCrossTurnResume, but a claimed run cannot start an agent turn on its own —
+ * the host only fires agent_turn_prepare when it dispatches a turn. For a
+ * genuinely dead agent (stall) or a gateway resume with no follow-up user
+ * message, no turn ever comes, so the run would sit in `claimed` until the 24h
+ * orphan sweep. This kicks a cross-turn injection so the host actually restarts
+ * execution. idempotencyKey (keyed on lastActivityAt) dedupes double-injection
+ * of the same recovery event while allowing successive retries to each fire.
+ */
+function kickResumedTurn(runId: string, state: AutopilotState): void {
+  if (state.orchestrationState !== 'claimed') return;
+  const enqueue = enqueueInjectionFn;
+  if (typeof enqueue !== 'function') return;
+  void Promise.resolve(
+    enqueue({
+      sessionKey: state.sessionKey,
+      text: buildRetryInstruction(state),
+      idempotencyKey: `autopilot-resume-${runId}-${state.lastActivityAt ?? state.totalContinuations}`,
+      placement: 'prepend_context',
+      ttlMs: DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs,
+    }),
+  ).catch((err) => warn(`[autopilot] resume kick enqueue failed for session=${state.sessionKey}: ${err}`));
+}
+
+/**
  * before_tool_call priority — must be higher than matrixassistant-audit (priority 9).
  * Ensures autopilot audit trail is recorded before audit can short-circuit.
  * @see the host's matrixassistant-audit plugin (AUDIT_HOOK_PRIORITY = 9)
@@ -116,6 +157,7 @@ export function _resetForTest(): void {
   sessionIdToKey = new Map();
   sessionKeyToRunId = new Map();
   canaryFired = new Set();
+  enqueueInjectionFn = undefined;
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
@@ -191,6 +233,8 @@ export function _triggerRetryCheckForTest(overrides: {
   ) {
     const updated = orchestratorReducer(state, { type: 'retry_due', runId, now });
     setState(runId, updated);
+    // PROD-7: retry_due→claimed is a dead end without an actuator — kick a turn.
+    if (updated.orchestrationState === 'claimed') kickResumedTurn(runId, updated);
   }
 
   return stateByRun.get(runId);
@@ -292,6 +336,10 @@ function generateRunId(): string {
 }
 
 export function register(api: OpenClawPluginApi): void {
+  // PROD-7 / LOGIC-4: stash the cross-turn injection actuator so the stall
+  // interval and gateway resume (both outside per-call closures) can restart a
+  // claimed run. Optional-chained: undefined on hosts without the 5.28+ facade.
+  enqueueInjectionFn = api.session?.workflow?.enqueueNextTurnInjection as EnqueueInjectionFn | undefined;
   // Read user config from OpenClaw, merge with defaults
   // pluginConfig is Record<string, unknown> — coerce values to expected types
   const uc = api.pluginConfig ?? {};
@@ -1037,7 +1085,11 @@ export function register(api: OpenClawPluginApi): void {
 
       // M2: Dispatch resume_requested through orchestrator reducer
       const orchestrated = orchestratorReducer(state, { type: 'resume_requested', runId, now: Date.now() });
-      setState(runId, resume(orchestrated));
+      const resumed = resume(orchestrated);
+      setState(runId, resumed);
+      // LOGIC-4: a programmatic resume has no follow-up user message to trigger
+      // agent_turn_prepare, so kick a cross-turn injection to actually continue.
+      kickResumedTurn(runId, resumed);
       log(`[autopilot] resume: session=${sessionKey} paused→running, errors reset`);
       // Re-acquire audit monitor mode on resume.
       setAuditMode('monitor');
@@ -1148,6 +1200,9 @@ export function register(api: OpenClawPluginApi): void {
           now,
         });
         setState(runId, updated);
+        // PROD-7: a claimed run cannot self-start a turn — kick one so a genuinely
+        // dead agent restarts instead of sitting in claimed until the 24h sweep.
+        if (updated.orchestrationState === 'claimed') kickResumedTurn(runId, updated);
         log(`[autopilot] retry_due: session=${state.sessionKey} run=${runId} attempt=${state.retry?.attempt ?? 1}`);
       }
 
