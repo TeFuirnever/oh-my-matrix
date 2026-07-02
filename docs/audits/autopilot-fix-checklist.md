@@ -44,7 +44,7 @@
 
 ## Wave 4 — 跨包 + 文档
 
-- [ ] **#11 [P2] 三重 tokenizer 统一** ⚠️ **跨包** — permission-policy 导出 `tokenizeShell`，autopilot 两份 import。**触发 monorepo 版本链**：bump permission-policy → 更新 autopilot/dynamic-workflows peerDep。⚠️ npm publish 需真实终端 + 2FA OTP（Claude 跑不了）。对抗验证确认当前不分歧，纯维护性——可延后。
+- [x] **#11 [P2] 三重 tokenizer 统一** — `workflow-config.ts` 删除 `tokenizeCommand`、`command-runner.ts` 删除 `parseCommandArgs`，两处改为 import `tokenizeShell` from `@oh-my-matrix/permission-policy`。`parseCommandArgs` 保留为 re-export alias（向后兼容测试 import）。无需 version bump（`tokenizeShell` 已在当前版本导出）。✅
 - [x] **#12 [P2] test helpers 移出 barrel** — package.json 加 `exports` map 阻止外部 deep import；`generateRunId()` 不再委托 `_generateRunIdForTest()`（直接内联 `run-${crypto.randomUUID()}`）。✅
 - [x] **#13 [P2] README 扩充** — 完整 README：plugin config 参考表（10 项）、6 个 gateway method 合约、WORKFLOW.md 格式示例、AutopilotProjection 字段表、troubleshooting。✅
 - [x] **#14 [P2] hook handler 类型化** — 12 个 hook handler 从 `event: any, ctx: any` 改为 OpenClaw SDK 类型（PluginHookBeforeAgentFinalizeEvent 等）；提取 `resolveSessionKey()` helper 兼容 production ctx 路径和 test mock event 路径。✅
