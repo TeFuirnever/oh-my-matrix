@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { WorkflowConfig, ValidationCommand } from './types';
 import { parseModelRouting } from './model-routing';
+import { tokenizeShell } from '@oh-my-matrix/permission-policy';
 
 export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   version: 1,
@@ -61,32 +62,6 @@ const ALLOWED_VALIDATION_BINARIES: ReadonlySet<string> = new Set([
   'gradle', 'mvn', 'rake', 'bundle', 'swift', 'xcodebuild',
 ]);
 
-/**
- * Quote-aware tokenizer shared by the binary gate and the argument gate.
- * Mirrors parseCommandArgs (command-runner.ts) at execution time: quotes toggle
- * state and are stripped, unquoted space splits tokens. One tokenizer here so
- * the two gates decide on exactly the argv execFile will spawn.
- */
-function tokenizeCommand(command: string): string[] {
-  const s = command.trim();
-  const tokens: string[] = [];
-  let cur = '';
-  let inSingle = false;
-  let inDouble = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '"' && !inSingle) { inDouble = !inDouble; continue; }
-    if (c === "'" && !inDouble) { inSingle = !inSingle; continue; }
-    if (c === ' ' && !inSingle && !inDouble) {
-      if (cur) { tokens.push(cur); cur = ''; }
-      continue;
-    }
-    cur += c;
-  }
-  if (cur) tokens.push(cur);
-  return tokens;
-}
-
 /** S1-B: interpreters that can execute an arbitrary string passed as a flag. */
 const INTERPRETER_BINARIES: ReadonlySet<string> = new Set(['node', 'python', 'python3']);
 /** S1-B: flags that make those interpreters run an arbitrary string. */
@@ -110,7 +85,7 @@ function filterValidationCommands(
 ): ValidationCommand[] {
   const kept: ValidationCommand[] = [];
   for (const cmd of commands) {
-    const tokens = tokenizeCommand(cmd.command);
+    const tokens = tokenizeShell(cmd.command);
     const bin = tokens[0]?.toLowerCase();
     if (!bin || !ALLOWED_VALIDATION_BINARIES.has(bin)) {
       warnings.push(

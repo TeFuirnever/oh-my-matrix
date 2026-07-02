@@ -16,6 +16,9 @@
  */
 import { execFile } from 'child_process';
 import type { ValidationCommand, EvidenceCommandResult } from './types';
+import { tokenizeShell } from '@oh-my-matrix/permission-policy';
+
+export { tokenizeShell as parseCommandArgs };
 
 /**
  * Run each command sequentially and collect results.
@@ -67,33 +70,6 @@ export async function runValidationCommands(
   return results;
 }
 
-/**
- * Parse a command string into [binary, ...args], respecting single and
- * double quotes so paths with spaces are handled correctly on Windows and macOS.
- * Shell features (&&, |, ;, $var) are NOT supported — wrap in a script file.
- */
-export function parseCommandArgs(command: string): string[] {
-  const args: string[] = [];
-  let current = '';
-  let inDouble = false;
-  let inSingle = false;
-
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-    } else if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-    } else if (ch === ' ' && !inDouble && !inSingle) {
-      if (current) { args.push(current); current = ''; }
-    } else {
-      current += ch;
-    }
-  }
-  if (current) args.push(current);
-  return args;
-}
-
 function hasNonAscii(...values: string[]): boolean {
   return values.some((s) => [...s].some((c) => c.charCodeAt(0) > 127));
 }
@@ -112,7 +88,7 @@ function shouldUseShell(bin: string, args: string[], cwd: string | undefined): b
 }
 
 async function execCommand(command: string, timeoutMs: number, cwd?: string): Promise<void> {
-  const parts = parseCommandArgs(command.trim());
+  const parts = tokenizeShell(command.trim());
   if (parts.length === 0 || !parts[0]) {
     throw new Error('empty command string');
   }
