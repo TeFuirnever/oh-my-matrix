@@ -104,6 +104,56 @@ describe('E2E real-event-shape guard — dynamic-workflows', () => {
     });
   });
 
+  describe('SEC-5 git global-flag evasion THROUGH the registered hook', () => {
+    // The unit suite (permission-policy.test.ts) covers classifyCommand directly:
+    // it strips `git -c/-C/--work-tree/--git-dir/--namespace/--exec-path/--config-env`
+    // (and boolean flags --bare/-p/--no-pager/...) before the subcommand so the real
+    // destructive verb classifies as 'destructive_git', not 'unknown'.
+    //
+    // This block fills the E2E gap (issue #51 item 3): the SAME payloads must
+    // classify as 'destructive_git' (NOT 'unknown') when they travel the FULL
+    // before_tool_call → decidePermissionForEvent → extractCommandSegments →
+    // tokenizeShell → classifyCommand path with a real {toolName, params:{command}}
+    // event. A wiring regression (e.g. params.command not reaching classifyCommand,
+    // like the 2026-06-28 event.args fail-open) would flip these to 'unknown'.
+    //
+    // CRITICAL — why we assert blockReason, not just block: the subagent path runs
+    // with defaultDeny:true, so 'unknown' ALSO blocks (via "not on the allowlist for
+    // subagent sessions"). Both 'destructive_git' and 'unknown' → block. To actually
+    // pin SEC-5 we assert the block came via the DESTRUCTIVE-GIT path (message:
+    // "Destructive git commands are blocked"), which is only reached when the global
+    // flag is stripped. If SEC-5 regresses, the same payload blocks via the unknown/
+    // defaultDeny path with a DIFFERENT message, failing this test.
+    it.each([
+      ['git --git-dir=/evil reset --hard', '--git-dir= (attached)'],
+      ['git --git-dir /evil reset --hard', '--git-dir (space-form)'],
+      ['git --work-tree=/sensitive clean -fdx', '--work-tree= (attached)'],
+      ['git --work-tree /sensitive push --force', '--work-tree (space-form)'],
+      ['git --namespace=ns reset --hard', '--namespace= (attached)'],
+      ['git --exec-path=/evil reset --hard', '--exec-path= (attached)'],
+      ['git --config-env=HOME=X reset --hard', '--config-env= (attached)'],
+      ['git -c key=val reset --hard', '-c key=val'],
+      ['git --bare reset --hard', '--bare (boolean)'],
+      ['git -p reset --hard', '-p (boolean, short)'],
+      ['git --no-pager reset --hard', '--no-pager (boolean)'],
+      // Combined: a stack of global flags (= and -c forms) must all strip before
+      // the destructive verb. No -C/path form (would set cwd to a stray path and
+      // muddy the audit side effect); stacked =/-c forms keep cwd clean.
+      ['git --work-tree=/a -c k=v --git-dir=/c reset --hard', 'stacked global flags'],
+    ] as const)('classifies global-flag-masked git as destructive_git (not unknown): "%s"', async (command) => {
+      const h = mock.hooks.get('before_tool_call')!;
+      const result = (await h(
+        { toolName: 'exec', params: { command } },
+        { sessionKey: SUBAGENT_KEY },
+      )) as { block?: boolean; blockReason?: string };
+      expect(result.block).toBe(true);
+      // Pins SEC-5: the block must come from the destructive_git classification,
+      // NOT the defaultDeny 'unknown' path. See the comment above for why this
+      // distinction matters under defaultDeny:true.
+      expect(result.blockReason).toBe('Destructive git commands are blocked');
+    });
+  });
+
   describe('audit-on-block DISK side effect', () => {
     let ws: string;
     beforeEach(() => {

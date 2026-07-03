@@ -162,8 +162,13 @@ describe('E2E 10MB rotation — real >10MB base file rolls to audit-DATE-N.jsonl
     expect(fs.existsSync(base)).toBe(true);
 
     // The rotated file holds the new entry; loadRecentAuditEntries sees it.
+    // Strict assertion: the base file holds 10MB of NON-JSON garbage ('x' bytes),
+    // so it must contribute zero parsed entries. If loadRecentAuditEntries ever
+    // regressed to surface garbage-parsed or stale entries, a mere `.some()`
+    // existence check would still pass — assert exclusivity instead.
     const loaded = loadRecentAuditEntries(tmpDir, 10);
-    expect(loaded.some((e) => e.toolName === 'rotated-write')).toBe(true);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].toolName).toBe('rotated-write');
   });
 
   it('a second rotation (audit-DATE-1 also >= 10MB) rolls to audit-DATE-2.jsonl', () => {
