@@ -225,8 +225,26 @@ export function classifyCommand(
     let idx = 0;
     while (idx < args.length) {
       const a = args[idx];
+      // Short flags with a required value (two-token form)
       if ((a === '-c' || a === '-C') && idx + 1 < args.length) { idx += 2; continue; }
       if (a.startsWith('-C') && a.length > 2) { idx += 1; continue; }
+      if (a.startsWith('-c') && a.length > 2) { idx += 1; continue; }
+      // SEC-5: long-form flags with a value — two-token and `=`-attached forms.
+      // Covers all flags from `man git` that shift the subcommand index.
+      if ((a === '--work-tree' || a === '--git-dir' || a === '--namespace'
+           || a === '--exec-path' || a === '--config-env' || a === '--super-prefix'
+           || a === '--list-cmds') && idx + 1 < args.length) { idx += 2; continue; }
+      if (a.startsWith('--work-tree=') || a.startsWith('--git-dir=')
+          || a.startsWith('--namespace=') || a.startsWith('--exec-path=')
+          || a.startsWith('--config-env=') || a.startsWith('--super-prefix=')
+          || a.startsWith('--list-cmds=')) { idx += 1; continue; }
+      // Boolean global flags (single token, no value)
+      if ([
+        '--html-path', '--man-path', '--info-path', '--bare',
+        '-p', '--paginate', '-P', '--no-pager',
+        '--no-replace-objects', '--no-lazy-fetch', '--no-optional-locks', '--no-advice',
+        '--literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs',
+      ].includes(a)) { idx += 1; continue; }
       break;
     }
     const sub = args[idx];

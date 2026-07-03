@@ -25,7 +25,7 @@ export type {
 } from './src/permission-policy';
 
 // ─── Audit persistence ──────────────────────────────────────────────────
-export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath } from './src/audit-persister';
+export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath, getAuditWriteFailureCount } from './src/audit-persister';
 
 // ─── Shared types ───────────────────────────────────────────────────────
 export type { CommandClass, PermissionAuditEntry } from './src/types';

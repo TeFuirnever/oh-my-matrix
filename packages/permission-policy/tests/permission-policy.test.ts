@@ -54,6 +54,35 @@ describe('classifyCommand git/find evasion hardening (spec §3)', () => {
   it('strips leading git -c/-C global flags before the subcommand', () => {
     expect(classifyCommand('git', ['-c', 'x=y', 'reset', '--hard'])).toBe('destructive_git');
     expect(classifyCommand('git', ['-C', '/p', 'push', '--force'])).toBe('destructive_git');
+    // attached single-token forms: -c<key>=<value> and -C<path>
+    expect(classifyCommand('git', ['-ccore.askPass=evil', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['-C/path', 'push', '--force'])).toBe('destructive_git');
+  });
+  it('strips long-form git global flags (--work-tree, --git-dir, --namespace) — SEC-5', () => {
+    // combined form: --flag=value
+    expect(classifyCommand('git', ['--work-tree=/sensitive', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--git-dir=/path', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--namespace=ns', 'clean', '-fd'])).toBe('destructive_git');
+    // space-separated form: --flag value
+    expect(classifyCommand('git', ['--work-tree', '/sensitive', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--git-dir', '/path', 'push', '--force'])).toBe('destructive_git');
+    // mixed: long-form + short -C
+    expect(classifyCommand('git', ['--work-tree=/path', '-C', '/cwd', 'reset', '--hard'])).toBe('destructive_git');
+  });
+  it('strips --bare boolean flag before the subcommand', () => {
+    expect(classifyCommand('git', ['--bare', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--bare', 'clean', '-fd'])).toBe('destructive_git');
+  });
+  it('strips remaining boolean git global flags (-p, --no-pager, --literal-pathspecs, etc.)', () => {
+    expect(classifyCommand('git', ['-p', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--no-pager', 'clean', '-fd'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--literal-pathspecs', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--no-replace-objects', 'push', '--force'])).toBe('destructive_git');
+  });
+  it('strips --exec-path and --config-env flags (= and space-separated forms)', () => {
+    expect(classifyCommand('git', ['--exec-path=/evil', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--exec-path', '/evil', 'reset', '--hard'])).toBe('destructive_git');
+    expect(classifyCommand('git', ['--config-env=HOME=X', 'clean', '-fd'])).toBe('destructive_git');
   });
 });
 

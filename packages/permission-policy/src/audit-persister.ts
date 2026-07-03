@@ -14,6 +14,10 @@ import type { PermissionAuditEntry } from './types';
 const AUDIT_SUBDIR = '.autopilot';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
+let _writeFailureCount = 0;
+export function getAuditWriteFailureCount(): number { return _writeFailureCount; }
+export function _resetAuditFailureCountForTest(): void { _writeFailureCount = 0; }
+
 /** Returns the audit directory path for a given workspace root. */
 function getAuditDir(workspaceDir: string): string {
   return path.join(workspaceDir, AUDIT_SUBDIR);
@@ -71,10 +75,7 @@ export function appendAuditEntry(entry: PermissionAuditEntry, workspaceDir: stri
     fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf-8');
   } catch (e) {
-    // Audit persistence must never crash the plugin — but the JSONL trail is the
-    // sole forensic record (in-memory trail is capped + lost on process exit), so
-    // a silent write failure must at least be visible to operators. Nested guard
-    // so the logger itself can never throw. (F2: was a bare `catch {}`.)
+    _writeFailureCount++;
     try { console.error('[permission-policy] audit append failed:', e); } catch { /* noop */ }
   }
 }
