@@ -1,0 +1,8 @@
+{
+  "workflowId": "dw-fixture-direct",
+  "mode": "direct-sessions",
+  "selectionReason": "OpenProse unavailable; use direct session summaries.",
+  "createdAt": 1710001000000,
+  "startedAt": 1710001000000,
+  "completedAt": 1710001120000
+}
