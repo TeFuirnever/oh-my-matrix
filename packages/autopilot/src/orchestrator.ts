@@ -343,12 +343,18 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
-    // ─── blocked + resume_requested → claimed (only recoverable)
+    // ─── blocked/unclaimed + resume_requested → claimed (only recoverable)
     case 'resume_requested': {
-      if (state.orchestrationState !== 'blocked') return state;
-      const reason = state.blockedReason;
-      if (!reason || !RESUMABLE_BLOCKED_REASONS.has(reason)) {
-        return state;
+      // REV-1 fix: also handle 'unclaimed' (a run paused before dispatch).
+      // Without this, resume of an unclaimed run is a silent no-op: state stays
+      // unclaimed, kickResumedTurn early-returns, but the caller sees success.
+      if (state.orchestrationState !== 'blocked' && state.orchestrationState !== 'unclaimed') return state;
+      // For blocked runs, only recoverable reasons can resume.
+      if (state.orchestrationState === 'blocked') {
+        const reason = state.blockedReason;
+        if (!reason || !RESUMABLE_BLOCKED_REASONS.has(reason)) {
+          return state;
+        }
       }
       return {
         ...state,
