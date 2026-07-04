@@ -12,6 +12,9 @@ import { orchestratorReducer } from '../src/orchestrator';
 import { hasNoActionableTask } from '../src/completion-detector';
 import { loadWorkflowConfig } from '../src/workflow-config';
 import type { AutopilotState } from '../src/types';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /** Minimal register() mock exposing session.workflow.enqueueNextTurnInjection as a spy. */
 function makeApiWithEnqueue() {
@@ -97,9 +100,6 @@ describe('LOGIC-3: hasNoActionableTask regex precision', () => {
 
 describe('PROD-1: loadWorkflowConfig surfaces read errors in warnings', () => {
   it('returns warning when WORKFLOW.md exists but is unreadable (directory)', () => {
-    const os = require('os');
-    const fs = require('fs');
-    const path = require('path');
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-test-'));
     // Create a directory named WORKFLOW.md — existsSync returns true, readFileSync throws EISDIR
     fs.mkdirSync(path.join(tmpDir, 'WORKFLOW.md'));
@@ -223,9 +223,6 @@ describe('PROD-2: cleanup removes sessionKeyToRunId, not just stateByRun', () =>
 
 describe('PROD-9: parseSimpleYaml handles heavy blank/comment noise', () => {
   it('parses a config with thousands of interspersed blank + comment lines', () => {
-    const os = require('os');
-    const fs = require('fs');
-    const path = require('path');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-prod9-'));
     // 5000 comment+blank pairs between two real keys — exercises the iterative
     // skip that replaced the per-line recursion (would risk a stack blow-up).

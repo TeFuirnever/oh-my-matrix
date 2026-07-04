@@ -56,6 +56,8 @@ The plugin registers 11 OpenClaw hooks declared in `packages/autopilot/package.j
 
 `packages/dynamic-workflows/` is the runtime guard plugin for workflow subagents. It registers `before_tool_call` at priority 11, before autopilot and audit handlers, so dangerous subagent calls are stopped at the gateway.
 
+It also exports a read-only **projection contract** (`buildDynamicWorkflowProjection`, `normalizeOpenProseRun`, `normalizePermissionAuditEntries`) that derives `DynamicWorkflowProjection` from real data sources — OpenProse filesystem run snapshots and guard audit entries. See [`docs/design/dynamic-workflows-projection-design.md`](design/dynamic-workflows-projection-design.md) and [ADR-014](adr/014-dynamic-workflows-product-boundary.md).
+
 ### Permission Policy
 
 `packages/permission-policy/` is a pure library. It exists because autopilot and dynamic-workflows need the same command classification, permission decisions, real event extraction, and audit persistence.
@@ -109,4 +111,4 @@ Do not claim a source change is active in a consuming OpenClaw host until that h
 - Host deploy: reproducible runbook scaffolded at [`docs/runbooks/host-deploy.md`](runbooks/host-deploy.md) — repo-side steps executable, host-internal steps marked `[TODO:host]` pending the host team.
 - README/docs now represent autopilot as first-class, but release packaging still needs a public policy.
 - Permission policy needs a stronger shell model for redirect and quote-edge cases.
-- Workflow observability needs a UI contract for branch graph, blocked calls, and evidence state.
+- Workflow observability: projection contract (`DynamicWorkflowProjection`) and builder implemented (Milestone C, 2026-07-03). Host/UI rendering of branch graph, blocked calls, and evidence state is Milestone D — not yet implemented.

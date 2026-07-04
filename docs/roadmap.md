@@ -61,6 +61,11 @@ Exit criteria:
 | Blocked-call reporting | Guard blocks should be understandable, not mysterious | Planned |
 | Pattern examples gallery | The 8 workflow modes need realistic examples | Planned |
 
+Design references:
+
+- [`docs/design/dynamic-workflows-projection-design.md`](design/dynamic-workflows-projection-design.md)
+- [`docs/design/dynamic-workflows-projection-fixture-capture.md`](design/dynamic-workflows-projection-fixture-capture.md)
+
 Exit criteria:
 
 - A host can render `.prose` execution progress, branch outputs, blocked calls, and final synthesis status.

@@ -14,6 +14,8 @@ import {
   getAuditFilePath,
   auditFileRecencyKey,
   _todayStringForTest,
+  getAuditWriteFailureCount,
+  _resetAuditFailureCountForTest,
 } from '../src/audit-persister';
 import type { PermissionAuditEntry } from '../src/types';
 
@@ -235,5 +237,38 @@ describe('appendAuditEntry — failure surfaces to stderr without throwing (F2)'
     expect(String(errSpy.mock.calls[0]?.[0])).toContain('audit append failed');
 
     errSpy.mockRestore();
+  });
+});
+
+describe('appendAuditEntry failure counter — PROD-8', () => {
+  beforeEach(() => { _resetAuditFailureCountForTest(); });
+
+  it('getAuditWriteFailureCount starts at 0 after reset', () => {
+    expect(getAuditWriteFailureCount()).toBe(0);
+  });
+
+  it('increments failure count when write fails (impossible workspace path)', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const blockFile = path.join(tmpDir, 'not-a-dir');
+    fs.writeFileSync(blockFile, 'x');
+    appendAuditEntry(makeEntry(), path.join(blockFile, 'ws'));
+    errSpy.mockRestore();
+    expect(getAuditWriteFailureCount()).toBe(1);
+  });
+
+  it('accumulates across multiple failures', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const blockFile = path.join(tmpDir, 'not-a-dir-2');
+    fs.writeFileSync(blockFile, 'x');
+    const impossibleWs = path.join(blockFile, 'ws');
+    appendAuditEntry(makeEntry(), impossibleWs);
+    appendAuditEntry(makeEntry(), impossibleWs);
+    errSpy.mockRestore();
+    expect(getAuditWriteFailureCount()).toBe(2);
+  });
+
+  it('does not increment on successful write', () => {
+    appendAuditEntry(makeEntry(), tmpDir);
+    expect(getAuditWriteFailureCount()).toBe(0);
   });
 });

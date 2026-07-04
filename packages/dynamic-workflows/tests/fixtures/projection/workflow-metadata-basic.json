@@ -1,0 +1,9 @@
+{
+  "workflowId": "dw-fixture-basic",
+  "mode": "openprose",
+  "selectionReason": "Task requires parallel investigation and final synthesis.",
+  "prosePath": ".openclaw/workflows/dw-fixture-basic.prose",
+  "createdAt": 1710000000000,
+  "startedAt": 1710000000000,
+  "completedAt": 1710000300000
+}

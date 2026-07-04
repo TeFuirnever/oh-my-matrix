@@ -1,0 +1,8 @@
+{
+  "status": "present",
+  "artifacts": [".openclaw/workflows/dw-fixture-basic/final-synthesis.md"],
+  "evidenceRefs": [
+    ".openclaw/workflows/dw-fixture-basic/research.md",
+    ".openclaw/workflows/dw-fixture-basic/review.md"
+  ]
+}

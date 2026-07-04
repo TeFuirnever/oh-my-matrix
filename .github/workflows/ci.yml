@@ -44,6 +44,8 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build (regenerate dist from source)
+        run: pnpm -r build
       - name: Typecheck
         run: pnpm typecheck
       - name: Summary
@@ -83,6 +85,8 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build (regenerate dist from source)
+        run: pnpm -r build
       - name: Test
         run: pnpm -r test
       - name: Summary

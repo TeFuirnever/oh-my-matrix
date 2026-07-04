@@ -1,0 +1,32 @@
+{
+  "representativeSource": "docs/design/dynamic-workflows-projection-design.md",
+  "captureDate": "2026-07-02",
+  "representativeReason": "Stable live OpenProse state file path is not yet committed.",
+  "workflowId": "dw-fixture-basic",
+  "phase": "completed",
+  "startedAt": 1710000000000,
+  "updatedAt": 1710000300000,
+  "branches": [
+    {
+      "id": "research",
+      "name": "Research",
+      "phase": "completed",
+      "required": true,
+      "summary": "Collected runtime evidence.",
+      "artifacts": [".openclaw/workflows/dw-fixture-basic/research.md"]
+    },
+    {
+      "id": "review",
+      "name": "Review",
+      "phase": "completed",
+      "required": true,
+      "summary": "Reviewed synthesis risks.",
+      "artifacts": [".openclaw/workflows/dw-fixture-basic/review.md"]
+    }
+  ],
+  "artifacts": [
+    ".openclaw/workflows/dw-fixture-basic/run-state.json",
+    ".openclaw/workflows/dw-fixture-basic/research.md"
+  ],
+  "errors": []
+}

@@ -72,10 +72,34 @@
 ### 剩余 backlog（🔵 需设计/规划，接手上下文见报告）
 
 - [ ] **ARCH-4 双状态机统一** — PARTIALLY，纯气味非 bug，与 #2 同结论（defer 到需新增状态时）。
-- [ ] **TEST-1 coverage 阈值** 60→~88（配合 TEST-3）· **TEST-2 源码扫描测试→行为测试** · **TEST-3 index.ts 分支 74.8% 补测** · **TEST-7 e2e 正名**。
-- [ ] **SEC-5 git --work-tree containment**（permission-policy，需 destructiveGit opt-in，MEDIUM）· **PROD-8 audit 磁盘写 fail-silent**（跨包）。
+- [x] **TEST-1 coverage 阈值** 60→88/78/90/88（已在本 branch 完成）。
+- [ ] **TEST-2 源码扫描测试→行为测试** · **TEST-3 index.ts 分支 74.8% 补测** · **TEST-7 e2e 正名**。
+- [x] **SEC-5 git --work-tree containment**（已完成：完整 global-flag stripping，含 --bare/-p/--exec-path 等所有 man git flag）。
+- [x] **PROD-8 audit 磁盘写 fail-silent**（已完成：`getAuditWriteFailureCount()` 导出，barrel 不导出 reset helper）。
 - [ ] **API-5 gateway per-method 参数类型**（LOW，内部 RPC）。
 - [~] **API-2 test helpers 泄漏 dist** — **接受现状**：有 NODE_ENV guard，仅类型 cosmetic；干净修需移私有状态=重构非 quick fix。
+
+---
+
+## Wave 8 — 代码审查新发现（2026-07-03）
+
+> 来源：8 角度 finder + 独立 verifier 对抗验证。4 CONFIRMED / 1 PLAUSIBLE。
+> **涉及文件**：`packages/autopilot/index.ts`、`packages/autopilot/src/orchestrator.ts`、`packages/autopilot/src/workflow-config.ts`、`packages/permission-policy/src/permission-policy.ts`。
+
+### Correctness（需修复）
+
+- [ ] **[P1] REV-1 resume unclaimed 静默 no-op** — `orchestrator.ts:261` `resume_requested` case 只处理 `blocked→claimed`，`orchestrationState='unclaimed'`（dispatch 前 pause 的 run）进入后 return state 不变 → `kickResumedTurn` 再次 early-return（guard `!== 'claimed'`）→ `respond(true, {ok:true})` 仍触发，调用方看到 success，run 实际永远卡住。**修复**：`resume_requested` 同时处理 `'unclaimed'` → `'claimed'` 转换。
+
+- [ ] **[P1] REV-2 kickResumedTurn TTL 与 stall 超时不匹配** — `index.ts:113` TTL 硬编码 `DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs`（300s），但 `!config.tokenBudget` 时 stall 检测用 `stallTimeoutMs * 2`（600s）。injection 在 300s 过期，host 在 300–600s 内启动 resumed turn → injection 已消失 → run 卡 `'claimed'` 直到 24h orphan 清理。**修复**：`kickResumedTurn` 接收已计算的 `stallTimeoutMs` 参数而非 hardcode 默认值。
+
+- [ ] **[P1] REV-3 PROD-1 修复实际静默失效（call site 读错字段）** — `index.ts:999` 读 `result.config.warnings`，但 all-paths-fail 时 `loadWorkflowConfig` 返回 `{ config: DEFAULT_WORKFLOW_CONFIG, warnings: ioWarnings }`，`DEFAULT_WORKFLOW_CONFIG.warnings = []`，ioWarnings 在 `result.warnings` 永远不被读取。**修复**：`index.ts:999` 改为读 `result.warnings`（或统一在 workflow-config.ts 把 warnings 嵌入 config 对象）。
+
+- [ ] **[P2] REV-4 多路径搜索时第一条路径的 I/O 错误静默丢弃** — `workflow-config.ts:478` success return 不含 `ioWarnings`：第一条路径失败（error 推入 ioWarnings）→ 第二条成功 → `return { config: merged, warnings }` 仅含 parseAutopilotSection warnings。**修复**：`return { config: merged, warnings: [...ioWarnings, ...warnings] }`。
+
+### Efficiency（可改进）
+
+- [ ] **[P3] REV-5 boolean git flag 用内联 array `.includes()` 而非 Set** — `permission-policy.ts:242` while-loop 每次迭代分配新的 14 元素数组做线性扫描，与同文件 `GIT_BINARIES`/`GIT_TOOLS` 的 `new Set([...]).has()` 模式不一致。**修复**：提取 `const GIT_BOOLEAN_GLOBAL_FLAGS = new Set([...])` 到模块顶层，改用 `.has(a)`。（注：altitude 建议的 `a.startsWith('-')` fallback 在双 token flag 场景有 fail-open 风险，不采用。）
+
 
 ---
 

@@ -14,6 +14,26 @@ import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime'
 import { decidePermissionForEvent, classifyCommand, appendAuditEntry, extractCommandSegments } from '@oh-my-matrix/permission-policy';
 import { logWithContext } from './src/logger';
 
+// ─── Projection contract (read-only, host/UI observable) ─────────────────
+export { buildDynamicWorkflowProjection, normalizeOpenProseRun, normalizePermissionAuditEntries } from './src/projection';
+export type {
+  DynamicWorkflowMode,
+  DynamicWorkflowPhase,
+  DynamicWorkflowBranchPhase,
+  DynamicWorkflowSummaryStatus,
+  DynamicWorkflowMetadata,
+  NormalizedOpenProseRun,
+  OpenProseFilesystemRunSnapshot,
+  OpenProseFilesystemBindingSnapshot,
+  NormalizedWorkflowBranch,
+  NormalizedBlockedCall,
+  DynamicWorkflowFinalSynthesis,
+  DirectSessionSummary,
+  DynamicWorkflowBranchState,
+  DynamicWorkflowProjection,
+  BuildDynamicWorkflowProjectionInput,
+} from './src/projection-types';
+
 export const id = 'dynamic-workflows';
 export const name = 'Dynamic Workflows Guard';
 export const version = '0.1.2';

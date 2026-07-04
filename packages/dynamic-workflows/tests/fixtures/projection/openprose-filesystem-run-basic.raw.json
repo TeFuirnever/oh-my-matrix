@@ -1,0 +1,21 @@
+{
+  "kind": "openprose-filesystem-run-v1",
+  "representativeSource": "/Users/guanxueliang/Desktop/Matrix/MatrixAssistant/node_modules/openclaw/docs/prose.md#file-locations",
+  "captureDate": "2026-07-02",
+  "representativeReason": "MatrixAssistant bundles OpenClaw/OpenProse docs and runtime support, but no committed .prose run artifact exists in that checkout; this preserves the documented .prose/runs/{YYYYMMDD}-{HHMMSS}-{random}/state.md + bindings/ contract until live capture is possible.",
+  "workflowId": "dw-fixture-basic",
+  "statePath": ".prose/runs/20260702-132000-dwfixture/state.md",
+  "stateMarkdown": "# Dynamic Workflow Run\n\nparallel:\n  research # (complete)\n  review # (complete)\n\nsession \"Synthesize final answer\" # (complete)\n",
+  "bindings": [
+    {
+      "name": "research",
+      "path": ".prose/runs/20260702-132000-dwfixture/bindings/research.md",
+      "markdown": "---\nkind: session\nid: research\nname: Research\nsource: research\nstatus: complete\nrequired: true\nartifact: .openclaw/workflows/dw-fixture-basic/research.md\n---\nCollected runtime evidence."
+    },
+    {
+      "name": "review",
+      "path": ".prose/runs/20260702-132000-dwfixture/bindings/review.md",
+      "markdown": "---\nkind: session\nid: review\nname: Review\nsource: review\nstatus: complete\nrequired: true\nartifact: .openclaw/workflows/dw-fixture-basic/review.md\n---\nReviewed synthesis risks."
+    }
+  ]
+}

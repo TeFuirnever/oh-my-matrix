@@ -1,0 +1,7 @@
+{
+  "workflowId": "dw-fixture-plan",
+  "mode": "plan-only",
+  "selectionReason": "User requested planning only.",
+  "prosePath": ".openclaw/workflows/dw-fixture-plan.prose",
+  "createdAt": 1710002000000
+}

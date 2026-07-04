@@ -1,0 +1,16 @@
+[
+  {
+    "id": "session-a",
+    "name": "Repository Scan",
+    "phase": "completed",
+    "summary": "Mapped the local workflow files.",
+    "artifacts": [".openclaw/workflows/dw-fixture-direct/session-a.md"]
+  },
+  {
+    "id": "session-b",
+    "name": "Risk Review",
+    "phase": "completed",
+    "summary": "Found no guard behavior change requirement.",
+    "artifacts": [".openclaw/workflows/dw-fixture-direct/session-b.md"]
+  }
+]
