@@ -23,6 +23,36 @@ export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
 ]);
 
 /**
+ * Derive the user-facing `status` field from `orchestrationState` + `blockedReason`.
+ *
+ * W1 (dual state machine collapse): `status` is moving toward being a derived
+ * field with the reducer as its sole writer. This function encodes the mapping
+ * so that, once all writers route through the reducer, `status` is always a
+ * pure function of orchState — eliminating the H1-class bug where the two
+ * fields could disagree.
+ *
+ * Mapping (evidence-based from current autopilot-state.ts setter behavior):
+ *   done                              → 'done'
+ *   blocked + user_stopped            → 'idle'     (terminal, user-initiated)
+ *   blocked + resumable reason        → 'paused'   (recoverable)
+ *   blocked + other non-resumable     → 'paused'   (parked, not resumable)
+ *   unclaimed/claimed/running/released/retry_queued → 'running'
+ *
+ * NOTE: this is currently reference-only — no production writer uses it yet.
+ * Phase 2 will route all writers through the reducer, which will call this.
+ */
+export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 'blockedReason'>): AutopilotState['status'] {
+  const orch = state.orchestrationState;
+  if (orch === 'done') return 'done';
+  if (orch === 'blocked') {
+    if (state.blockedReason === 'user_stopped') return 'idle';
+    return 'paused';
+  }
+  // unclaimed, claimed, running, released, retry_queued — all active states.
+  return 'running';
+}
+
+/**
  * Apply an orchestrator event to the current state.
  * Returns a new state object (immutable).
  */
