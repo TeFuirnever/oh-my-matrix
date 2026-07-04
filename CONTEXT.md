@@ -71,3 +71,4 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 - [ADR-012: Dynamic Workflows Plugin Extraction](docs/adr/012-dynamic-workflows-plugin-extraction.md)
 - [ADR-013: Permission Policy Library](docs/adr/013-permission-policy-library.md)
 - [ADR-014: Dynamic Workflows Product Boundary](docs/adr/014-dynamic-workflows-product-boundary.md)
+- [ADR-015: Build Artifacts (`dist/`) Are Not Committed](docs/adr/015-dist-not-committed.md)
