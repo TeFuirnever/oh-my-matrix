@@ -96,15 +96,15 @@ Known limitation: command parsing is tokenize-based, not a full shell parser. Se
 
 ## Distribution Reality
 
-The workspace packages are private and source-hosted here. Host consumption still requires a packaging/deploy step outside this repository:
+The workspace packages are published to npm and consumed by hosts via the npm registry (see [ADR-010](adr/010-autopilot-source-hosting.md), [host-deploy runbook](runbooks/host-deploy.md)). `dist/` is **not committed to git** — it is regenerated from source by CI (before typecheck/test) and by `prepublishOnly` at publish time (see [ADR-015](adr/015-dist-not-committed.md)). A source change is **not** live in a consuming host until:
 
-1. build affected packages
-2. pack or copy dist
-3. refresh the host bundled-plugin copy
-4. restart the host gateway
-5. run deployed-dist smoke checks
+1. `pnpm -r test` passes in this repo (source verified),
+2. the affected package is published to npm (`pnpm publish`, 2FA),
+3. the host bumps its dependency version and reloads its bundled-plugin copy,
+4. the host gateway is restarted, and
+5. a deployed-dist smoke check passes in the host repo.
 
-Do not claim a source change is active in a consuming OpenClaw host until that host deploy path has been verified.
+**Repo tests green ≠ host live.** Step 5 is the only proof.
 
 ## Current Gaps
 
