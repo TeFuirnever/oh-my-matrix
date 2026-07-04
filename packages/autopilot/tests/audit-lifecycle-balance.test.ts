@@ -159,4 +159,78 @@ describe('audit refCount lifecycle balance', () => {
     // was already released. Net balanced: monitor(2) === active(1 pause + 1 cleanup).
     expect(countCalls(mockAuditSetMode, 'active')).toBe(monitorCount);
   });
+
+  // ── S8: teardown paths must release audit refCount for still-running runs ──
+  // session_end / session-extension cleanup / LRU eviction all deleted run state
+  // WITHOUT calling setAuditMode('active'), leaking the monitor refCount and
+  // potentially pinning monitor mode permanently. cleanupAll already does it
+  // correctly (T-S8 above); these tests prove the other paths catch up.
+
+  // T-S8a: session_end must release refCount for a still-running run
+  it('T-S8a: session_end releases audit refCount for a running run', async () => {
+    await activateFullYolo('sess-end');
+
+    expect(countCalls(mockAuditSetMode, 'monitor')).toBe(1);
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(0);
+
+    const sessionEnd = mock.hooks.get('session_end')!.handler;
+    sessionEnd({ sessionId: 'sid-sess-end', sessionKey: 'sess-end' });
+
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(1);
+    expect(countCalls(mockAuditSetMode, 'monitor')).toBe(countCalls(mockAuditSetMode, 'active'));
+  });
+
+  // T-S8b: session_end must NOT over-release for an already-paused run
+  it('T-S8b: session_end does not over-release for a paused run', async () => {
+    await activateFullYolo('sess-end2');
+    await driveToMaxContinuations('sess-end2'); // pause → released
+
+    const activeBefore = countCalls(mockAuditSetMode, 'active'); // 1 (from pause)
+
+    const sessionEnd = mock.hooks.get('session_end')!.handler;
+    sessionEnd({ sessionId: 'sid-sess-end2', sessionKey: 'sess-end2' });
+
+    // No additional active call — the run was already released at pause.
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(activeBefore);
+  });
+
+  // T-S8d: session-extension cleanup must release refCount for a running run.
+  // The cleanup callback is registered via registerSessionExtension at register()
+  // time; extract it from the mock and invoke it directly.
+  it('T-S8d: session-extension cleanup releases audit refCount for a running run', async () => {
+    await activateFullYolo('sess-ext');
+
+    expect(countCalls(mockAuditSetMode, 'monitor')).toBe(1);
+    const activeBefore = countCalls(mockAuditSetMode, 'active');
+
+    // The registerSessionExtension mock captured the extension object.
+    const extCall = (mock.api.registerSessionExtension as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    extCall.cleanup({ sessionKey: 'sess-ext' });
+
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(activeBefore + 1);
+  });
+
+  // T-S8c: LRU eviction must release refCount for an evicted running run.
+  // MAX_RUN_STATES is 50; activating 51 sessions triggers one eviction.
+  // Uses a dedicated mock with maxConcurrentAutopilot raised above 51 so every
+  // activate succeeds (the default cap of 5 would reject beyond the 5th).
+  it('T-S8c: LRU eviction releases audit refCount for the evicted run', async () => {
+    const manyMock = createMockApi({ maxTotalContinuations: 2, maxConcurrentAutopilot: 100 });
+    mockAuditSetMode.mockClear();
+    _resetForTest();
+    register(manyMock.api as any);
+    _setAuditSetModeForTest(mockAuditSetMode);
+
+    for (let i = 0; i < 51; i++) {
+      const activate = manyMock.gatewayMethods.get('autopilot.activate')!;
+      const start = manyMock.hooks.get('session_start')!.handler;
+      await activate({ params: { sessionKey: `sess-evict-${i}` }, respond: vi.fn() });
+      await start({ sessionId: `sid-evict-${i}`, sessionKey: `sess-evict-${i}` });
+    }
+
+    const monitorCount = countCalls(mockAuditSetMode, 'monitor');
+    expect(monitorCount).toBe(51);
+    // The oldest (sess-evict-0) was evicted → exactly 1 release from the eviction.
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(1);
+  });
 });

@@ -272,6 +272,8 @@ function evictOldestRuns(): void {
     }
     if (oldestRunId == null) break;
     const oldestState = stateByRun.get(oldestRunId);
+    // S8: release audit refCount for an evicted still-running run before delete.
+    if (oldestState?.status === 'running') setAuditMode('active');
     stateByRun.delete(oldestRunId);
     if (oldestState) {
       sessionKeyToRunId.delete(oldestState.sessionKey);
@@ -835,7 +837,10 @@ export function register(api: OpenClawPluginApi): void {
     if (!sessionKey) return;
     const entry = findRunBySession(sessionKey);
     if (entry) {
-      const [runId] = entry;
+      const [runId, state] = entry;
+      // S8: release the audit monitor refCount for still-running runs before
+      // deleting state, mirroring cleanupAll. A leak here pins monitor mode.
+      if (state.status === 'running') setAuditMode('active');
       stateByRun.delete(runId);
       sessionKeyToRunId.delete(sessionKey);
       canaryFired.delete(sessionKey);
@@ -955,7 +960,11 @@ export function register(api: OpenClawPluginApi): void {
     cleanup: (ctx) => {
       if (ctx.sessionKey) {
         const entry = findRunBySession(ctx.sessionKey);
-        if (entry) stateByRun.delete(entry[0]);
+        if (entry) {
+          // S8: release audit refCount for still-running runs before delete.
+          if (entry[1].status === 'running') setAuditMode('active');
+          stateByRun.delete(entry[0]);
+        }
         // PROD-2: clear the reverse-index and canary set too, else session-key
         // teardown (without a session_end) leaves dangling map entries.
         sessionKeyToRunId.delete(ctx.sessionKey);
@@ -1262,6 +1271,8 @@ export function register(api: OpenClawPluginApi): void {
       const state = stateByRun.get(runId);
       if (state) {
         warn(`[autopilot] health check: cleaning orphaned session=${state.sessionKey} run=${runId}`);
+        // S8: release audit refCount for orphaned still-running runs before delete.
+        if (state.status === 'running') setAuditMode('active');
         stateByRun.delete(runId);
         sessionKeyToRunId.delete(state.sessionKey);
         canaryFired.delete(state.sessionKey);
