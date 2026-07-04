@@ -86,6 +86,73 @@ describe('classifyCommand git/find evasion hardening (spec §3)', () => {
   });
 });
 
+// ─── B4/B6/B7: destructive-git classifier gaps (Issue #47 deferred findings) ──
+// TDD: these PoC tests MUST FAIL before the fix and PASS after.
+describe('B4/B6/B7 destructive-git classification gaps', () => {
+  // ── B4: git checkout <ref> <path> discards workdir (was safe_git) ──
+  it('B4: git checkout HEAD . → destructive_git (discard via ref+path)', () => {
+    expect(classifyCommand('git', ['checkout', 'HEAD', '.'])).toBe('destructive_git');
+  });
+  it('B4: git checkout HEAD~1 . → destructive_git', () => {
+    expect(classifyCommand('git', ['checkout', 'HEAD~1', '.'])).toBe('destructive_git');
+  });
+  it('B4: git checkout HEAD file.txt → destructive_git (ref + named path)', () => {
+    expect(classifyCommand('git', ['checkout', 'HEAD', 'file.txt'])).toBe('destructive_git');
+  });
+  it('B4: git checkout HEAD -- file.txt stays destructive_git (regression)', () => {
+    expect(classifyCommand('git', ['checkout', 'HEAD', '--', 'file.txt'])).toBe('destructive_git');
+  });
+
+  // ── B6: git -c <bareword> must not eat the subcommand (was unknown) ──
+  it('B6: git -c clean -fd → destructive_git (bareword not consumed as -c value)', () => {
+    expect(classifyCommand('git', ['-c', 'clean', '-fd'])).toBe('destructive_git');
+  });
+  it('B6: git -c reset --hard → destructive_git (bareword subcommand surfaces)', () => {
+    expect(classifyCommand('git', ['-c', 'reset', '--hard'])).toBe('destructive_git');
+  });
+
+  // ── B7: git checkout -B resets branch (was safe_git) ──
+  it('B7: git checkout -B main origin/main → destructive_git (force branch reset)', () => {
+    expect(classifyCommand('git', ['checkout', '-B', 'main', 'origin/main'])).toBe('destructive_git');
+  });
+  it('B7: git checkout -B main → destructive_git (bare force-create)', () => {
+    expect(classifyCommand('git', ['checkout', '-B', 'main'])).toBe('destructive_git');
+  });
+
+  // ── Regressions: safe checkout forms must NOT become destructive ──
+  it('regression: git checkout main → safe_git (single positional = branch switch)', () => {
+    expect(classifyCommand('git', ['checkout', 'main'])).toBe('safe_git');
+  });
+  it('regression: git checkout HEAD → safe_git (detached HEAD, single positional)', () => {
+    expect(classifyCommand('git', ['checkout', 'HEAD'])).toBe('safe_git');
+  });
+  it('regression: git checkout -b feature origin/main → safe_git (tracking branch create)', () => {
+    expect(classifyCommand('git', ['checkout', '-b', 'feature', 'origin/main'])).toBe('safe_git');
+  });
+  it('regression: git checkout -b newbranch → safe_git (lowercase -b is safe create)', () => {
+    expect(classifyCommand('git', ['checkout', '-b', 'newbranch'])).toBe('safe_git');
+  });
+
+  // ── Regressions: existing global-flag stripping must still work ──
+  it('regression: git -c x=y reset --hard → destructive_git (well-formed -c key=val)', () => {
+    expect(classifyCommand('git', ['-c', 'x=y', 'reset', '--hard'])).toBe('destructive_git');
+  });
+  it('regression: git -c core.bare reset --hard → destructive_git (boolean -c key has dot)', () => {
+    // Boolean shorthand: `git -c advice.detachedHead` is valid (=true); a config
+    // key always contains a `.` (section.name), so it is consumed and reset surfaces.
+    expect(classifyCommand('git', ['-c', 'core.bare', 'reset', '--hard'])).toBe('destructive_git');
+  });
+  it('regression: git -c advice.detachedHead reset --hard → destructive_git (bool key)', () => {
+    expect(classifyCommand('git', ['-c', 'advice.detachedHead', 'reset', '--hard'])).toBe('destructive_git');
+  });
+  it('regression: git -C /p push --force → destructive_git (-C path unchanged)', () => {
+    expect(classifyCommand('git', ['-C', '/p', 'push', '--force'])).toBe('destructive_git');
+  });
+  it('regression: git -ccore.x=y reset --hard (attached -c) → destructive_git', () => {
+    expect(classifyCommand('git', ['-ccore.askPass=evil', 'reset', '--hard'])).toBe('destructive_git');
+  });
+});
+
 describe('extractCommandSegments (shell split)', () => {
   it('splits on && into per-command argv', () => {
     const { segments } = extractCommandSegments({ toolName: 'exec', params: { command: 'cd /ws && git status' } });
@@ -732,5 +799,29 @@ describe('B9 — segments===0 framework tools respect defaultDeny', () => {
 
   it('allows unknown framework tool in TRUSTED session (no defaultDeny — unchanged)', () => {
     expect(decidePermissionForEvent(frameworkEv('unknown_new_tool'), trustedOpts).outcome).toBe('allow');
+  });
+});
+
+// ─── B4/B6/B7 security impact: destructive PoCs now BLOCKED in subagent mode ──
+// Before the fix, `git checkout HEAD .` was safe_git → allowed unconditionally
+// (safe_git returns allow at line 396, BEFORE the defaultDeny gate at 468).
+// After the fix it is destructive_git → blocked in subagent (defaultDeny) sessions.
+describe('B4/B6/B7 — subagent defaultDeny blocks destructive PoCs', () => {
+  const subagentOpts = {
+    workflowAllowsDestructiveGit: false,
+    defaultDeny: true as const,
+    workspacePath: '/ws',
+  };
+  const execEv = (command: string) =>
+    ({ toolName: 'exec', params: { command } as Record<string, unknown> });
+
+  it('B4: git checkout HEAD . is BLOCKED in subagent mode (was allowed via safe_git)', () => {
+    const d = decidePermissionForEvent(execEv('git checkout HEAD .'), subagentOpts);
+    expect(d.outcome).toBe('block');
+  });
+
+  it('B7: git checkout -B main origin/main is BLOCKED in subagent mode', () => {
+    const d = decidePermissionForEvent(execEv('git checkout -B main origin/main'), subagentOpts);
+    expect(d.outcome).toBe('block');
   });
 });

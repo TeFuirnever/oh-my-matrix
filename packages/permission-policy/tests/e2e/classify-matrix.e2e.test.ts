@@ -71,6 +71,10 @@ describe('E2E classifyCommand matrix — classification boundary', () => {
     // B5: `git restore` discards working-tree/staged changes (modern checkout --)
     ['git restore .', 'destructive_git'],
     ['git restore --staged .', 'destructive_git'],
+    // B4/B6/B7 (Issue #47): destructive-git misclassification gaps
+    ['git checkout HEAD .', 'destructive_git'],
+    ['git checkout -B main origin/main', 'destructive_git'],
+    ['git -c clean -fd', 'destructive_git'],
   ] as const)('destructive_git: %s', (command, expected) => {
     it(`classifies "${command}" as ${expected}`, () => {
       expect(classifyExec(command)).toBe(expected);

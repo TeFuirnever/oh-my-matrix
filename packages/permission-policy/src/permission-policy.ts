@@ -145,6 +145,17 @@ export type PermissionDecision =
   | { outcome: 'block'; reason: string; message: string; commandClass?: CommandClass };
 
 /**
+ * B6: recognise a token that looks like a `git -c` config value so the strip loop
+ * consumes it, vs. a bareword subcommand that should surface for classification.
+ * A valid -c value is EITHER `key=value` (has `=`) OR a boolean config key
+ * `section.name` (has `.` — git accepts `-c advice.detachedHead` as =true). A git
+ * subcommand NEVER contains `.` or `=`, so this is precise: `clean` / `reset`
+ * surface as the subcommand, while `x=y`, `core.bare`, `advice.detachedHead` are
+ * consumed. Without this, `git -c core.bare reset --hard` would swallow `reset`.
+ */
+const CONFIG_KEY_VAL_RE = /[.=]/;
+
+/**
  * Classify a command/tool call into a CommandClass category.
  */
 export function classifyCommand(
@@ -225,8 +236,15 @@ export function classifyCommand(
     let idx = 0;
     while (idx < args.length) {
       const a = args[idx];
-      // Short flags with a required value (two-token form)
-      if ((a === '-c' || a === '-C') && idx + 1 < args.length) { idx += 2; continue; }
+      // Short flags with a required value (two-token form).
+      // -C <path>: a path is always valid → consume unconditionally.
+      // -c <key=val|section.name>: only consume the next token when it looks like a
+      //   config value (has `.` or `=`, see CONFIG_KEY_VAL_RE) so a bareword
+      //   subcommand like `clean` surfaces for classification instead of being eaten
+      //   as -c's value (B6: `git -c clean -fd` → destructive_git, not unknown).
+      if (a === '-C' && idx + 1 < args.length) { idx += 2; continue; }
+      if (a === '-c' && idx + 1 < args.length && CONFIG_KEY_VAL_RE.test(args[idx + 1])) { idx += 2; continue; }
+      if (a === '-c' && idx + 1 < args.length) { idx += 1; continue; } // malformed -c value: skip -c only
       if (a.startsWith('-C') && a.length > 2) { idx += 1; continue; }
       if (a.startsWith('-c') && a.length > 2) { idx += 1; continue; }
       // SEC-5: long-form flags with a value — two-token and `=`-attached forms.
@@ -266,6 +284,19 @@ export function classifyCommand(
       if (args.includes('--')) return 'destructive_git'; // explicit discard separator
       const target = args[idx + 1];
       if (target === '.' || target === '*') return 'destructive_git'; // discard workdir changes
+      // B7: `checkout -B` force-creates/resets a branch to a new start point —
+      // discards the old branch position (destructive, reflog-recoverable). Lowercase
+      // -b is safe branch creation and must NOT trigger this. --force-create is a
+      // `git switch` flag (git rejects it for checkout), so it is not handled here.
+      if (args.includes('-B')) return 'destructive_git';
+      // B4: `git checkout <ref> <path>` discards working-tree changes for <path>.
+      // Distinguish from `git checkout <branch>` (1 positional = branch switch) and
+      // `checkout -b/-B <name> [<start>]` (branch creation — never a discard form,
+      // so only apply when -b/-B are absent). ≥2 non-flag positionals ⇒ discard.
+      if (!args.includes('-b') && !args.includes('-B')) {
+        const positionals = args.slice(idx + 1).filter(a => !a.startsWith('-'));
+        if (positionals.length >= 2) return 'destructive_git';
+      }
     }
     // force-push rewrites remote history (unrecoverable without remote reflog)
     if (sub === 'push' && args.some(a => a === '--force' || a === '-f' || a === '--force-with-lease')) return 'destructive_git';
