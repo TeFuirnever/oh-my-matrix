@@ -20,7 +20,19 @@ export function _resetAuditFailureCountForTest(): void { _writeFailureCount = 0;
 
 /** Returns the audit directory path for a given workspace root. */
 function getAuditDir(workspaceDir: string): string {
-  return path.join(workspaceDir, AUDIT_SUBDIR);
+  // S12: resolve symlinks so the audit path always reflects the canonical
+  // physical location. Without this, a symlinked workspaceDir writes the audit
+  // log through the symlink (opaque follow), and the unresolved symlink string
+  // ends up in audit paths — a containment/forensics hazard if the link target
+  // is attacker-controlled. realpathSync falls back to the input if resolution
+  // fails (e.g. not-yet-created dir, which mkdirSync handles downstream).
+  let resolved = workspaceDir;
+  try {
+    resolved = fs.realpathSync(workspaceDir);
+  } catch {
+    // Path may not exist yet (mkdirSync creates it below); keep the input.
+  }
+  return path.join(resolved, AUDIT_SUBDIR);
 }
 
 /**
