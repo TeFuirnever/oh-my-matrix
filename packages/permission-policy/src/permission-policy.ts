@@ -289,6 +289,10 @@ export function classifyCommand(
       // -b is safe branch creation and must NOT trigger this. --force-create is a
       // `git switch` flag (git rejects it for checkout), so it is not handled here.
       if (args.includes('-B')) return 'destructive_git';
+      // B8: `checkout -f` / `--force` overwrites uncommitted working-tree changes
+      // (discard). Unlike -b/-B this is NOT branch creation — it forces the
+      // checkout to proceed despite local modifications, discarding them.
+      if (args.includes('-f') || args.includes('--force')) return 'destructive_git';
       // B4: `git checkout <ref> <path>` discards working-tree changes for <path>.
       // Distinguish from `git checkout <branch>` (1 positional = branch switch) and
       // `checkout -b/-B <name> [<start>]` (branch creation — never a discard form,

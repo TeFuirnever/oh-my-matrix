@@ -119,6 +119,17 @@ describe('B4/B6/B7 destructive-git classification gaps', () => {
     expect(classifyCommand('git', ['checkout', '-B', 'main'])).toBe('destructive_git');
   });
 
+  // ── B8: git checkout -f / --force discards workdir (was safe_git) ──
+  it('B8: git checkout -f . → destructive_git (force discard workdir)', () => {
+    expect(classifyCommand('git', ['checkout', '-f', '.'])).toBe('destructive_git');
+  });
+  it('B8: git checkout --force HEAD → destructive_git (force overwrites workdir)', () => {
+    expect(classifyCommand('git', ['checkout', '--force', 'HEAD'])).toBe('destructive_git');
+  });
+  it('B8: git checkout -f main → destructive_git (force branch switch discards local mods)', () => {
+    expect(classifyCommand('git', ['checkout', '-f', 'main'])).toBe('destructive_git');
+  });
+
   // ── Regressions: safe checkout forms must NOT become destructive ──
   it('regression: git checkout main → safe_git (single positional = branch switch)', () => {
     expect(classifyCommand('git', ['checkout', 'main'])).toBe('safe_git');
