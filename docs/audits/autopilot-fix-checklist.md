@@ -88,11 +88,11 @@
 
 ### Correctness（需修复）
 
-- [ ] **[P1] REV-1 resume unclaimed 静默 no-op** — `orchestrator.ts:261` `resume_requested` case 只处理 `blocked→claimed`，`orchestrationState='unclaimed'`（dispatch 前 pause 的 run）进入后 return state 不变 → `kickResumedTurn` 再次 early-return（guard `!== 'claimed'`）→ `respond(true, {ok:true})` 仍触发，调用方看到 success，run 实际永远卡住。**修复**：`resume_requested` 同时处理 `'unclaimed'` → `'claimed'` 转换。
+- [x] **[P1] REV-1 resume unclaimed 静默 no-op** — ✅ Done (PR #81)。`resume_requested` 现在处理 `unclaimed→claimed`(+回归测试)。
 
-- [ ] **[P1] REV-2 kickResumedTurn TTL 与 stall 超时不匹配** — `index.ts:113` TTL 硬编码 `DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs`（300s），但 `!config.tokenBudget` 时 stall 检测用 `stallTimeoutMs * 2`（600s）。injection 在 300s 过期，host 在 300–600s 内启动 resumed turn → injection 已消失 → run 卡 `'claimed'` 直到 24h orphan 清理。**修复**：`kickResumedTurn` 接收已计算的 `stallTimeoutMs` 参数而非 hardcode 默认值。
+- [x] **[P1] REV-2 kickResumedTurn TTL 与 stall 超时不匹配** — ✅ Done (PR #81)。TTL 改用 `state.workflow?.stallTimeoutMs ?? defaultStallTimeoutMs(!!state.tokenBudget)`，匹配 stall 检测的实际超时。
 
-- [ ] **[P1] REV-3 PROD-1 修复实际静默失效（call site 读错字段）** — `index.ts:999` 读 `result.config.warnings`，但 all-paths-fail 时 `loadWorkflowConfig` 返回 `{ config: DEFAULT_WORKFLOW_CONFIG, warnings: ioWarnings }`，`DEFAULT_WORKFLOW_CONFIG.warnings = []`，ioWarnings 在 `result.warnings` 永远不被读取。**修复**：`index.ts:999` 改为读 `result.warnings`（或统一在 workflow-config.ts 把 warnings 嵌入 config 对象）。
+- [x] **[P1] REV-3 PROD-1 修复实际静默失效（call site 读错字段）** — ✅ Done (PR #81)。call site 改读 `result.warnings`(不再读 `result.config.warnings`)+回归测试验证 warnings 契约。
 
 - [ ] **[P2] REV-4 多路径搜索时第一条路径的 I/O 错误静默丢弃** — `workflow-config.ts:478` success return 不含 `ioWarnings`：第一条路径失败（error 推入 ioWarnings）→ 第二条成功 → `return { config: merged, warnings }` 仅含 parseAutopilotSection warnings。**修复**：`return { config: merged, warnings: [...ioWarnings, ...warnings] }`。
 
