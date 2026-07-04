@@ -42,7 +42,11 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      eqeqeq: ['warn', 'always'],
+      // eqeqeq with `null: 'ignore'`: the `x == null` / `x != null` idiom (checks
+      // both null + undefined) is a legitimate, common TS pattern. Without this
+      // exception the rule generates 15 warnings on valid existence-checks,
+      // drowning out any real type-coercion `==` that would be a genuine bug.
+      eqeqeq: ['warn', 'always', { null: 'ignore' }],
     },
   },
   // Source .ts: keep `any` visible but non-blocking. The repo already uses `any`
