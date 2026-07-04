@@ -103,6 +103,38 @@
 
 ---
 
+## Wave 5 — 端到端功能正确性审查 (2026-07-04)
+
+> 来源：[`autopilot-correctness-review-2026-07-04.md`](./autopilot-correctness-review-2026-07-04.md)
+> 双 lane(code-reviewer + architect)模块级审查。**HIGH 必须修;MEDIUM/WATCH 是中长期债务。**
+
+### 必修(evidence gate 假完成)
+
+- [x] **H1 [P0] evidence gate 失败路径产生假完成** — `index.ts:495-497` 基于 `updated.status === 'done'` 判断,但 evidence failed 时 reducer 保持 `status:'running'`,落入 else 调 `complete()`,导致 retry_queued 的 run 被错误标 done + enabled:false,retry 永不触发。**修复**:改为基于 `evidenceSummary.status === 'failed'` 判断——failed+blocked → pause('validation_failed');failed+其他 → 保持 running+enabled(让 retry loop 接手);passed/skipped → complete(原行为)。+`'validation_failed'` PauseReason。测试加固:failed 路径断言 `status==='running'` + `enabled===true`。✅ (TDD red→green, code-review APPROVE+CLEAR)。这是 W1(dual state machine)的直接后果。
+
+### 应修(配置/恢复 gap)
+
+- [ ] **M1 [P1] `stall_timeout_ms` 配置被解析但从未消费** — `workflow-config.ts:154` 存进 `workflow.stallTimeoutMs`,但 `index.ts:1169` stall interval 永远用模块级 `DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs`。**修复**:stall loop 内读 `state.workflow?.stallTimeoutMs ?? DEFAULT...`(per-run,顺带修了多 run 共享全局 timeout 的问题)。
+- [ ] **M2 [P2] `workspace_failed`/`permission_denied` 事件 dead code** — `orchestrator.ts:237-245` reducer 有处理但 index.ts 从不 dispatch。**修复**:要么 wire(before_tool_call block 分支 dispatch),要么删除 + 文档化"tool block 由 host veto 处理"。
+- [ ] **M3 [P2] `claimed` 状态 stall 不被检测** — `index.ts:1180` stall 只查 `running`。PROD-7 actuator enqueue 失败时 run 卡 claimed,等 5-10min fallback。**修复**:stall 检查扩展到 `claimed`(更长阈值),或加 claimed watchdog。
+- [ ] **M4 [P2] evidence-gate complete-case 提取为命名函数** — `index.ts:450-501` 内联逻辑(H1 bug 藏身处)提取为 `applyCompleteWithEvidence(state, runId, now)`,独立可测。
+
+### 架构债务(非阻塞,但建议规划;HIGH 的根因)
+
+- [ ] **W1 [P1-arch] dual state machine collapse** — `orchestrator.ts:4` 声称 single-writer,实际 status 被 3 套机制写(autopilot-state.ts 5 setter / reducer / index.ts 8 spread)。H1 guard 是 patch。**建议**:reducer 成 status+orchState 唯一 writer,status 从 orchState 派生。21 mutation site → 1。较大重构,独立规划。
+- [ ] **W2 [P2-arch] `needsCrossTurnResume` 16 write site / 3 义** — 建模为显式 orchState 或派生布尔,消除 index.ts:385 的 infinite-loop 创可贴。
+- [ ] **W3 [P2-arch] audit-mode refcount 并发脆弱** — `index.ts:281` 跨插件 refcount,maxConcurrent:5 下 session 间互相干扰。建议 autopilot 自持 refcount。
+- [ ] **W4 [P2-arch] 集成接缝测试缺失** — 加 (status,orchState) invariant 测试 + stall-vs-hook 并发测试。HIGH 正是靠此缺失存活 7 轮 audit。
+
+### LOW(清理)
+
+- [ ] **L1** `command-runner.ts:21` `parseCommandArgs` 死导出,删除。
+- [ ] **L2** `autopilot-state.ts:3` + `continuation-engine.ts:82` 500-char 截断缺共享常量。
+- [ ] **L3** `index.ts:1027,1169` stall timeout `×2` 表达式重复且语义不透明,提取命名 helper。
+
+
+---
+
 ## 每项完成的 DoD（Definition of Done）
 
 1. `corepack pnpm -r test` 全绿（⚠️ 用 `corepack pnpm`，用户级 pnpm 会 hang）

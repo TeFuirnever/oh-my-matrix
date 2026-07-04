@@ -489,12 +489,27 @@ export function register(api: OpenClawPluginApi): void {
             evidence: evidenceSummary,
           });
         }
-        // Apply evidence to state + mark done.
-        // Guard (H1): evidence_finished (passed/skipped) already sets status:'done' via orchestrator.
-        // complete() requires status='running' and would throw — skip it when orchestrator completed.
-        setState(runId, updated.status === 'done'
-          ? { ...updated, evidence: evidenceSummary }
-          : complete({ ...updated, evidence: evidenceSummary }));
+        // Apply evidence result to state. The decision branches on evidence outcome:
+        // passed/skipped → mark the run done; failed → retry or block (NOT done).
+        // Before this fix (H1), the code checked `updated.status === 'done'`, but the
+        // reducer leaves status='running' on evidence FAILURE, so failed evidence fell
+        // into complete() — producing a false 'done' + enabled:false, which stranded
+        // the run (the stall interval's retry_due guard checks state.enabled).
+        // See docs/audits/autopilot-correctness-review-2026-07-04.md HIGH finding.
+        setState(runId,
+          // failed → the reducer moved to retry_queued (will retry) or blocked (max
+          // retries). Keep the run enabled in retry_queued so the stall interval can
+          // fire retry_due; pause only when fully blocked.
+          evidenceSummary.status === 'failed'
+            ? updated.orchestrationState === 'blocked'
+              ? pause({ ...updated, evidence: evidenceSummary }, 'validation_failed')
+              : { ...updated, evidence: evidenceSummary } // retry_queued: stay running+enabled
+            // passed/skipped → reducer already set orchState='done' + status='done'
+            // when the evidence reducer ran; if it didn't run (orchState unchanged),
+            // complete() advances status to done. Either way the run finishes.
+            : updated.status === 'done'
+              ? { ...updated, evidence: evidenceSummary }
+              : complete({ ...updated, evidence: evidenceSummary }));
         logWithContext('info', 'evidence gate result', { sessionKey, runId, evidenceStatus: evidenceSummary.status, failureReason: evidenceSummary.failureReason });
         // Release audit monitor when task completes — session is done, no more tool calls needed.
         setAuditMode('active');

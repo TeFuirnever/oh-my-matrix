@@ -9,7 +9,8 @@ export type PauseReason =
   | 'permission_denied'
   | 'injection_rejected'
   | 'user_stopped'
-  | 'token_budget_exceeded';
+  | 'token_budget_exceeded'
+  | 'validation_failed';
 
 // ─── M2 Orchestration Types ──────────────────────────────────
 

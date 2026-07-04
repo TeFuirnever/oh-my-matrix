@@ -195,6 +195,13 @@ describe('Evidence Gate wiring', () => {
       expect(projection.evidenceStatus).toBe('failed');
       expect(projection.lastEvidenceCommands).toHaveLength(1);
       expect(projection.lastEvidenceCommands[0].status).toBe('failed');
+      // H1 regression guard: a failed required validation must NOT mark the run done.
+      // Before the fix, evidence_finished(failed) left status='running', so index.ts:495
+      // fell into the else branch and called complete() — producing a false 'done' with
+      // enabled:false. The run must stay active (running + enabled) so it can retry/block
+      // — never report completed when its own validation says it failed.
+      expect(projection.status).toBe('running');
+      expect(projection.enabled).toBe(true);
     }, 10000);
   });
 });
