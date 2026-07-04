@@ -101,7 +101,6 @@
 - [ ] **[P3] REV-5 boolean git flag 用内联 array `.includes()` 而非 Set** — `permission-policy.ts:242` while-loop 每次迭代分配新的 14 元素数组做线性扫描，与同文件 `GIT_BINARIES`/`GIT_TOOLS` 的 `new Set([...]).has()` 模式不一致。**修复**：提取 `const GIT_BOOLEAN_GLOBAL_FLAGS = new Set([...])` 到模块顶层，改用 `.has(a)`。（注：altitude 建议的 `a.startsWith('-')` fallback 在双 token flag 场景有 fail-open 风险，不采用。）
 
 
-
 ---
 
 ## 每项完成的 DoD（Definition of Done）
