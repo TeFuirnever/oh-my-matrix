@@ -114,7 +114,7 @@
 
 ### 应修(配置/恢复 gap)
 
-- [ ] **M1 [P1] `stall_timeout_ms` 配置被解析但从未消费** — `workflow-config.ts:154` 存进 `workflow.stallTimeoutMs`,但 `index.ts:1169` stall interval 永远用模块级 `DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs`。**修复**:stall loop 内读 `state.workflow?.stallTimeoutMs ?? DEFAULT...`(per-run,顺带修了多 run 共享全局 timeout 的问题)。
+- [x] **M1 [P1] `stall_timeout_ms` 配置被解析但从未消费** — ✅ Done (PR #77)。stall interval + isRunStuck 现在读 per-run `state.workflow?.stallTimeoutMs`,不再用全局 default。默认 timeout 从 600s(旧 ×2 global)改为 300s(config 实际值)。
 - [ ] **M2 [P2] `workspace_failed`/`permission_denied` 事件 dead code** — `orchestrator.ts:237-245` reducer 有处理但 index.ts 从不 dispatch。**修复**:要么 wire(before_tool_call block 分支 dispatch),要么删除 + 文档化"tool block 由 host veto 处理"。
 - [ ] **M3 [P2] `claimed` 状态 stall 不被检测** — `index.ts:1180` stall 只查 `running`。PROD-7 actuator enqueue 失败时 run 卡 claimed,等 5-10min fallback。**修复**:stall 检查扩展到 `claimed`(更长阈值),或加 claimed watchdog。
 - [ ] **M4 [P2] evidence-gate complete-case 提取为命名函数** — `index.ts:450-501` 内联逻辑(H1 bug 藏身处)提取为 `applyCompleteWithEvidence(state, runId, now)`,独立可测。
@@ -123,7 +123,7 @@
 
 - [x] **W1 [P1-arch] dual state machine collapse** — ✅ Done (PR #76, ralplan consensus + TDD)。reducer 现在是 status 的 sole writer(post-switch `deriveStatus` wrapper),5 个 setter 全部 derive。H1 根因(两 field 不一致)结构上消灭。+78 测试(deriveStatus 表 + pause mapping + status invariant)。**剩余长尾**(非阻塞,作为 follow-up):
   - [ ] **W1a** production index.ts 仍调 5 个 setter(8 处)而非 dispatch reducer events——status 值已安全(derived),但调用路径未全部路由。Phase 2 完整版。
-  - [ ] **W1b** `agent_turn_finished` error path 仍用 lossy `toBlockedReason(event.error, 'validation_failed')`(pre-existing,非 W1 引入)——unrecoverable error 的 fallback 可能落入 RESUMABLE。建议改为 non-resumable default 或新 `unrecoverable_error` BlockedReason。
+  - [x] **W1b** `agent_turn_finished` error path lossy fallback — ✅ Done (PR #78)。新增 `unrecoverable_error` BlockedReason(non-resumable),error path fallback 从 `validation_failed` 改为 `unrecoverable_error`。terminal error 不再被误分类为可恢复。
   - [ ] **W1c** loop-breaker branch-A/B e2e 未写(Critic N1:circuit-breaker 实际 non-recoverable,branch-A 基本不可达;若写 branch-A 测试需用 "timeout" 而非 "circuit breaker" 字符串)。
 - [ ] **W2 [P2-arch] `needsCrossTurnResume` 16 write site / 3 义** — 建模为显式 orchState 或派生布尔,消除 index.ts:385 的 infinite-loop 创可贴。
 - [ ] **W3 [P2-arch] audit-mode refcount 并发脆弱** — `index.ts:281` 跨插件 refcount,maxConcurrent:5 下 session 间互相干扰。建议 autopilot 自持 refcount。
