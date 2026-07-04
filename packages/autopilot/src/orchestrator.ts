@@ -65,11 +65,22 @@ export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 
 /**
  * Apply an orchestrator event to the current state.
  * Returns a new state object (immutable).
+ *
+ * W1 Phase 3: the reducer is the sole writer of `status`. Every return path
+ * flows through a post-switch derivation step that sets `status = deriveStatus(result)`,
+ * guaranteeing status is always consistent with orchState+blockedReason.
  */
 export function orchestratorReducer(
   state: AutopilotState,
   event: OrchestratorEvent,
 ): AutopilotState {
+  const next = reducerCore(state, event);
+  // Sole-writer invariant: status is always derived, never independently set.
+  const derivedStatus = deriveStatus(next);
+  return next.status === derivedStatus ? next : { ...next, status: derivedStatus };
+}
+
+function reducerCore(state: AutopilotState, event: OrchestratorEvent): AutopilotState {
   switch (event.type) {
     // ─── idle → unclaimed ─────────────────────────────────────
     case 'activate_requested': {
@@ -342,3 +353,4 @@ export function orchestratorReducer(
     }
   }
 }
+

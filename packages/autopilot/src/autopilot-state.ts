@@ -29,7 +29,10 @@ export function activate(state: AutopilotState): AutopilotState {
 }
 
 export function deactivate(state: AutopilotState): AutopilotState {
-  if (state.status !== 'running' && state.status !== 'paused' && state.status !== 'done') {
+  // W1 Phase 3: allow 'idle' too — the reducer may have already derived it via
+  // stop_requested → blocked → user_stopped → deriveStatus → 'idle'. The setter
+  // is now idempotent for field-clearing when the reducer already did the transition.
+  if (state.status !== 'running' && state.status !== 'paused' && state.status !== 'done' && state.status !== 'idle') {
     throw new Error(`Cannot deactivate from status "${state.status}"`);
   }
   const next: AutopilotState = {
