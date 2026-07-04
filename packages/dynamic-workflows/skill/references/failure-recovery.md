@@ -1,7 +1,26 @@
 # Failure Modes & Recovery
 
-Read this file when `prose compile` or `prose run` fails, or when results
-are wrong. Each row: symptom → first fix → escalation if still broken.
+Read this file when `prose compile` or `prose run` fails, when results are
+wrong, or when a `.prose` program won't compile. Each row: symptom → first fix
+→ escalation if still broken.
+
+## Generate-validate-repair loop
+
+When writing a `.prose` program for a task:
+
+1. **Generate**: Write the complete `.prose` program based on the task and the
+   pattern that best fits (see SKILL.md "When to use" decision table).
+2. **Validate**: Use `prose compile <file>` (or verify manually if unavailable).
+3. **Repair**: If compilation fails, read the error messages and fix the
+   specific issues. Do not rewrite from scratch — make targeted fixes:
+   - `Undefined agent reference` → check spelling matches the `agent name:` block
+   - `Duplicate variable` → rename (flat namespace, all names unique)
+   - `Undefined interpolation variable` → add `input x: "description"` only when
+     `x` is a trusted runtime value; for user text, pass it through `context:`
+     instead of interpolating into `prompt:`
+   - For the full error reference, see "Common compile errors" below.
+4. **Repeat**: Up to 3 total attempts. If still failing after 3, simplify the
+   program (fewer agents, simpler control flow).
 
 ## Diagnostic table
 
@@ -33,6 +52,20 @@ If `prose run` crashes mid-execution:
 4. For workflows that modify files: use a git branch or equivalent checkpoint
    as a transaction boundary before `prose run`; keep changes only after the
    full workflow succeeds and the final diff is inspected
+
+## Direct fallback template
+
+When OpenProse is unavailable and the plan fits the ≤5-session fallback:
+
+1. Name branches `branch_1` ... `branch_N`; assign each a disjoint target and
+   read-only or explicitly owned write scope.
+2. Send each branch the same instruction frame: task, target, allowed files,
+   forbidden operations, and required output schema.
+3. Collect each result as `{ branch, status, evidence, findings, errors }`.
+4. Mark missing, timed-out, or blocked branches as `status: partial`; do not
+   infer their findings.
+5. Run one synthesis pass over the collected results and label output sections
+   `verified`, `partial`, and `blocked`.
 
 ## Destructive command blacklist
 
