@@ -456,9 +456,10 @@ export function loadWorkflowConfig(baseRepoPath: string, workspacePath?: string)
         // Invalid autopilot section (e.g., autopilot: {})
         if (autopilot === null || (typeof autopilot === 'object' && Object.keys(autopilot).length === 0)) {
           // autopilot: {} or autopilot: null — use defaults but mark as workflow_md source
+          // REV-4: surface I/O warnings from earlier-failed candidate paths.
           return {
-            config: { ...DEFAULT_WORKFLOW_CONFIG, source: 'workflow_md', warnings: [] },
-            warnings: [],
+            config: { ...DEFAULT_WORKFLOW_CONFIG, source: 'workflow_md', warnings: ioWarnings },
+            warnings: ioWarnings,
           };
         }
         continue;
@@ -472,10 +473,12 @@ export function loadWorkflowConfig(baseRepoPath: string, workspacePath?: string)
         workspace: { ...DEFAULT_WORKFLOW_CONFIG.workspace, ...partial.workspace },
         validation: { ...DEFAULT_WORKFLOW_CONFIG.validation, ...partial.validation },
         destructiveGit: { ...DEFAULT_WORKFLOW_CONFIG.destructiveGit, ...partial.destructiveGit },
-        warnings,
+        warnings: [...ioWarnings, ...warnings],
       };
 
-      return { config: merged, warnings };
+      // REV-4: surface I/O warnings from earlier-failed candidate paths alongside
+      // the parse-section warnings so the user sees "first file failed, used second".
+      return { config: merged, warnings: [...ioWarnings, ...warnings] };
     } catch (err) {
       ioWarnings.push(`Failed to read/parse ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
       continue;
