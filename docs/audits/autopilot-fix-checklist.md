@@ -115,7 +115,7 @@
 ### 应修(配置/恢复 gap)
 
 - [x] **M1 [P1] `stall_timeout_ms` 配置被解析但从未消费** — ✅ Done (PR #77)。stall interval + isRunStuck 现在读 per-run `state.workflow?.stallTimeoutMs`,不再用全局 default。默认 timeout 从 600s(旧 ×2 global)改为 300s(config 实际值)。
-- [ ] **M2 [P2] `workspace_failed`/`permission_denied` 事件 dead code** — `orchestrator.ts:237-245` reducer 有处理但 index.ts 从不 dispatch。**修复**:要么 wire(before_tool_call block 分支 dispatch),要么删除 + 文档化"tool block 由 host veto 处理"。
+- [x] **M2 [P2] `workspace_failed`/`permission_denied` 事件 dead code** — ✅ Done (PR #79)。文档化:tool block 由 host before_tool_call veto 处理,reducer 事件保留为 API surface(test-covered)。
 - [ ] **M3 [P2] `claimed` 状态 stall 不被检测** — `index.ts:1180` stall 只查 `running`。PROD-7 actuator enqueue 失败时 run 卡 claimed,等 5-10min fallback。**修复**:stall 检查扩展到 `claimed`(更长阈值),或加 claimed watchdog。
 - [ ] **M4 [P2] evidence-gate complete-case 提取为命名函数** — `index.ts:450-501` 内联逻辑(H1 bug 藏身处)提取为 `applyCompleteWithEvidence(state, runId, now)`,独立可测。
 
@@ -133,7 +133,7 @@
 
 - [ ] **L1** `command-runner.ts:21` `parseCommandArgs` 死导出,删除。
 - [ ] **L2** `autopilot-state.ts:3` + `continuation-engine.ts:82` 500-char 截断缺共享常量。
-- [ ] **L3** `index.ts:1027,1169` stall timeout `×2` 表达式重复且语义不透明,提取命名 helper。
+- [x] **L3** `index.ts:1027,1169` stall timeout `×2` 表达式重复且语义不透明 — ✅ Done (PR #79)。提取为 `defaultStallTimeoutMs(hasTokenBudget)` 命名 helper,×2 rationale 文档化。
 
 
 ---
