@@ -148,3 +148,37 @@
 ## 未做成待办的 backlog（P3，报告中记录，按需再提）
 
 goal-manager pass-through 删除 · 24h orphan 清理误删 paused · 退避加 jitter · configSchema 补字段描述 · index.ts:54/98 bare catch{} 加日志 · YAML BOM/lone-CR/多 `---` edge case · setGoal/cleanup gateway 文档化 · maxConcurrent:0 语义文档化
+
+---
+
+## Wave 9 — 安全适用性评估 + B4/B6/B7 destructive-git 分类器修复 (2026-07-03)
+
+> 来源：Issue #47 (deferred permission-policy findings) + Issue #53 (autopilot security audit) 适用性重评。
+> 3 个 explore agent 对 master `98a778d` 全量裁定 S2-S17 + B3-B9。**评估优先于盲改**：许多 finding
+> 在 #46/W1/SEC-5 大改后已失效——直接改会引入回归。本 Wave 只修确认仍 LIVE 的 B4/B6/B7 集群。
+
+### 适用性裁定矩阵 (2026-07-03)
+
+**已失效（无需改，可在 Issue 关闭）**：S2(subagent path)/S4/S5/S6/S9/S13/B3/B9 — 全部 FIXED 或 MITIGATED。
+
+**仍 LIVE 的安全 finding（按严重度）**：
+| ID | 严重度 | 裁定 | 处置 |
+|----|--------|------|------|
+| B4 | 🔴 HIGH | `git checkout HEAD .` → safe_git，两模式都绕过 | ✅ 本 Wave 修复 |
+| B6 | 🟡 MED→LOW | `git -c bareword` 吃子命令，仅 trusted allow | ✅ 本 Wave 修复 |
+| B7 | 🟡 MED→LOW | `git checkout -B` → safe_git（原报告说 unknown 有误） | ✅ 本 Wave 修复 |
+| S8 | 🟠 MED | audit refcount 在 session_end/orphan/LRU 泄漏 | 🔜 独立 session |
+| S10 | MED | token budget host 不上报时静默 no-op | 🔜 独立 session |
+| S12 | MED | audit 路径符号链接污染 | 🔜 独立 session |
+| S7/S11/S15/S16 | LOW | 竞态/跨进程/CJS 类型/双注册 | accepted limitation |
+
+### B4/B6/B7 修复（ralplan consensus: Planner + Architect + Critic）
+
+- [x] **B4 [P1-HIGH] `git checkout <ref> <path>` 误判 safe_git** — checkout 块新增 ≥2 positional 计数规则（跳过 `-` 开头 token），由 `-b`/`-B` 缺席守卫。`checkout main`(1pos)→safe、`checkout HEAD .`(2pos)→destructive、`checkout -b feat origin/main`(有-b)→safe。Architect 在 review 阶段捕获此 false-positive（tracking branch create 是极常见操作）。
+- [x] **B6 [P2] `git -c <bareword>` 吃子命令** — strip loop line 229 拆分 `-c`/`-C`：`-c` 仅当下一个 token 匹配 `CONFIG_KEY_VAL_RE`(`/[.=]/`，含 `.` 的 bool key 或含 `=` 的 key=val)时消费；否则只跳过 `-c`(idx+=1)，让 bareword 浮为 sub。`-C`(path)行为不变。**code-review 发现初版 regex（仅认 `=`）漏掉 boolean shorthand key（`-c advice.detachedHead` = true 是合法 git），导致 `git -c core.bare reset --hard` 回归 unknown；rework 改为 `/[.=]/` 后全部 6 case 正确。**
+- [x] **B7 [P2] `git checkout -B` 重置分支** — checkout 块新增 `args.includes('-B')` → destructive，置于 B4 计数之前（`-B main` 仅 1 positional）。不加 `--force-create`（git 对 checkout 拒绝此 flag，已实测）。
+- [x] **测试**：+17 测试（7 PoC red→green + 8 regression + 2 subagent defaultDeny 阻断证明）+ 3 e2e 矩阵行。permission-policy 220→237 全绿，三包 1059 tests 全绿，typecheck 通过。
+
+### Out-of-scope（Critic 记录，不吸收）
+- **B8（新命名）** `git checkout -f .` / `git checkout --force <ref>` — 预存 hole，不在本 Wave 三 finding 范围内；positional 规则可自然扩展（若加 `-f`/`--force` 到 destructive-trigger set）。单独跟踪。
+
