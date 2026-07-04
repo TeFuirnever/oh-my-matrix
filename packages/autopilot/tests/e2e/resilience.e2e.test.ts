@@ -302,8 +302,12 @@ describe('E2E: resilience', () => {
       await activate(mock, 'sess-orphan');
       expect(await projectionFor(mock, 'sess-orphan')).toBeDefined();
 
-      // ORPHAN_THRESHOLD_MS = 24h; the health check runs inside the 60s interval.
-      vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 60_000);
+      // M3: advance past stall + retry exhaustion first (the stall detector now
+      // also covers 'claimed' runs, transitioning them to blocked after ~30min).
+      // Then advance past the 24h orphan threshold — the orphan sweep cleans
+      // blocked runs that settled outside the active states.
+      vi.advanceTimersByTime(60_000 * 40); // 40min — past all stall + retry cycles
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 60_000); // 24h + 1 interval
 
       expect(await projectionFor(mock, 'sess-orphan')).toBeUndefined();
     });

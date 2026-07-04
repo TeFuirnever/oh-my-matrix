@@ -198,9 +198,12 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
-    // ─── running + stall_timeout → retry_queued ────────────────
+    // ─── running/claimed + stall_timeout → retry_queued ────────────────
+    // M3: also accept 'claimed' — a claimed run that never receives a turn stalls
+    // and should transition to retry_queued (or blocked if retries exhausted),
+    // not linger until the 24h orphan sweep.
     case 'stall_timeout': {
-      if (state.orchestrationState !== 'running') return state;
+      if (state.orchestrationState !== 'running' && state.orchestrationState !== 'claimed') return state;
       const maxRetries = state.workflow?.maxRetries ?? 3;
       const maxRetryBackoffMs = state.workflow?.maxRetryBackoffMs ?? DEFAULT_WORKFLOW_CONFIG.maxRetryBackoffMs;
       const currentAttempt = (state.retry?.attempt ?? 0) + 1;

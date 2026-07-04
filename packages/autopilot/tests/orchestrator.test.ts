@@ -243,6 +243,27 @@ describe('orchestrator reducer — state transition table', () => {
       expect(next.retry!.recoverable).toBe(true);
       expect(next.retry!.lastError).toContain('stall');
     });
+
+    // M3: claimed + stall_timeout → retry_queued (was a no-op before the fix)
+    it('M3: claimed run that stalls transitions to retry_queued', () => {
+      const state = makeState({
+        orchestrationState: 'claimed',
+        lastActivityAt: NOW - 400000,
+        workflow: {
+          version: 1, source: 'default',
+          maxConcurrent: 5, maxRetries: 3, stallTimeoutMs: 300000,
+          maxRetryBackoffMs: 300000,
+          workspace: { root: '.matrix/autopilot-worktrees', cleanup: 'manual', branchPrefix: 'autopilot', allowDirtyBase: false },
+          validation: { commands: [], failOnOptional: false },
+          destructiveGit: { allow: false }, warnings: [],
+        },
+      });
+      const next = orchestratorReducer(state, {
+        type: 'stall_timeout', runId: 'run-1', now: NOW,
+      });
+      expect(next.orchestrationState).toBe('retry_queued');
+      expect(next.retry!.recoverable).toBe(true);
+    });
   });
 
   // ─── retry_queued + retry_due → claimed ─────────────────────────────
