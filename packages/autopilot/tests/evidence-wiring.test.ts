@@ -203,5 +203,53 @@ describe('Evidence Gate wiring', () => {
       expect(projection.status).toBe('running');
       expect(projection.enabled).toBe(true);
     }, 10000);
+
+    it.skipIf(process.platform === 'win32')('does NOT throw when evidence fails with maxRetries=0 (H1+W1 collision regression)', async () => {
+      // Regression guard for the H1+W1 collision: when maxRetries=0, failed evidence
+      // goes straight to blocked. The reducer derives status='paused', and the old code
+      // called pause() (which requires status='running') → throw. The fix drops the
+      // redundant pause() call; the reducer already set the correct state.
+      const { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } =
+        await import('../src/workflow-config');
+      vi.mocked(loadWorkflowConfig).mockReturnValueOnce({
+        config: {
+          ...DEFAULT_WORKFLOW_CONFIG,
+          maxRetries: 0,
+          validation: {
+            commands: [{ id: 'fail-cmd', command: 'false', timeoutMs: 5000, required: true }],
+            failOnOptional: false,
+          },
+        },
+        warnings: [],
+      });
+
+      _resetForTest();
+      const mockBlocked = createMockApi();
+      register(mockBlocked.api as unknown as Parameters<typeof register>[0]);
+
+      const activateRespond = vi.fn();
+      await mockBlocked.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-blocked-throw', trustWorkspace: true }, respond: activateRespond });
+      await mockBlocked.hooks.get('session_start')!({ sessionId: 'sid-blocked-throw', sessionKey: 'sess-ev-blocked-throw' });
+
+      const finalizeBlocked = mockBlocked.hooks.get('before_agent_finalize')!;
+      for (let i = 0; i < 2; i++) {
+        await finalizeBlocked({ sessionId: 'sid-blocked-throw', sessionKey: 'sess-ev-blocked-throw', stopHookActive: false, lastAssistantMessage: 'still working...' });
+      }
+      // This must NOT throw.
+      await finalizeBlocked({
+        sessionId: 'sid-blocked-throw',
+        sessionKey: 'sess-ev-blocked-throw',
+        stopHookActive: false,
+        lastAssistantMessage: '所有任务已完成，代码通过了全部测试。',
+      });
+
+      const statusRespond = vi.fn();
+      await mockBlocked.gatewayMethods.get('autopilot.status')!({ params: { sessionKey: 'sess-ev-blocked-throw' }, respond: statusRespond });
+      const projection = statusRespond.mock.calls[0][1]?.projection;
+
+      expect(projection.evidenceStatus).toBe('failed');
+      // Must not be done (H1 guard still holds on the blocked path).
+      expect(projection.status).not.toBe('done');
+    }, 10000);
   });
 });

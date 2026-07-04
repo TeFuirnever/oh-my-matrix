@@ -512,11 +512,12 @@ export function register(api: OpenClawPluginApi): void {
         setState(runId,
           // failed → the reducer moved to retry_queued (will retry) or blocked (max
           // retries). Keep the run enabled in retry_queued so the stall interval can
-          // fire retry_due; pause only when fully blocked.
+          // fire retry_due. When blocked, the reducer already set orchState='blocked'
+          // + blockedReason + derived status='paused' — do NOT call pause() (it would
+          // throw: pause() requires status='running' but the reducer derived 'paused').
+          // Just attach the evidence summary; the state is already correct.
           evidenceSummary.status === 'failed'
-            ? updated.orchestrationState === 'blocked'
-              ? pause({ ...updated, evidence: evidenceSummary }, 'validation_failed')
-              : { ...updated, evidence: evidenceSummary } // retry_queued: stay running+enabled
+            ? { ...updated, evidence: evidenceSummary }
             // passed/skipped → reducer already set orchState='done' + status='done'
             // when the evidence reducer ran; if it didn't run (orchState unchanged),
             // complete() advances status to done. Either way the run finishes.
