@@ -58,7 +58,11 @@ function makeEntry(overrides: Partial<PermissionAuditEntry> = {}): PermissionAud
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-e2e-roundtrip-'));
+  // S12: getAuditFilePath now resolves symlinks via realpathSync, so the test
+  // expected-path assertions must use the canonical path too. On macOS the
+  // os.tmpdir() result (/var/folders/...) is itself a symlink to /private/...,
+  // so resolve it once here; downstream assertions compare against this.
+  tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'audit-e2e-roundtrip-')));
 });
 
 afterEach(() => {

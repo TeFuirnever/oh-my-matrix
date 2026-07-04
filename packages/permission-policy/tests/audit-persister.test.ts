@@ -34,7 +34,8 @@ function makeEntry(overrides: Partial<PermissionAuditEntry> = {}): PermissionAud
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-audit-test-'));
+  // S12: realpath so tmpDir is the canonical path (macOS /tmp → /private/tmp).
+  tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-audit-test-')));
 });
 
 afterEach(() => {
@@ -270,5 +271,46 @@ describe('appendAuditEntry failure counter — PROD-8', () => {
   it('does not increment on successful write', () => {
     appendAuditEntry(makeEntry(), tmpDir);
     expect(getAuditWriteFailureCount()).toBe(0);
+  });
+});
+
+// ── S12: symlink pollution — audit path must resolve symlinks ──────────
+describe('S12: audit path resolves symlinks (no containment escape)', () => {
+  beforeEach(() => { _resetAuditFailureCountForTest(); });
+
+  it('getAuditFilePath resolves a symlinked workspaceDir to its real path', () => {
+    // Create a real dir, then a symlink pointing at it
+    const realDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's12-real-')));
+    const linkPath = path.join(tmpDir, 'ws-symlink');
+    try {
+      fs.symlinkSync(realDir, linkPath);
+
+      const filePath = getAuditFilePath(linkPath);
+
+      // The returned path must be under the REAL directory (resolved), not the
+      // symlink. The symlink path itself must NOT appear literally in the result.
+      expect(filePath.startsWith(realDir)).toBe(true);
+      expect(filePath).not.toContain('ws-symlink');
+    } finally {
+      fs.rmSync(realDir, { recursive: true, force: true });
+    }
+  });
+
+  it('appendAuditEntry writes to the real (resolved) directory, not the symlink target escape', () => {
+    const realDir = fs.mkdtempSync(path.join(os.tmpdir(), 's12-write-real-'));
+    const linkPath = path.join(tmpDir, 'ws-link');
+    try {
+      fs.symlinkSync(realDir, linkPath);
+
+      appendAuditEntry(makeEntry({ runId: 's12-run' }), linkPath);
+
+      // The audit file must exist under the REAL directory (resolved), proving
+      // the write went to the canonical path and the symlink was not followed
+      // opaquely into an attacker-controlled location.
+      const auditFiles = fs.readdirSync(path.join(realDir, '.autopilot'));
+      expect(auditFiles.some(f => f.endsWith('.jsonl'))).toBe(true);
+    } finally {
+      fs.rmSync(realDir, { recursive: true, force: true });
+    }
   });
 });
