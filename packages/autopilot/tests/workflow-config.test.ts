@@ -422,5 +422,31 @@ body`,
         expect(rPy.config.validation.commands).toHaveLength(1);
       });
     });
+
+    // ── REV-4: multi-path search must surface I/O warnings from earlier-failed paths ──
+    describe('REV-4: multi-path I/O warnings not silently dropped', () => {
+      it('surfaces first-path I/O error when second path succeeds (parse warnings case)', () => {
+        // Two paths: workspacePath/WORKFLOW.md (throws on read) then baseRepoPath/WORKFLOW.md (valid).
+        // existsSync returns true for both; readFileSync throws on first call, succeeds on second.
+        mockFs.existsSync.mockReturnValue(true);
+        mockFs.readFileSync
+          .mockImplementationOnce(() => { throw new Error('EISDIR: illegal operation on a directory'); })
+          .mockReturnValueOnce(`---
+autopilot:
+  version: 1
+  max_concurrent: 3
+---
+`);
+
+        const result = loadWorkflowConfig('/base/repo', '/workspace/path');
+
+        // The valid second path wins (source = workflow_md, max_concurrent applied).
+        expect(result.config.source).toBe('workflow_md');
+        expect(result.config.maxConcurrent).toBe(3);
+        // REV-4: the first path's I/O warning must NOT be silently dropped.
+        expect(result.warnings.some((w) => w.includes('Failed to read/parse'))).toBe(true);
+        expect(result.warnings.some((w) => w.includes('/workspace/path'))).toBe(true);
+      });
+    });
   });
 });
