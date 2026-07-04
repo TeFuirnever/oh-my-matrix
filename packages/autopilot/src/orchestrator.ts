@@ -53,6 +53,7 @@ export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
  */
 export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 'blockedReason'>): AutopilotState['status'] {
   const orch = state.orchestrationState;
+  if (orch === undefined) return 'idle'; // pre-activate / no run
   if (orch === 'done') return 'done';
   if (orch === 'blocked') {
     if (state.blockedReason === 'user_stopped') return 'idle';
@@ -319,8 +320,11 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
     // retry/block decision wins. This prevents a double-transition where a
     // loop-breaker pause arrives after the turn already failed and retried.
     case 'pause_requested': {
+      // TENSION 3: exclude 'retry_queued' — a recoverable breaker under retry cap
+      // must survive a subsequent pause_requested (branch-A contract). Only
+      // pause from the active-running family, not from an already-retrying state.
       const runningFamily: OrchestrationState[] = [
-        'running', 'claimed', 'retry_queued', 'released', 'unclaimed',
+        'running', 'claimed', 'released', 'unclaimed',
       ];
       if (!runningFamily.includes(state.orchestrationState as OrchestrationState)) return state;
       return {

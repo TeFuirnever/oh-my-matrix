@@ -1,4 +1,5 @@
 import type { AutopilotState, PauseReason } from './types';
+import { pauseReasonToBlockedReason } from './types';
 import { deriveStatus } from './orchestrator';
 
 const MAX_GOAL_LENGTH = 500;
@@ -56,7 +57,7 @@ export function pause(state: AutopilotState, reason: PauseReason): AutopilotStat
   const next: AutopilotState = {
     ...state,
     orchestrationState: 'blocked',
-    blockedReason: pauseReasonToBlockedReasonSafe(reason),
+    blockedReason: pauseReasonToBlockedReason(reason),
     enabled: false,
     pauseReason: reason,
     needsCrossTurnResume: false,
@@ -96,12 +97,6 @@ export function resume(state: AutopilotState): AutopilotState {
   return { ...next, status: deriveStatus(next) };
 }
 
-// Local import to avoid circular dependency at module load — pauseReasonToBlockedReason
-// is total but we guard anyway for defensive use inside the setter.
-import { pauseReasonToBlockedReason } from './types';
-function pauseReasonToBlockedReasonSafe(reason: PauseReason) {
-  return pauseReasonToBlockedReason(reason);
-}
 
 export function incrementTurn(state: AutopilotState): AutopilotState {
   return { ...state, turnAttempts: state.turnAttempts + 1 };

@@ -32,6 +32,10 @@ describe('W1 deriveStatus — status derivation table', () => {
     expect(deriveStatus({ orchestrationState: 'done', blockedReason: undefined })).toBe('done');
   });
 
+  it('orchState=undefined → idle (pre-activate / no run)', () => {
+    expect(deriveStatus({ orchestrationState: undefined, blockedReason: undefined })).toBe('idle');
+  });
+
   // blocked splits on blockedReason.
   describe('blocked splits on blockedReason', () => {
     it('blocked + user_stopped → idle (terminal, user-initiated)', () => {
@@ -52,6 +56,9 @@ describe('W1 deriveStatus — status derivation table', () => {
       'permission_denied', 'workspace_containment_failed', 'workspace_create_failed',
       'validation_failed', 'evidence_missing', 'stalled', 'token_budget_exceeded',
       'user_stopped', 'config_invalid', 'max_retries_reached',
+      // W1 Phase 1.5 new values:
+      'max_total_reached', 'tool_error_repeated', 'loop_breaker_triggered',
+      'context_overflow_unrecoverable', 'injection_rejected',
     ];
     const nonResumableNonUser = allBlockedReasons.filter(
       (r) => r !== 'user_stopped' && !RESUMABLE_BLOCKED_REASONS.has(r),
