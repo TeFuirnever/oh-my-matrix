@@ -175,7 +175,10 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
           orchestrationState: 'blocked',
           blockedReason: classification.recoverable
             ? 'max_retries_reached'
-            : toBlockedReason(event.error ?? 'unknown error'),
+            // W1b: don't use toBlockedReason (falls back to validation_failed which
+            // is RESUMABLE). Use the explicit non-resumable default for unrecognized
+            // error strings, and only map known ones directly.
+            : toBlockedReason(event.error ?? 'unknown error', 'unrecoverable_error'),
           lastActivityAt: event.now,
         };
       }

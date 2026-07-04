@@ -41,7 +41,10 @@ export type BlockedReason =
   | 'tool_error_repeated'
   | 'loop_breaker_triggered'
   | 'context_overflow_unrecoverable'
-  | 'injection_rejected';
+  | 'injection_rejected'
+  // W1b: generic terminal error that doesn't match a specific BlockedReason.
+  // Non-resumable — prevents lossy toBlockedReason fallback to validation_failed.
+  | 'unrecoverable_error';
 
 /** Canonical set of all valid BlockedReason values — used by isValidBlockedReason type guard */
 export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<BlockedReason>([
@@ -60,6 +63,7 @@ export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<Blocked
   'loop_breaker_triggered',
   'context_overflow_unrecoverable',
   'injection_rejected',
+  'unrecoverable_error',
 ]);
 
 /** H-2: Type guard — validates that an arbitrary string is a BlockedReason.
