@@ -1,16 +1,15 @@
 ---
 name: dynamic-workflows
 description: >
-  Orchestrate multi-agent workflows at scale. When a task needs parallel
-  fan-out, adversarial cross-checking, pipeline processing, or iterative
-  deepening — generate a .prose program and execute it with OpenProse first,
-  falling back only for small direct-session plans. Use this skill when the
-  user says "run a workflow", "ultracode", "fan out agents", "parallel
-  agents", "multi-agent orchestrate", "审计", "并行审查", "交叉验证",
-  "并行 agent", or when a task clearly exceeds what a single agent can
-  handle in one pass. Also activate for safety questions about workflow
-  operations ("能不能 git reset", "workflow 里可以做什么",
-  "destructive commands in workflows").
+  Orchestrate multi-agent workflows: fan-out for parallel perspectives, pipeline
+  for staged processing, adversarial-verify for refutation-filtered findings,
+  tournament for best-of-N, judge-panel for calibrated scoring, duel-loop for
+  implement-review cycles, and routing/multi-lens/completeness-critic/loop-until-dry/generate-and-filter
+  patterns. Generate a .prose program, compile with OpenProse, execute, synthesize.
+  Use when a task needs 3+ independent perspectives, 10+ files, structured
+  comparison of 3+ alternatives, or pattern-matched multi-agent work. Falls back
+  to bounded direct-session plans for small tasks. Also answers workflow safety
+  questions (destructive git, credential access in subagent sessions).
 metadata:
   prefers: open-prose
   fallback: direct-session-orchestration
@@ -49,14 +48,28 @@ the file diff, and ask before keeping or reverting partial changes.
 
 ## When to use a workflow
 
-**DO use** a workflow when:
+**DO use** a workflow — match your task to a pattern:
 
-- The task spans **10+ files, endpoints, or modules** to audit/review/migrate
-- Results improve with **3+ independent perspectives** checked against each other
-- Work can be **parallelized** across files, topics, or approaches
-- A **pipeline** of stages should process items independently (screen → analyze
-  → synthesize)
-- You need to **compare 3+ alternatives** with structured evaluation
+| You want to... | Pattern | Example trigger |
+|---|---|---|
+| Get multiple independent takes, then pick the best | fan-out-reduce | "give me 3 perspectives on..." |
+| Process many items through stages (screen→analyze→synthesize) | pipeline | "screen these files, expand the suspicious ones, rank" |
+| Find issues but only keep what survives refutation | adversarial-verify | "audit this, but filter false positives" |
+| Search exhaustively when scope is unknown | loop-until-dry | "find every instance of X, even hidden ones" |
+| Route different request types to different handling | routing | "classify tickets, dispatch each by type" |
+| Pick the best of several attempts via pairwise judging | tournament | "I have 4 candidate solutions, pick the winner" |
+| Overproduce candidates, then filter by a rubric | generate-and-filter | "generate 20 test ideas, keep the meaningful ones" |
+| Improve quality via implement↔review loops | duel-loop | "draft a fix, have another agent break it, repeat" |
+| Get calibrated scores, not just a winner | judge-panel | "score this on clarity/correctness/completeness" |
+| Verify the output covers ALL requirements | completeness-critic | "check my report against the original ask" |
+| Audit one target from multiple disciplines | multi-lens-sweep | "audit for security AND performance AND maintainability" |
+
+**Threshold — when NOT to multi-agent:**
+- Touches ≤3 files or a single agent handles 80%+ of the task → use one agent
+  (this IS the single-agent baseline threshold, operationalized)
+- Coordination cost grows as `n(n-1)/2` pairwise points (4 agents = 6, 10 agents
+  = 45). Prefer 3-5 well-scoped agents; if you need more, split into sequential
+  .prose programs, not one giant fan-out.
 
 **Do NOT use** a workflow for:
 
@@ -146,6 +159,30 @@ Pick the orchestration pattern that fits the task. Most tasks match one of
 the three core patterns below, or a composition of two. See the pattern
 selection table for a quick decision guide.
 
+### Step 1.5: Map task to standard roles (MANDATORY)
+
+Before writing `agent` blocks, map each sub-task to a standard role from
+`references/role-prompts/`. For each sub-task:
+
+1. Scan the role-prompts index (each file's "Use when" line). Does a standard
+   role's purpose match the sub-task?
+2. **Match found** → use that role's prompt text verbatim in
+   `agent <role>: prompt: "..."`. Copy the prompt body from the role-prompts
+   file into the .prose. The 14 standard roles: explorer, analyst, planner,
+   architect, implementer, verifier, reviewer, security-auditor, skeptic,
+   judge, test-author, debugger, tracer, synthesizer.
+3. **No match** → define a custom agent with a `custom_` name prefix
+   (e.g., `agent custom_migration_validator:`) and a fresh prompt.
+
+This makes "prefer standard roles, else regenerate" observable: standard roles
+are reused silently; custom roles surface at the Step 2 checkpoint for explicit
+user approval.
+
+> **Why prompt-snippets, not just names:** OpenProse's `agent name:` is a local
+> template — the agent's behavior comes entirely from the inline `prompt:` and
+> `model:`, not from the name. So "reuse a role" means "copy its prompt text,"
+> not "name it the same." See `references/role-prompts/` for the copyable text.
+
 ### Step 2: Write the .prose program
 
 Start from this skeleton:
@@ -206,9 +243,11 @@ Key rules:
   trusted labels or values created by earlier workflow steps.
 
 **🔴 CHECKPOINT · 🛑 STOP**: Show the generated .prose to the user before
-proceeding to compilation. Ask: "Here is the workflow — shall I compile
-and run it?" If the user requests changes, incorporate feedback. If the
-user rejects, ask which pattern or approach they prefer.
+proceeding to compilation. List every agent used: mark standard roles with ✓
+and every `custom_*` agent with ⚠ (needs explicit approval — this is the
+"else regenerate" branch surfaced for review). Ask: "Here is the workflow —
+shall I compile and run it?" If the user requests changes, incorporate
+feedback. If the user rejects, ask which pattern or approach they prefer.
 
 ### Step 3: Validate
 
@@ -448,6 +487,25 @@ session "Report only the findings that survived skeptical review"
   context: { findings, verdicts }
 ```
 
+**Verification discipline (applies to adversarial-verify, duel-loop,
+judge-panel, and any verify/review session):**
+
+1. **Authoring ≠ review.** The agent that produces output CANNOT approve it.
+   Use a different role-prompt (verifier, reviewer, security-auditor, judge)
+   for the review pass.
+2. **Read-only roles are a prompt convention, NOT runtime-enforced.** The
+   subagent guard is role-blind — it cannot tell a verifier from an
+   implementer. `write_file`/`apply_patch` remain technically allowed for all
+   subagent sessions. The prompt text is the only gate keeping verifiers
+   honest; do not rely on the runtime to enforce read-only posture. (Destructive
+   git operations ARE runtime-blocked for all subagent sessions regardless of
+   role — that is a separate guard.)
+3. **Require FRESH evidence.** Reject completion claims that say "should pass"
+   / "probably works" / "all tests pass" without test output in the result.
+4. **Re-run after approval.** In a duel-loop, after reviewer approval, re-run
+   tests before synthesis — approval is a reporting moment, not a completion
+   gate.
+
 For patterns 4-8 (loop-until-dry, routing, tournament, generate-and-filter,
 duel-loop), read `references/patterns-advanced.md`.
 
@@ -530,9 +588,19 @@ Use this table before giving up or switching strategies:
   sequential .prose programs
 - **Maximum recursion depth** in `block`: 3
 - **Always set `max:`** on `loop until` constructs
-- **Model cost awareness**: Use `haiku` for screening, `sonnet` for drafting,
+- **Model routing**: Use `haiku` for screening, `sonnet` for drafting,
   `opus` only for judgment. A tournament with 4 opus contestants + 3 opus
-  judges = 7 opus calls — use sonnet contestants + opus judge instead
+  judges = 7 opus calls — use sonnet contestants + opus judge instead.
+  Operational rules:
+  - **Default tier**: screening/lookup = haiku, drafting/implementation = sonnet,
+    judgment/architecture/security-review = opus.
+  - **Raise to opus ONLY for**: judgment, multi-system architecture, security
+    review, root-cause after 2+ failed fixes, adversarial refutation.
+  - **Lower to haiku for**: relevance screening, file enumeration, simple
+    yes/no classification in routing pattern.
+  - **Coordination cost grows as `n(n-1)/2`** — model choice directly controls
+    cost. When in doubt, start one tier lower and escalate only if output
+    quality is insufficient.
 
 ## Safety and data hygiene
 
