@@ -1243,7 +1243,7 @@ export function register(api: OpenClawPluginApi): void {
       // expects it to take effect; the global fallback was silently ignoring it.
       const stallTimeoutMs = state.workflow?.stallTimeoutMs
         ?? defaultStallTimeoutMs(!!config.tokenBudget);
-      if (state.enabled && state.status === 'running' && state.orchestrationState === 'running') {
+      if (state.enabled && state.status === 'running' && (state.orchestrationState === 'running' || state.orchestrationState === 'claimed')) {
         const stallResult = checkStall({
           lastActivityAt: state.lastActivityAt ?? state.startedAt ?? now,
           now,

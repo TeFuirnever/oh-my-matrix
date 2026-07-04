@@ -18,13 +18,17 @@ export interface StallResult {
 
 /**
  * Check if the run has stalled based on last activity time.
- * Only considers stall when orchestrationState is 'running'.
+ * Considers stall when orchestrationState is 'running' (active turn) or 'claimed'
+ * (M3: a claimed run that never receives a turn is a dead-end — detect it so the
+ * stall_timeout event can transition it to retry_queued, rather than waiting for
+ * the 24h orphan sweep).
  */
 export function checkStall(input: StallCheckInput): StallResult {
   const { orchestrationState, lastActivityAt, now, stallTimeoutMs } = input;
 
-  // Only check stall while actively running
-  if (orchestrationState !== 'running') {
+  // Check stall for active states: 'running' (turn in progress) and 'claimed'
+  // (waiting for a turn that may never come).
+  if (orchestrationState !== 'running' && orchestrationState !== 'claimed') {
     return { stalled: false };
   }
 

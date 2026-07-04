@@ -135,6 +135,41 @@ describe('stall-detector', () => {
       expect(result.stalled).toBe(true);
       expect(result.stallDurationMs).toBe(100000);
     });
+
+    // ── M3: claimed state stall detection ──────────────────────────
+    // A run stuck in 'claimed' (never receives a turn) was previously invisible
+    // to the stall detector — it only checked 'running'. The only recovery was
+    // the 24h orphan sweep. Now 'claimed' is also checked (with the same threshold).
+
+    it('M3: stalled when claimed and exceeded timeout', () => {
+      const result = checkStall({
+        orchestrationState: 'claimed',
+        lastActivityAt: 100000,
+        now: 500000,
+        stallTimeoutMs: STALL_TIMEOUT_MS,
+      });
+      expect(result.stalled).toBe(true);
+    });
+
+    it('M3: not stalled when claimed but within timeout', () => {
+      const result = checkStall({
+        orchestrationState: 'claimed',
+        lastActivityAt: 900000,
+        now: 1000000,
+        stallTimeoutMs: STALL_TIMEOUT_MS,
+      });
+      expect(result.stalled).toBe(false);
+    });
+
+    it('M3: not stalled when claimed and lastActivityAt is undefined', () => {
+      const result = checkStall({
+        orchestrationState: 'claimed',
+        lastActivityAt: undefined,
+        now: 1000000,
+        stallTimeoutMs: STALL_TIMEOUT_MS,
+      });
+      expect(result.stalled).toBe(false);
+    });
   });
 });
 

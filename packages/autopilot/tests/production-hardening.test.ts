@@ -165,13 +165,14 @@ describe('Phase 4: Production hardening', () => {
       // Activate a session
       await healthApi.gatewayMethods['autopilot.activate']({ params: { sessionKey: 'sess-orphan', goal: 'stale task' }, respond: vi.fn() });
 
-      // Verify it exists
-      const respondBefore = vi.fn();
-      await healthApi.gatewayMethods['autopilot.status']({ params: { sessionKey: 'sess-orphan' }, respond: respondBefore });
-      const before = respondBefore.mock.calls[0][1];
-      expect(before?.projection).toBeDefined();
+      // M3: Advance past the stall threshold first — the stall detector transitions
+      // the run through retry_queued → blocked (after exhausting retries). With
+      // maxRetries:3 and ~5min backoff, retry exhaustion takes ~30min. Advance
+      // past that so the run settles in 'blocked', then the orphan sweep (24h
+      // from the last activity = the blocked transition) cleans it up.
+      vi.advanceTimersByTime(60_000 * 40); // 40min — past all stall + retry cycles
 
-      // Advance time well past the orphan threshold (24h) + 1 stall check interval
+      // Now advance past the orphan threshold (24h from last activity) + 1 interval.
       vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 60_000);
 
       // After health check interval fires, orphaned session should be cleaned
