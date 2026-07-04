@@ -18,7 +18,6 @@
  */
 import type { PluginHookBeforeToolCallEvent } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const REAL_BEFORE_TOOL_CALL_SHAPE: PluginHookBeforeToolCallEvent = {
   toolName: 'exec',
   params: { command: 'git reset --hard HEAD~1', workdir: '/ws' },
