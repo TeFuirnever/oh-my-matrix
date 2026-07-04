@@ -64,7 +64,7 @@ describe('H-2: isValidBlockedReason type guard', () => {
 });
 
 describe('H-2: orchestrator fallback on invalid BlockedReason', () => {
-  it('falls back to validation_failed when agent_turn_finished error is not a valid BlockedReason', async () => {
+  it('falls back to unrecoverable_error (non-resumable) when agent_turn_finished error is not a valid BlockedReason (W1b)', async () => {
     const { orchestratorReducer } = await import('../src/orchestrator');
     const { createInitialState } = await import('../src/types');
 
@@ -97,7 +97,9 @@ describe('H-2: orchestrator fallback on invalid BlockedReason', () => {
 
     expect(next.orchestrationState).toBe('blocked');
     // Must NOT be the raw error string — must be a valid fallback
-    expect(next.blockedReason).toBe('validation_failed');
+    // W1b: unrecognized error strings fall back to 'unrecoverable_error' (non-resumable),
+    // NOT 'validation_failed' (which is RESUMABLE — the old lossy fallback bug).
+    expect(next.blockedReason).toBe('unrecoverable_error');
   });
 
   it('preserves valid BlockedReason from error string', async () => {
