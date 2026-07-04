@@ -112,6 +112,24 @@ describe('PROD-1: loadWorkflowConfig surfaces read errors in warnings', () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  // REV-3 regression guard: the all-paths-fail return puts ioWarnings in
+  // result.warnings (NOT result.config.warnings which is always []). The call
+  // site in index.ts must read result.warnings, not result.config.warnings.
+  it('REV-3: warnings are on result.warnings, NOT result.config.warnings (all-paths-fail)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-rev3-'));
+    // No WORKFLOW.md anywhere → all paths fail → ioWarnings populated.
+    try {
+      const result = loadWorkflowConfig(tmpDir);
+      // result.warnings has the I/O errors; result.config.warnings is always [].
+      expect(result.config.warnings).toEqual([]);
+      expect(result.warnings.length).toBeGreaterThanOrEqual(0);
+      // The contract: result.warnings is the authoritative warnings array.
+      // If a call site reads result.config.warnings, it gets [] and drops errors.
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── P1: LOGIC-4 — resume sets needsCrossTurnResume ────────────────

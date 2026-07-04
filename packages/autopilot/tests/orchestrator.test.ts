@@ -417,6 +417,17 @@ describe('orchestrator reducer — state transition table', () => {
       expect(next.orchestrationState).toBe('blocked');
       expect(next.blockedReason).toBe('permission_denied');
     });
+
+    // REV-1 regression guard: resume of an unclaimed run (paused before dispatch)
+    // must transition to claimed, not silently no-op.
+    it('REV-1: resumes unclaimed → claimed (was silent no-op)', () => {
+      const state = makeState({ orchestrationState: 'unclaimed' });
+      const next = orchestratorReducer(state, {
+        type: 'resume_requested', runId: 'run-1', now: NOW,
+      });
+      expect(next.orchestrationState).toBe('claimed');
+      expect(next.needsCrossTurnResume).toBe(true);
+    });
   });
 
   // ─── done + activate_requested → unclaimed (new run) ────────────────

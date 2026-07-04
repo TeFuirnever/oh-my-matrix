@@ -110,7 +110,10 @@ function kickResumedTurn(runId: string, state: AutopilotState): void {
       text: buildRetryInstruction(state),
       idempotencyKey: `autopilot-resume-${runId}-${state.lastActivityAt ?? state.totalContinuations}`,
       placement: 'prepend_context',
-      ttlMs: DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs,
+      // REV-2 fix: match the stall timeout, not the raw default. A no-budget run
+      // stalls at ×2 (600s); the injection TTL must outlive it or the host boots
+      // a resumed turn after the injection already expired.
+      ttlMs: state.workflow?.stallTimeoutMs ?? defaultStallTimeoutMs(!!state.tokenBudget),
     }),
   ).catch((err) => warn(`[autopilot] resume kick enqueue failed for session=${state.sessionKey}: ${err}`));
 }
@@ -1025,8 +1028,8 @@ export function register(api: OpenClawPluginApi): void {
             commands = detectValidationCommands(payloadWorkspacePath);
           }
           const warnings = trustWorkspace
-            ? result.config.warnings
-            : [...result.config.warnings, 'untrusted workspace — validation commands disabled (enable via trustWorkspace:true)'];
+            ? result.warnings
+            : [...result.warnings, 'untrusted workspace — validation commands disabled (enable via trustWorkspace:true)'];
           return {
             ...s,
             workflow: {
