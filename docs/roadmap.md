@@ -43,8 +43,8 @@ Exit criteria:
 |---|---|---|
 | Public package policy | Packages are on npm public (autopilot / dynamic-workflows / permission-policy) but lack a documented consumer install + version policy | Planned |
 | `WORKFLOW.md` examples | Autopilot config exists but needs copy-pasteable examples | Planned |
-| Projection contract docs | Host UI needs stable fields and failure semantics | Planned |
-| Public type exports (`AutopilotProjection` from barrel) | Hosts deep-import `dist/src/projection` today, coupling to OMM's internal layout | Planned |
+| Projection contract docs | Host UI needs stable fields and failure semantics | Done 2026-07-03 (Milestone C, #70) |
+| Public type exports (`AutopilotProjection` from barrel) | Hosts previously deep-imported `dist/src/projection`, coupling to OMM's internal layout | Done 2026-07-03 (Milestone C, #70) |
 | Evidence gate examples | Users need to understand required vs optional validation | Planned |
 
 Exit criteria:
@@ -57,8 +57,8 @@ Exit criteria:
 
 | Deliverable | Why | Status |
 |---|---|---|
-| Workflow graph contract | Large fan-out runs need visible branch state | Planned |
-| Blocked-call reporting | Guard blocks should be understandable, not mysterious | Planned |
+| Projection contract (`DynamicWorkflowProjection`) | Large fan-out runs need a stable, read-only data shape for UI/consumers | Done 2026-07-03 (Milestone C, #70) |
+| Host/UI rendering of branch graph, blocked calls, evidence | The projection is built but no host renders it yet | Planned (Milestone D) |
 | Pattern examples gallery | The 8 workflow modes need realistic examples | Planned |
 
 Design references:

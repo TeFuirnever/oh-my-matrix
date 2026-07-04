@@ -17,6 +17,7 @@ Thanks for contributing. This repo is small, safety-sensitive, and docs-first. G
 
 ```bash
 pnpm install
+pnpm -r build   # dist/ is not committed (ADR-015); typecheck + tests need it built
 ```
 
 Useful checks:
