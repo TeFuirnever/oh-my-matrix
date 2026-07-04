@@ -168,12 +168,12 @@ describe('E2E: resilience', () => {
       await driveToRunningFirstTurn('sess-stall');
 
       // lastActivityAt = activate time T0 (fake clock). The stall interval ticks
-      // every 60s; stall-detector uses strict '>'. First stall tick is at T0+660000
-      // (T0+600000 is not strictly greater). Advance exactly that far so the
-      // subsequent retry_due (T0+670000) does NOT also fire.
+      // every 60s; stall-detector uses strict '>'. M1 fix: per-run stallTimeoutMs
+      // (300000 from DEFAULT_WORKFLOW_CONFIG) replaces the old global ×2 (600000).
+      // First stall tick is at T0+360000 (T0+300000 is not strictly greater).
       const before = Date.now();
-      vi.advanceTimersByTime(660_000);
-      const stallFiredAt = before + 660_000;
+      vi.advanceTimersByTime(360_000);
+      const stallFiredAt = before + 360_000;
 
       const proj = await projectionFor(mock, 'sess-stall');
       // frozen to current behavior: stall leaves status='running', sets retry_queued.
@@ -187,10 +187,10 @@ describe('E2E: resilience', () => {
     it('retry_due (after the 10s backoff) returns the run to claimed via the real interval', async () => {
       await activate(mock, 'sess-retry');
       await driveToRunningFirstTurn('sess-retry');
-      vi.advanceTimersByTime(660_000); // → stall #1, retry_queued, nextRetryAt = T0+670000
+      vi.advanceTimersByTime(360_000); // → stall #1, retry_queued, nextRetryAt = T0+370000
       expect((await projectionFor(mock, 'sess-retry')).orchestrationState).toBe('retry_queued');
 
-      // Advance one 60s interval → T0+720000, which is past nextRetryAt (T0+670000),
+      // Advance one 60s interval → T0+420000, which is past nextRetryAt (T0+370000),
       // so the interval's retry_due branch fires: retry_queued → claimed.
       vi.advanceTimersByTime(60_000);
 
@@ -205,7 +205,7 @@ describe('E2E: resilience', () => {
       // Drive a real stall to reach retry_queued with a future nextRetryAt.
       await activate(mock, 'sess-nodue');
       await driveToRunningFirstTurn('sess-nodue');
-      vi.advanceTimersByTime(660_000); // stall, nextRetryAt = now+10000
+      vi.advanceTimersByTime(360_000); // M1: stall at 300000+60000 tick, nextRetryAt = now+10000
       const afterStall = (await projectionFor(mock, 'sess-nodue'));
       const nextRetryAt = afterStall.nextRetryAt!;
 

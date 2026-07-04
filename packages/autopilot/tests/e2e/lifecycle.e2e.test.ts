@@ -331,10 +331,10 @@ describe('E2E: activate → loop → complete lifecycle', () => {
         const turnPrepare = stuckMock.hooks.get('agent_turn_prepare')!;
         turnPrepare({ prompt: 'go' }, { sessionKey: 'sess-stuck' });
 
-        // Advance past the default stall timeout (600_000ms, no tokenBudget)
-        // plus one stall-check interval (60_000ms) so the interval fires.
-        // stall-detector uses strict '>' so we go one tick over.
-        vi.advanceTimersByTime(600_000 + 60_000 + 1);
+        // Advance past the per-run stall timeout (300_000ms from DEFAULT_WORKFLOW_CONFIG,
+        // M1 fix: no longer ×2 global) plus one stall-check interval (60_000ms) so the
+        // interval fires. stall-detector uses strict '>' so we go one tick over.
+        vi.advanceTimersByTime(300_000 + 60_000 + 1);
 
         const projStuck = await projectionFor(stuckMock, 'sess-stuck');
         // frozen to current behavior: stall sets orchState='retry_queued', status stays 'running'.

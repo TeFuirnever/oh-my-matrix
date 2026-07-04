@@ -1039,7 +1039,10 @@ export function register(api: OpenClawPluginApi): void {
         // A stuck run would otherwise block every future activation until a
         // gateway restart, because the stall handler leaves status='running'.
         // Genuinely-active runs (recent activity) still fall through to reject.
-        const stuckRecovery = isRunStuck(state, Date.now(), config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
+        // M1: use the run's own stallTimeoutMs if configured, not just the global default.
+        const stuckStallMs = state.workflow?.stallTimeoutMs
+          ?? (config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
+        const stuckRecovery = isRunStuck(state, Date.now(), stuckStallMs);
         if (state.status === 'idle' || state.status === 'done' || stuckRecovery) {
           if (stuckRecovery) {
             warn(`[autopilot] activate: recovering stuck session=${sessionKey} (status=${state.status}, orchState=${state.orchestrationState ?? 'none'}) — discarding stale run ${oldRunId}`);
@@ -1181,9 +1184,8 @@ export function register(api: OpenClawPluginApi): void {
   // Periodically check all active runs for stall (no activity for stallTimeoutMs).
   // When a stall is detected, dispatch stall_timeout through the orchestrator reducer.
   const stallCheckIntervalMs = 60_000; // Check every 60 seconds
-  const stallTimeoutMs = config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2;
 
-  // M-7: Clear previous interval before creating new one (HMR / double-register safety)
+  // M-7: Clear previous interval before creating a new one (HMR / double-register safety)
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 
   stallInterval = setInterval(() => {
@@ -1191,7 +1193,12 @@ export function register(api: OpenClawPluginApi): void {
     const orphanRunIds: string[] = [];
 
     for (const [runId, state] of stateByRun.entries()) {
-      // GAP-4: Stall detection for active runs
+      // GAP-4: Stall detection for active runs.
+      // M1 fix: read stallTimeoutMs PER-RUN from the run's workflow config, not
+      // the global default. An operator setting `stall_timeout_ms` in WORKFLOW.md
+      // expects it to take effect; the global fallback was silently ignoring it.
+      const stallTimeoutMs = state.workflow?.stallTimeoutMs
+        ?? (config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
       if (state.enabled && state.status === 'running' && state.orchestrationState === 'running') {
         const stallResult = checkStall({
           lastActivityAt: state.lastActivityAt ?? state.startedAt ?? now,
