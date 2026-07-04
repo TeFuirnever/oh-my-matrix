@@ -116,6 +116,19 @@ function kickResumedTurn(runId: string, state: AutopilotState): void {
 }
 
 /**
+ * L3: resolve the stall timeout fallback when a run has no per-run config.
+ * Runs without a token budget get double the default (undocumented ops tuning —
+ * no-budget runs tend to be long-running and tolerate longer silence before
+ * being declared stalled). Extracted to a named helper so the ×2 rationale is
+ * documented in one place, not duplicated at two call sites.
+ */
+function defaultStallTimeoutMs(hasTokenBudget: boolean): number {
+  return hasTokenBudget
+    ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs
+    : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2;
+}
+
+/**
  * before_tool_call priority — must be higher than matrixassistant-audit (priority 9).
  * Ensures autopilot audit trail is recorded before audit can short-circuit.
  * @see the host's matrixassistant-audit plugin (AUDIT_HOOK_PRIORITY = 9)
@@ -1041,7 +1054,7 @@ export function register(api: OpenClawPluginApi): void {
         // Genuinely-active runs (recent activity) still fall through to reject.
         // M1: use the run's own stallTimeoutMs if configured, not just the global default.
         const stuckStallMs = state.workflow?.stallTimeoutMs
-          ?? (config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
+          ?? defaultStallTimeoutMs(!!config.tokenBudget);
         const stuckRecovery = isRunStuck(state, Date.now(), stuckStallMs);
         if (state.status === 'idle' || state.status === 'done' || stuckRecovery) {
           if (stuckRecovery) {
@@ -1198,7 +1211,7 @@ export function register(api: OpenClawPluginApi): void {
       // the global default. An operator setting `stall_timeout_ms` in WORKFLOW.md
       // expects it to take effect; the global fallback was silently ignoring it.
       const stallTimeoutMs = state.workflow?.stallTimeoutMs
-        ?? (config.tokenBudget ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs : DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs * 2);
+        ?? defaultStallTimeoutMs(!!config.tokenBudget);
       if (state.enabled && state.status === 'running' && state.orchestrationState === 'running') {
         const stallResult = checkStall({
           lastActivityAt: state.lastActivityAt ?? state.startedAt ?? now,

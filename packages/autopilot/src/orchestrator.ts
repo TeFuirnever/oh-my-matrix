@@ -114,6 +114,11 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
     }
 
     // ─── unclaimed + workspace_failed → blocked ───────────────
+    // M2 NOTE: this event + permission_denied below are defined in the reducer
+    // but never dispatched from index.ts. Tool blocks are handled by the host's
+    // before_tool_call veto, not via orchestrator events. Kept as reducer-level
+    // API surface for future use (e.g. if workspace creation moves into the
+    // orchestrator). Tests cover the reducer contract; the dispatch gap is intentional.
     case 'workspace_failed': {
       if (state.orchestrationState !== 'unclaimed') return state;
       return {
