@@ -33,7 +33,15 @@ export type BlockedReason =
   | 'token_budget_exceeded'
   | 'user_stopped'
   | 'config_invalid'
-  | 'max_retries_reached';
+  | 'max_retries_reached'
+  // W1 Phase 1.5: 5 new values so pauseReasonToBlockedReason is total (no fallback).
+  // These let terminal PauseReasons map to distinct non-resumable BlockedReasons
+  // instead of silently falling through to 'validation_failed' (TENSION 1).
+  | 'max_total_reached'
+  | 'tool_error_repeated'
+  | 'loop_breaker_triggered'
+  | 'context_overflow_unrecoverable'
+  | 'injection_rejected';
 
 /** Canonical set of all valid BlockedReason values — used by isValidBlockedReason type guard */
 export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<BlockedReason>([
@@ -47,6 +55,11 @@ export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<Blocked
   'user_stopped',
   'config_invalid',
   'max_retries_reached',
+  'max_total_reached',
+  'tool_error_repeated',
+  'loop_breaker_triggered',
+  'context_overflow_unrecoverable',
+  'injection_rejected',
 ]);
 
 /** H-2: Type guard — validates that an arbitrary string is a BlockedReason.
@@ -58,6 +71,31 @@ export function isValidBlockedReason(value: string): value is BlockedReason {
 /** H-2: Safe BlockedReason coercion — returns the value if valid, otherwise falls back. */
 export function toBlockedReason(value: string, fallback: BlockedReason = 'validation_failed'): BlockedReason {
   return isValidBlockedReason(value) ? value : fallback;
+}
+
+/**
+ * W1 Phase 1.5: TOTAL PauseReason → BlockedReason mapping (no silent fallback).
+ *
+ * Replaces the lossy `toBlockedReason(pauseReason, 'validation_failed')` pattern
+ * that mapped 6 of 10 terminal PauseReasons to 'validation_failed' — which is in
+ * RESUMABLE_BLOCKED_REASONS, making terminal pauses look recoverable (TENSION 1).
+ *
+ * This function is total: every PauseReason has an explicit BlockedReason. Adding
+ * a new PauseReason without a mapping row is a COMPILE ERROR (not a silent bug).
+ */
+export function pauseReasonToBlockedReason(reason: PauseReason): BlockedReason {
+  switch (reason) {
+    case 'permission_denied': return 'permission_denied';
+    case 'user_stopped': return 'user_stopped';
+    case 'token_budget_exceeded': return 'token_budget_exceeded';
+    case 'validation_failed': return 'validation_failed';
+    case 'max_attempts_reached': return 'max_retries_reached';
+    case 'max_total_reached': return 'max_total_reached';
+    case 'tool_error_repeated': return 'tool_error_repeated';
+    case 'loop_breaker_triggered': return 'loop_breaker_triggered';
+    case 'context_overflow_unrecoverable': return 'context_overflow_unrecoverable';
+    case 'injection_rejected': return 'injection_rejected';
+  }
 }
 
 export type EvidenceStatus = 'not_started' | 'running' | 'passed' | 'failed' | 'skipped';
@@ -190,7 +228,14 @@ export type OrchestratorEvent =
   | { type: 'evidence_finished'; runId: string; evidence: EvidenceSummary; now: number }
   | { type: 'permission_denied'; runId: string; toolName: string; now: number }
   | { type: 'stop_requested'; runId: string; now: number }
-  | { type: 'resume_requested'; runId: string; now: number };
+  | { type: 'resume_requested'; runId: string; now: number }
+  // W1 Phase 1.5: pause_requested routes the 4 pause() call sites through the
+  // reducer so status is derived, not imperatively set. The reducer maps the
+  // PauseReason to a BlockedReason via pauseReasonToBlockedReason (total, no
+  // fallback) and sets orchState='blocked'. TENSION 3: this event is status-only
+  // — if the reducer already moved off the running family (e.g. via
+  // agent_turn_finished → retry_queued/blocked), pause_requested no-ops.
+  | { type: 'pause_requested'; runId: string; reason: PauseReason; now: number };
 
 // ─── Core State ───────────────────────────────────────────────
 

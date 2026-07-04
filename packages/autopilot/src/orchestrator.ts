@@ -11,25 +11,77 @@ import type {
   OrchestrationState,
   BlockedReason,
 } from './types';
-import { toBlockedReason } from './types';
+import { toBlockedReason, pauseReasonToBlockedReason } from './types';
 import { classifyRecoverability, shouldRetry, buildRetryEntry } from './retry-queue';
 import { DEFAULT_WORKFLOW_CONFIG } from './workflow-config';
 
-/** Recoverable blocked reasons that can be resumed */
+/**
+ * Recoverable blocked reasons that can be resumed.
+ *
+ * W1 Phase 1.5: re-derived from the pauseReasonToBlockedReason mapping. The 5
+ * new terminal BlockedReasons (max_total_reached, tool_error_repeated,
+ * loop_breaker_triggered, context_overflow_unrecoverable, injection_rejected)
+ * are deliberately NON-resumable EXCEPT injection_rejected — a workflow
+ * injection failure is transient (the host may accept it on retry), so it stays
+ * resumable. This is a deliberate widening documented in ADR-016.
+ */
 export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
   'stalled',
   'validation_failed',
   'evidence_missing',
+  'injection_rejected', // W1: deliberate widening (transient injection failure)
 ]);
+
+/**
+ * Derive the user-facing `status` field from `orchestrationState` + `blockedReason`.
+ *
+ * W1 (dual state machine collapse): `status` is moving toward being a derived
+ * field with the reducer as its sole writer. This function encodes the mapping
+ * so that, once all writers route through the reducer, `status` is always a
+ * pure function of orchState — eliminating the H1-class bug where the two
+ * fields could disagree.
+ *
+ * Mapping (evidence-based from current autopilot-state.ts setter behavior):
+ *   done                              → 'done'
+ *   blocked + user_stopped            → 'idle'     (terminal, user-initiated)
+ *   blocked + resumable reason        → 'paused'   (recoverable)
+ *   blocked + other non-resumable     → 'paused'   (parked, not resumable)
+ *   unclaimed/claimed/running/released/retry_queued → 'running'
+ *
+ * NOTE: this is currently reference-only — no production writer uses it yet.
+ * Phase 2 will route all writers through the reducer, which will call this.
+ */
+export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 'blockedReason'>): AutopilotState['status'] {
+  const orch = state.orchestrationState;
+  if (orch === undefined) return 'idle'; // pre-activate / no run
+  if (orch === 'done') return 'done';
+  if (orch === 'blocked') {
+    if (state.blockedReason === 'user_stopped') return 'idle';
+    return 'paused';
+  }
+  // unclaimed, claimed, running, released, retry_queued — all active states.
+  return 'running';
+}
 
 /**
  * Apply an orchestrator event to the current state.
  * Returns a new state object (immutable).
+ *
+ * W1 Phase 3: the reducer is the sole writer of `status`. Every return path
+ * flows through a post-switch derivation step that sets `status = deriveStatus(result)`,
+ * guaranteeing status is always consistent with orchState+blockedReason.
  */
 export function orchestratorReducer(
   state: AutopilotState,
   event: OrchestratorEvent,
 ): AutopilotState {
+  const next = reducerCore(state, event);
+  // Sole-writer invariant: status is always derived, never independently set.
+  const derivedStatus = deriveStatus(next);
+  return next.status === derivedStatus ? next : { ...next, status: derivedStatus };
+}
+
+function reducerCore(state: AutopilotState, event: OrchestratorEvent): AutopilotState {
   switch (event.type) {
     // ─── idle → unclaimed ─────────────────────────────────────
     case 'activate_requested': {
@@ -256,6 +308,33 @@ export function orchestratorReducer(
       };
     }
 
+    // ─── pause_requested → blocked (W1 Phase 1.5, TENSION 3) ────────────
+    // Routes the 4 pause() call sites through the reducer so status derives
+    // from orchState, not an imperative setter. The PauseReason maps to a
+    // BlockedReason via pauseReasonToBlockedReason (total — no fallback that
+    // could make terminal reasons look resumable, TENSION 1).
+    //
+    // TENSION 3 reconciliation: pause_requested is status-only. If the reducer
+    // already moved off the running family (e.g. agent_turn_finished fired an
+    // error → retry_queued/blocked), pause_requested NO-OPS — the reducer's own
+    // retry/block decision wins. This prevents a double-transition where a
+    // loop-breaker pause arrives after the turn already failed and retried.
+    case 'pause_requested': {
+      // TENSION 3: exclude 'retry_queued' — a recoverable breaker under retry cap
+      // must survive a subsequent pause_requested (branch-A contract). Only
+      // pause from the active-running family, not from an already-retrying state.
+      const runningFamily: OrchestrationState[] = [
+        'running', 'claimed', 'released', 'unclaimed',
+      ];
+      if (!runningFamily.includes(state.orchestrationState as OrchestrationState)) return state;
+      return {
+        ...state,
+        orchestrationState: 'blocked' as const,
+        blockedReason: pauseReasonToBlockedReason(event.reason),
+        lastActivityAt: event.now,
+      };
+    }
+
     // ─── blocked + resume_requested → claimed (only recoverable)
     case 'resume_requested': {
       if (state.orchestrationState !== 'blocked') return state;
@@ -278,3 +357,4 @@ export function orchestratorReducer(
     }
   }
 }
+
