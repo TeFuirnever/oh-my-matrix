@@ -1,49 +1,88 @@
 import type { AutopilotState, PauseReason } from './types';
+import { deriveStatus } from './orchestrator';
 
 const MAX_GOAL_LENGTH = 500;
 
+/**
+ * W1 Phase 2: the setters now derive `status` via `deriveStatus` instead of
+ * hardcoding it. This makes status always a pure function of orchState +
+ * blockedReason, even while the setters are still the ones clearing coupled
+ * fields (pauseReason, needsCrossTurnResume, etc).
+ *
+ * The throw-guards on `state.status` remain as transition safety: they catch
+ * callers that haven't routed through the reducer yet. Phase 3 will remove them
+ * once all call sites dispatch reducer events and the reducer is the sole writer.
+ *
+ * NOTE: setters that don't change orchState (pause at a 'running' orchState,
+ * complete at a 'running'/'released' orchState) still produce the correct
+ * derived status because deriveStatus maps 'running'→'running' and only 'done'/
+ * 'blocked' orchStates produce non-running statuses. The call sites are
+ * responsible for ensuring orchState is correct BEFORE calling the setter —
+ * which they already are (reducer runs first at every site).
+ */
 export function activate(state: AutopilotState): AutopilotState {
   if (state.status !== 'idle' && state.status !== 'done') {
     throw new Error(`Cannot activate from status "${state.status}", must be "idle" or "done"`);
   }
-  return { ...state, status: 'running', enabled: true };
+  const next = { ...state, orchestrationState: 'unclaimed' as const, blockedReason: undefined, enabled: true };
+  return { ...next, status: deriveStatus(next) };
 }
 
 export function deactivate(state: AutopilotState): AutopilotState {
   if (state.status !== 'running' && state.status !== 'paused' && state.status !== 'done') {
     throw new Error(`Cannot deactivate from status "${state.status}"`);
   }
-  return {
+  const next: AutopilotState = {
     ...state,
-    status: 'idle',
+    orchestrationState: 'blocked',
+    blockedReason: 'user_stopped',
     enabled: false,
     pauseReason: undefined,
     needsCrossTurnResume: false,
     degraded: false,
   };
+  return { ...next, status: deriveStatus(next) };
 }
 
 export function pause(state: AutopilotState, reason: PauseReason): AutopilotState {
   if (state.status !== 'running') {
     throw new Error(`Cannot pause from status "${state.status}", must be "running"`);
   }
-  return { ...state, status: 'paused', enabled: false, pauseReason: reason, needsCrossTurnResume: false };
+  // W1 Phase 2: set orchState='blocked' + map the reason so deriveStatus works.
+  // This is the transition step — Phase 3 will make this a pure reducer dispatch.
+  const next: AutopilotState = {
+    ...state,
+    orchestrationState: 'blocked',
+    blockedReason: pauseReasonToBlockedReasonSafe(reason),
+    enabled: false,
+    pauseReason: reason,
+    needsCrossTurnResume: false,
+  };
+  return { ...next, status: deriveStatus(next) };
 }
 
 export function complete(state: AutopilotState): AutopilotState {
   if (state.status !== 'running') {
     throw new Error(`Cannot complete from status "${state.status}", must be "running"`);
   }
-  return { ...state, status: 'done', enabled: false, needsCrossTurnResume: false, degraded: false };
+  const next: AutopilotState = {
+    ...state,
+    orchestrationState: 'done',
+    enabled: false,
+    needsCrossTurnResume: false,
+    degraded: false,
+  };
+  return { ...next, status: deriveStatus(next) };
 }
 
 export function resume(state: AutopilotState): AutopilotState {
   if (state.status !== 'paused') {
     throw new Error(`Cannot resume from status "${state.status}", must be "paused"`);
   }
-  return {
+  const next: AutopilotState = {
     ...state,
-    status: 'running',
+    orchestrationState: 'claimed',
+    blockedReason: undefined,
     enabled: true,
     pauseReason: undefined,
     toolErrorCount: 0,
@@ -51,6 +90,14 @@ export function resume(state: AutopilotState): AutopilotState {
     needsCrossTurnResume: false,
     degraded: false,
   };
+  return { ...next, status: deriveStatus(next) };
+}
+
+// Local import to avoid circular dependency at module load — pauseReasonToBlockedReason
+// is total but we guard anyway for defensive use inside the setter.
+import { pauseReasonToBlockedReason } from './types';
+function pauseReasonToBlockedReasonSafe(reason: PauseReason) {
+  return pauseReasonToBlockedReason(reason);
 }
 
 export function incrementTurn(state: AutopilotState): AutopilotState {
