@@ -72,3 +72,4 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 - [ADR-013: Permission Policy Library](docs/adr/013-permission-policy-library.md)
 - [ADR-014: Dynamic Workflows Product Boundary](docs/adr/014-dynamic-workflows-product-boundary.md)
 - [ADR-015: Build Artifacts (`dist/`) Are Not Committed](docs/adr/015-dist-not-committed.md)
+- [ADR-016: Autopilot `status` is a derived, sole-writer field](docs/adr/016-autopilot-status-sole-writer.md)
