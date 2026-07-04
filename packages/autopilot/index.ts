@@ -72,6 +72,9 @@ let stateByRun = new Map<string, AutopilotState>();
 let sessionIdToKey = new Map<string, string>();
 let sessionKeyToRunId = new Map<string, string>();
 let canaryFired = new Set<string>();
+// S10: one-shot "host not reporting usage" warn per session — avoids log spam
+// while making the silent tokenBudget no-op observable to operators.
+let noUsageWarned = new Set<string>();
 let stallInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -173,6 +176,7 @@ export function _resetForTest(): void {
   sessionIdToKey = new Map();
   sessionKeyToRunId = new Map();
   canaryFired = new Set();
+  noUsageWarned = new Set();
   enqueueInjectionFn = undefined;
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
@@ -278,6 +282,7 @@ function evictOldestRuns(): void {
     if (oldestState) {
       sessionKeyToRunId.delete(oldestState.sessionKey);
       canaryFired.delete(oldestState.sessionKey);
+      noUsageWarned.delete(oldestState.sessionKey);
       // GAP-25: also clean up sessionIdToKey to prevent orphaned sid→skey entries
       for (const [sid, skey] of sessionIdToKey) {
         if (skey === oldestState.sessionKey) {
@@ -308,6 +313,7 @@ function cleanupAll(): void {
   sessionIdToKey.clear();
   sessionKeyToRunId.clear();
   canaryFired.clear();
+  noUsageWarned.clear();
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
@@ -803,7 +809,17 @@ export function register(api: OpenClawPluginApi): void {
     if (!entry?.[1].enabled) return;
 
     const usage = event.usage;
-    if (!usage?.total) return;
+    if (!usage?.total) {
+      // S10: when the host omits usage on a run WITH a configured tokenBudget,
+      // the budget silently never enforces (totalTokensUsed stays 0). Warn once
+      // per session so operators can diagnose "budget not working" instead of
+      // silently burning tokens. Skip when no budget is configured (irrelevant).
+      if (entry[1].tokenBudget && !noUsageWarned.has(sessionKey)) {
+        noUsageWarned.add(sessionKey);
+        warn(`[autopilot] llm_output: host did not report token usage for session=${sessionKey} but a tokenBudget is configured — budget enforcement is a no-op until the host reports usage`);
+      }
+      return;
+    }
 
     // H4: Guard against NaN / negative / non-finite token counts
     const added = typeof usage.total === 'number' && Number.isFinite(usage.total) && usage.total >= 0
@@ -844,6 +860,7 @@ export function register(api: OpenClawPluginApi): void {
       stateByRun.delete(runId);
       sessionKeyToRunId.delete(sessionKey);
       canaryFired.delete(sessionKey);
+      noUsageWarned.delete(sessionKey);
     }
     log(`[autopilot] session_end: session=${sessionKey} state cleaned up`);
   });
@@ -969,6 +986,7 @@ export function register(api: OpenClawPluginApi): void {
         // teardown (without a session_end) leaves dangling map entries.
         sessionKeyToRunId.delete(ctx.sessionKey);
         canaryFired.delete(ctx.sessionKey);
+        noUsageWarned.delete(ctx.sessionKey);
       }
     },
   });
@@ -1276,6 +1294,7 @@ export function register(api: OpenClawPluginApi): void {
         stateByRun.delete(runId);
         sessionKeyToRunId.delete(state.sessionKey);
         canaryFired.delete(state.sessionKey);
+        noUsageWarned.delete(state.sessionKey);
       }
     }
   }, stallCheckIntervalMs);
