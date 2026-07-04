@@ -11,15 +11,25 @@ import type {
   OrchestrationState,
   BlockedReason,
 } from './types';
-import { toBlockedReason } from './types';
+import { toBlockedReason, pauseReasonToBlockedReason } from './types';
 import { classifyRecoverability, shouldRetry, buildRetryEntry } from './retry-queue';
 import { DEFAULT_WORKFLOW_CONFIG } from './workflow-config';
 
-/** Recoverable blocked reasons that can be resumed */
+/**
+ * Recoverable blocked reasons that can be resumed.
+ *
+ * W1 Phase 1.5: re-derived from the pauseReasonToBlockedReason mapping. The 5
+ * new terminal BlockedReasons (max_total_reached, tool_error_repeated,
+ * loop_breaker_triggered, context_overflow_unrecoverable, injection_rejected)
+ * are deliberately NON-resumable EXCEPT injection_rejected — a workflow
+ * injection failure is transient (the host may accept it on retry), so it stays
+ * resumable. This is a deliberate widening documented in ADR-016.
+ */
 export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
   'stalled',
   'validation_failed',
   'evidence_missing',
+  'injection_rejected', // W1: deliberate widening (transient injection failure)
 ]);
 
 /**
@@ -282,6 +292,30 @@ export function orchestratorReducer(
         ...state,
         orchestrationState: 'blocked',
         blockedReason: 'user_stopped',
+        lastActivityAt: event.now,
+      };
+    }
+
+    // ─── pause_requested → blocked (W1 Phase 1.5, TENSION 3) ────────────
+    // Routes the 4 pause() call sites through the reducer so status derives
+    // from orchState, not an imperative setter. The PauseReason maps to a
+    // BlockedReason via pauseReasonToBlockedReason (total — no fallback that
+    // could make terminal reasons look resumable, TENSION 1).
+    //
+    // TENSION 3 reconciliation: pause_requested is status-only. If the reducer
+    // already moved off the running family (e.g. agent_turn_finished fired an
+    // error → retry_queued/blocked), pause_requested NO-OPS — the reducer's own
+    // retry/block decision wins. This prevents a double-transition where a
+    // loop-breaker pause arrives after the turn already failed and retried.
+    case 'pause_requested': {
+      const runningFamily: OrchestrationState[] = [
+        'running', 'claimed', 'retry_queued', 'released', 'unclaimed',
+      ];
+      if (!runningFamily.includes(state.orchestrationState as OrchestrationState)) return state;
+      return {
+        ...state,
+        orchestrationState: 'blocked' as const,
+        blockedReason: pauseReasonToBlockedReason(event.reason),
         lastActivityAt: event.now,
       };
     }

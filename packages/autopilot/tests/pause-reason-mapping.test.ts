@@ -19,6 +19,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { deriveStatus, RESUMABLE_BLOCKED_REASONS } from '../src/orchestrator';
+import { pauseReasonToBlockedReason } from '../src/types';
 import type { PauseReason, BlockedReason } from '../src/types';
 
 /**
@@ -69,12 +70,19 @@ describe('W1 TENSION 1 — PauseReason → BlockedReason mapping (10-row cross-p
       expect(derived).not.toBe('running');
     });
 
-    if (lossyToday) {
+    if (lossyToday && pause !== 'injection_rejected') {
       it('⚠️ is NON-resumable (the lossy fallback bug would make it resumable)', () => {
-        // This is the core TENSION 1 assertion: the 6 lossy reasons must NOT
-        // be in RESUMABLE_BLOCKED_REASONS. Today toBlockedReason maps them to
+        // This is the core TENSION 1 assertion: the lossy reasons must NOT be
+        // in RESUMABLE_BLOCKED_REASONS. Today toBlockedReason maps them to
         // 'validation_failed' which IS resumable — that's the bug.
+        // EXCEPTION: injection_rejected is deliberately resumable (W1 Phase 1.5
+        // widening — injection failure is transient, host may accept on retry).
         expect(RESUMABLE_BLOCKED_REASONS.has(blocked)).toBe(false);
+      });
+    }
+    if (pause === 'injection_rejected') {
+      it('is deliberately resumable (W1 Phase 1.5 widening — transient injection failure)', () => {
+        expect(RESUMABLE_BLOCKED_REASONS.has(blocked)).toBe(true);
       });
     }
   });
@@ -91,6 +99,39 @@ describe('W1 TENSION 1 — PauseReason → BlockedReason mapping (10-row cross-p
       } else {
         expect(resumable).toBe(false);
       }
+    }
+  });
+});
+
+describe('W1 Phase 1.5 — pauseReasonToBlockedReason real implementation', () => {
+  // Verifies the actual function matches the spec table above, AND that it is
+  // total (no fallback) — a new PauseReason without a case row is a compile error.
+  describe.each(INTENDED_MAPPING)('$pause', ({ pause, blocked }) => {
+    it(`maps to ${blocked}`, () => {
+      expect(pauseReasonToBlockedReason(pause)).toBe(blocked);
+    });
+  });
+
+  it('is total: covers all 10 PauseReasons (no unhandled case)', () => {
+    const allPauses: PauseReason[] = [
+      'max_attempts_reached', 'max_total_reached', 'tool_error_repeated',
+      'loop_breaker_triggered', 'context_overflow_unrecoverable', 'permission_denied',
+      'injection_rejected', 'user_stopped', 'token_budget_exceeded', 'validation_failed',
+    ];
+    for (const p of allPauses) {
+      // Must return a valid BlockedReason (never throws, never undefined).
+      const result = pauseReasonToBlockedReason(p);
+      expect(result).toBeTruthy();
+      expect(typeof result).toBe('string');
+    }
+  });
+
+  it('never returns validation_failed as a fallback for terminal reasons', () => {
+    // The 6 lossy reasons must NOT map to validation_failed (the old bug).
+    const lossy = INTENDED_MAPPING.filter((m) => m.lossyToday);
+    for (const { pause, blocked } of lossy) {
+      expect(blocked).not.toBe('validation_failed');
+      expect(pauseReasonToBlockedReason(pause)).not.toBe('validation_failed');
     }
   });
 });
