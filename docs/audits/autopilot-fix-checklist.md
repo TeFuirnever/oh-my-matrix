@@ -94,7 +94,7 @@
 
 - [x] **[P1] REV-3 PROD-1 修复实际静默失效（call site 读错字段）** — ✅ Done (PR #81)。call site 改读 `result.warnings`(不再读 `result.config.warnings`)+回归测试验证 warnings 契约。
 
-- [ ] **[P2] REV-4 多路径搜索时第一条路径的 I/O 错误静默丢弃** — `workflow-config.ts:478` success return 不含 `ioWarnings`：第一条路径失败（error 推入 ioWarnings）→ 第二条成功 → `return { config: merged, warnings }` 仅含 parseAutopilotSection warnings。**修复**：`return { config: merged, warnings: [...ioWarnings, ...warnings] }`。
+- [x] **[P2] REV-4 多路径搜索时第一条路径的 I/O 错误静默丢弃** — ✅ Done (PR #85)。`loadWorkflowConfig` 的 3 个 success return 现在都 spread `ioWarnings`（empty-section return + parsed return + config.warnings 字段）。+1 多路径测试验证第一条路径 I/O 错误在第二条成功时仍浮现。
 
 ### Efficiency（可改进）
 
@@ -116,7 +116,7 @@
 
 - [x] **M1 [P1] `stall_timeout_ms` 配置被解析但从未消费** — ✅ Done (PR #77)。stall interval + isRunStuck 现在读 per-run `state.workflow?.stallTimeoutMs`,不再用全局 default。默认 timeout 从 600s(旧 ×2 global)改为 300s(config 实际值)。
 - [x] **M2 [P2] `workspace_failed`/`permission_denied` 事件 dead code** — ✅ Done (PR #79)。文档化:tool block 由 host before_tool_call veto 处理,reducer 事件保留为 API surface(test-covered)。
-- [ ] **M3 [P2] `claimed` 状态 stall 不被检测** — `index.ts:1180` stall 只查 `running`。PROD-7 actuator enqueue 失败时 run 卡 claimed,等 5-10min fallback。**修复**:stall 检查扩展到 `claimed`(更长阈值),或加 claimed watchdog。
+- [x] **M3 [P2] `claimed` 状态 stall 不被检测** — ✅ Done (PR #88)。stall-detector + orchestrator + actuator 三层全部扩展到接受 `claimed`:detector gate 从 `!== 'running'` 改为 `!== 'running' && !== 'claimed'`;reducer `stall_timeout` case 接受 claimed → retry_queued;actuator 双门包含 claimed。claimed dead-end run 现在 5min 内被恢复（不再等 24h orphan sweep）。+4 测试，2 个 orphan 测试更新（反映新的 stall→retry→blocked→orphan 链）。
 - [ ] **M4 [P2] evidence-gate complete-case 提取为命名函数** — `index.ts:450-501` 内联逻辑(H1 bug 藏身处)提取为 `applyCompleteWithEvidence(state, runId, now)`,独立可测。
 
 ### 架构债务(非阻塞,但建议规划;HIGH 的根因)
@@ -164,12 +164,15 @@ goal-manager pass-through 删除 · 24h orphan 清理误删 paused · 退避加 
 **仍 LIVE 的安全 finding（按严重度）**：
 | ID | 严重度 | 裁定 | 处置 |
 |----|--------|------|------|
-| B4 | 🔴 HIGH | `git checkout HEAD .` → safe_git，两模式都绕过 | ✅ 本 Wave 修复 |
-| B6 | 🟡 MED→LOW | `git -c bareword` 吃子命令，仅 trusted allow | ✅ 本 Wave 修复 |
-| B7 | 🟡 MED→LOW | `git checkout -B` → safe_git（原报告说 unknown 有误） | ✅ 本 Wave 修复 |
-| S8 | 🟠 MED | audit refcount 在 session_end/orphan/LRU 泄漏 | 🔜 独立 session |
-| S10 | MED | token budget host 不上报时静默 no-op | 🔜 独立 session |
-| S12 | MED | audit 路径符号链接污染 | 🔜 独立 session |
+| B4 | 🔴 HIGH | `git checkout HEAD .` → safe_git，两模式都绕过 | ✅ PR #82 |
+| B6 | 🟡 MED→LOW | `git -c bareword` 吃子命令，仅 trusted allow | ✅ PR #82 |
+| B7 | 🟡 MED→LOW | `git checkout -B` → safe_git（原报告说 unknown 有误） | ✅ PR #82 |
+| B8 | 🔴 HIGH | `git checkout -f`/`--force` → safe_git（#82 review 发现） | ✅ PR #84 |
+| S8 | 🟠 MED | audit refcount 在 session_end/orphan/LRU/session-ext 泄漏 | ✅ PR #83 |
+| S10 | MED | token budget host 不上报时静默 no-op | ✅ PR #86 |
+| S12 | MED | audit 路径符号链接污染 | ✅ PR #87 |
+| REV-4 | P2 | 多路径 config I/O warnings 静默丢弃 | ✅ PR #85 |
+| M3 | P2 | claimed 状态 stall 不被检测（24h orphan 兜底） | ✅ PR #88 |
 | S7/S11/S15/S16 | LOW | 竞态/跨进程/CJS 类型/双注册 | accepted limitation |
 
 ### B4/B6/B7 修复（ralplan consensus: Planner + Architect + Critic）
