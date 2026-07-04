@@ -10,9 +10,9 @@
  * practical enforcement layer (a stray spread still compiles, but CI catches it).
  */
 import { describe, it, expect } from 'vitest';
-import { orchestratorReducer, deriveStatus, RESUMABLE_BLOCKED_REASONS } from '../src/orchestrator';
+import { orchestratorReducer, deriveStatus } from '../src/orchestrator';
 import { activate, pause, complete, resume, deactivate } from '../src/autopilot-state';
-import type { AutopilotState, OrchestratorEvent, BlockedReason, PauseReason } from '../src/types';
+import type { AutopilotState, OrchestratorEvent, PauseReason } from '../src/types';
 import { DEFAULT_WORKFLOW_CONFIG } from '../src/workflow-config';
 
 function makeState(overrides: Partial<AutopilotState> = {}): AutopilotState {
