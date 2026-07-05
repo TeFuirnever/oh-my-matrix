@@ -42,7 +42,6 @@
     "verify": "pnpm check && pnpm -r test && pnpm docs:build",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm -r build && changeset publish",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {

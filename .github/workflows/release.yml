@@ -1,15 +1,16 @@
 name: Release
 
-# Automated release via Changesets. On every push to master, this workflow
-# either:
-#   1. Opens/updates a "Version Packages" PR if there are pending changesets, OR
-#   2. Publishes packages to npm if a Version Packages PR was just merged.
+# Automated version management via Changesets. On every push to master, this
+# workflow opens/updates a "Version Packages" PR if there are pending changesets.
+#
+# npm publish is ALWAYS manual (run ./scripts/publish.sh locally after merging
+# the Version Packages PR). This workflow does NOT publish to npm.
 #
 # Contributor flow:  pnpm changeset  →  commit .changeset/*.md in your PR
-# Maintainer flow:   merge the auto-generated "Version Packages" PR to release
+# Maintainer flow:   1. merge the auto-generated "Version Packages" PR (version bump + CHANGELOG)
+#                    2. ./scripts/publish.sh locally to publish to npm
 #
 # See CONTRIBUTING.md § Releasing for the full process.
-# Local fallback:    ./scripts/publish.sh  (when CI is unavailable)
 
 on:
   push:
@@ -21,11 +22,11 @@ permissions:
 
 concurrency:
   group: release
-  cancel-in-progress: false  # never cancel an in-progress publish
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Release
+    name: Version Packages PR
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -36,36 +37,28 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Create Release Pull Request or Publish
+      - name: Create or Update Version Packages Pull Request
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm release
+          # version only — NO publish (npm publish is manual via ./scripts/publish.sh)
           version: pnpm version-packages
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Verify published artifacts
-        if: steps.changesets.outputs.published == 'true'
-        run: ./scripts/verify-publish.sh
 
       - name: Summary
         if: always()
         run: |
-          printf '### Release\n' >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.changesets.outputs.published }}" = "true" ]; then
-            printf 'Packages published to npm.\n' >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ steps.changesets.outputs.hasChangesets }}" = "true" ]; then
+          printf '### Release (version management)\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "true" ]; then
             printf 'Version Packages PR opened/updated.\n' >> "$GITHUB_STEP_SUMMARY"
+            printf 'Merge it, then run `./scripts/publish.sh` locally to publish to npm.\n' >> "$GITHUB_STEP_SUMMARY"
           else
-            printf 'No changesets pending. Nothing to publish.\n' >> "$GITHUB_STEP_SUMMARY"
+            printf 'No changesets pending.\n' >> "$GITHUB_STEP_SUMMARY"
           fi
           printf 'status: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

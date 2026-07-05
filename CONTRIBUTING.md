@@ -119,36 +119,38 @@ This creates a `.changeset/{random-name}.md` file — **commit it in your PR**.
 
 ### Releasing (maintainers)
 
-When PRs with changesets merge to `master`, the **Release** GitHub Action
-automatically opens a "Version Packages" PR that:
+Releases are split: **GitHub handles versioning; npm publish is always manual.**
+
+**Step 1 — version bump (automated):** When PRs with changesets merge to
+`master`, the **Release** GitHub Action automatically opens a "Version
+Packages" PR that:
 - Consumes all pending `.changeset/*.md` files
-- Bumps `package.json` + `openclaw.plugin.json` versions (kept in sync)
+- Bumps `package.json` versions
 - Generates/updates `CHANGELOG.md` per package
 - Deletes consumed `.changeset/*.md` files
 
-**Merge the "Version Packages" PR to publish.** On merge, the Release action
-automatically:
-- Builds all packages (`pnpm -r build`)
-- Publishes to npm in dependency order (leaf-first)
-- Verifies published artifacts (`scripts/verify-publish.sh`)
-- Tags the release commit as `{package}-v{version}`
+**Step 2 — sync openclaw.plugin.json (manual):** Changesets does not bump
+`openclaw.plugin.json`. Before merging the Version Packages PR, bump
+`openclaw.plugin.json` (if present) to match `package.json`.
+
+**Step 3 — merge the Version Packages PR.**
+
+**Step 4 — npm publish (manual, local):**
+
+```bash
+./scripts/publish.sh --dry-run   # validate first (always)
+./scripts/publish.sh             # real publish — build + publish + verify + tag
+```
+
+This runs: pre-flight validation (version alignment, clean tree, npm login) →
+build → publish in dependency order → verify published artifacts → tag.
 
 ### Version alignment invariant
 
 `package.json` and `openclaw.plugin.json` (if present) must always have the
-same version. Changesets bumps `package.json` automatically; **you must also
-bump `openclaw.plugin.json`** in the same Version Packages PR. The publish
-script validates this and refuses to publish on drift.
-
-### Local fallback (when CI is unavailable)
-
-```bash
-./scripts/publish.sh --dry-run   # validate (always do this first)
-./scripts/publish.sh             # real publish — same pipeline as CI
-```
-
-This runs: pre-flight validation → build → publish in dependency order →
-verify → tag. Useful when CI is down or for testing pre-release.
+same version. Changesets bumps `package.json` automatically; **you must
+manually bump `openclaw.plugin.json`** in the Version Packages PR (Step 2).
+The publish script validates this and refuses to publish on drift.
 
 ## License
 
