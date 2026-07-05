@@ -129,6 +129,36 @@ describe('audit refCount lifecycle balance', () => {
     expect(countCalls(mockAuditSetMode, 'monitor')).toBeGreaterThan(monitorAfterFirst);
   });
 
+  // T-STUCK: stuck → re-activate MUST release old refCount (+active) before new acquire.
+  // This is the C1 fix's positive direction: only a still-running stuck run holds
+  // an unreleased refCount (idle/done already released at complete/stop). When
+  // activate recovers a stuck run, it MUST call setAuditMode('active') to release
+  // that refCount — otherwise the audit plugin stays in monitor mode for a
+  // discarded run, or the refcount leaks.
+  it('T-STUCK: re-activate from stuck DOES release old refCount (+active)', async () => {
+    await activateFullYolo('sess-stuck');
+    // Session is now 'running' and holds a refcount (monitor was called).
+    expect(countCalls(mockAuditSetMode, 'monitor')).toBe(1);
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(0);
+
+    // Advance time beyond the stall threshold so isRunStuck returns true.
+    // defaultStallTimeoutMs(false) = 600_000ms (10 min); advance 11 min.
+    vi.useFakeTimers({ now: Date.now() + 660_000 });
+    try {
+      const activeBeforeReactivate = countCalls(mockAuditSetMode, 'active');
+
+      // Re-activate — isRunStuck is true (running + lastActivityAt stale).
+      await activateFullYolo('sess-stuck');
+
+      // C1 fix: stuckRecovery branch MUST call +active (release old refcount).
+      expect(countCalls(mockAuditSetMode, 'active')).toBeGreaterThan(activeBeforeReactivate);
+      // New run also acquires monitor.
+      expect(countCalls(mockAuditSetMode, 'monitor')).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // T-S8: cleanup with 2 full_yolo sessions must call active N times
   it('T-S8: cleanup releases ALL full_yolo session refCounts', async () => {
     await activateFullYolo('sess-s8a');
