@@ -1091,8 +1091,15 @@ export function register(api: OpenClawPluginApi): void {
           if (stuckRecovery) {
             warn(`[autopilot] activate: recovering stuck session=${sessionKey} (status=${state.status}, orchState=${state.orchestrationState ?? 'none'}) — discarding stale run ${oldRunId}`);
           }
-          // Release audit monitor for the old run before discarding it.
-          setAuditMode('active');
+          // Release audit monitor refcount ONLY if the old run still holds one.
+          // Per GAP-23 invariant: only status==='running' runs hold an unreleased
+          // refCount (acquire on activate, release on pause/complete/stop). The
+          // stuckRecovery branch is the only one where oldRunId may still be
+          // 'running'. idle/done runs were already released at complete/stop —
+          // releasing again would over-release the shared audit refcount (S8).
+          if (stuckRecovery) {
+            setAuditMode('active');
+          }
           stateByRun.delete(oldRunId);
           sessionKeyToRunId.delete(sessionKey);
           const runId = generateRunId();
