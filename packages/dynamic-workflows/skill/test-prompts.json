@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "scenario": "fan-out-reduce happy path",
+    "prompt": "I have 3 competing design proposals for the new auth module. Give me 3 independent perspectives on each, then synthesize the safest one to ship.",
+    "expected": "Skill activates; chooses fan-out-reduce; Step 1.5 maps to drafter + synthesizer roles; pre-compile checkpoint lists agents; output separates synthesized answer from individual drafts",
+    "tier": "happy"
+  },
+  {
+    "id": 2,
+    "scenario": "adversarial-verify — false positive filtering",
+    "prompt": "Audit these 12 files for security issues, but I only want findings you're confident about — filter out false positives.",
+    "expected": "Skill activates; chooses adversarial-verify; uses finder + skeptic role pair; skeptic defaults to refuted; final synthesis labels findings verified (survived refute) vs discarded; no fabricated findings for blocked branches",
+    "tier": "happy"
+  },
+  {
+    "id": 3,
+    "scenario": "below-threshold — should NOT activate (anti-test)",
+    "prompt": "Fix the typo in README.md line 42.",
+    "expected": "Skill does NOT activate (≤3 files, single agent handles it); DO-NOT-USE gate fires; direct fix without workflow overhead",
+    "tier": "negative"
+  }
+]
