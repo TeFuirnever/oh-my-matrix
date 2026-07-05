@@ -1,27 +1,23 @@
 name: Release
 
-# Manual release workflow — publishes the three @oh-my-matrix packages to npm.
-# Triggered by a human via the GitHub Actions UI (workflow_dispatch), never
-# automatic. This is a one-way door (public npm publish), so it requires
-# explicit confirmation every time.
+# Automated release via Changesets. On every push to master, this workflow
+# either:
+#   1. Opens/updates a "Version Packages" PR if there are pending changesets, OR
+#   2. Publishes packages to npm if a Version Packages PR was just merged.
 #
-# Prerequisites:
-#   - NPM_TOKEN secret configured in repo settings (npm publish token)
-#   - Version numbers bumped in package.json (and openclaw.plugin.json if applicable)
-#   - Working tree clean on master
+# Contributor flow:  pnpm changeset  →  commit .changeset/*.md in your PR
+# Maintainer flow:   merge the auto-generated "Version Packages" PR to release
 #
 # See CONTRIBUTING.md § Releasing for the full process.
+# Local fallback:    ./scripts/publish.sh  (when CI is unavailable)
 
 on:
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Dry run (validate without publishing)"
-        type: boolean
-        default: false
+  push:
+    branches: [master]
 
 permissions:
-  contents: write  # needed to push release tags
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: release
@@ -29,7 +25,7 @@ concurrency:
 
 jobs:
   release:
-    name: Publish to npm
+    name: Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,27 +40,32 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Publish packages
-        run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            ./scripts/publish.sh --dry-run
-          else
-            ./scripts/publish.sh
-          fi
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: pnpm release
+          version: pnpm version-packages
+          title: "chore: version packages"
+          commit: "chore: version packages"
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published artifacts
+        if: steps.changesets.outputs.published == 'true'
+        run: ./scripts/verify-publish.sh
 
       - name: Summary
         if: always()
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "### Release: SUCCESS ✅" >> "$GITHUB_STEP_SUMMARY"
-            if [ "${{ inputs.dry_run }}" = "true" ]; then
-              echo "Dry run completed — no packages were published." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "Packages published to npm and tags pushed." >> "$GITHUB_STEP_SUMMARY"
-            fi
+          printf '### Release\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.changesets.outputs.published }}" = "true" ]; then
+            printf 'Packages published to npm.\n' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.changesets.outputs.hasChangesets }}" = "true" ]; then
+            printf 'Version Packages PR opened/updated.\n' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "### Release: FAILED ❌" >> "$GITHUB_STEP_SUMMARY"
-            echo "Check the logs above for which step failed." >> "$GITHUB_STEP_SUMMARY"
+            printf 'No changesets pending. Nothing to publish.\n' >> "$GITHUB_STEP_SUMMARY"
           fi
+          printf 'status: `%s`\n' "${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

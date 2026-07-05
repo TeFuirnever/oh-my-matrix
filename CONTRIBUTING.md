@@ -92,60 +92,63 @@ The repo hosts three npm packages under `@oh-my-matrix`:
 [`dynamic-workflows`](packages/dynamic-workflows),
 [`autopilot`](packages/autopilot).
 
-### Publish order (peer-dependency graph)
+Releases are managed by [Changesets](https://github.com/changesets/changesets)
+(ADR-010 follow-up #1). The flow is contributor-driven: you declare *what*
+changed in your PR; Changesets handles version bumping, CHANGELOG generation,
+and npm publishing.
 
-```
-permission-policy  (leaf — no peerDeps)
-dynamic-workflows  (peerDeps: permission-policy)
-autopilot          (peerDeps: permission-policy)
-```
+### Adding a changeset (contributors)
 
-Always publish leaf-first. The publish script enforces this order.
-
-### Version bumping (manual)
-
-The publish script does NOT auto-bump versions — that is a human decision
-following [semver](https://semver.org/):
-
-| change type | bump | example |
-|---|---|---|
-| Skill/prompt layer (SKILL.md, role-prompts, references) | patch or minor | new role-prompt → minor; typo fix → patch |
-| Runtime code (index.ts, src/) | minor | new hook registration → minor |
-| Public API break (removed export, changed signature) | major | trustWorkspace default flip → 3.0.0 |
-
-When bumping `package.json`, **also bump `openclaw.plugin.json`** (if present)
-to the same version — the publish script validates this alignment and refuses
-to publish on drift.
-
-### Publishing
-
-**Option A — local script:**
+When your PR changes a published package, run:
 
 ```bash
-./scripts/publish.sh --dry-run   # validate first (always do this)
-./scripts/publish.sh             # real publish
+pnpm changeset
 ```
 
-**Option B — GitHub Actions:**
+This opens an interactive prompt:
+1. Select which packages changed (space to toggle, enter to confirm)
+2. Pick a bump type per package:
+   | bump | when to use |
+   |---|---|
+   | **patch** | bug fix, typo, internal refactor — no new API |
+   | **minor** | new feature/role-prompt/hook — backward-compatible |
+   | **major** | breaking API change — removed export, changed signature, default flip |
+3. Write a one-line summary of the change (this goes into CHANGELOG)
 
-Trigger the **Release** workflow from the Actions tab
-(`workflow_dispatch`). Set `dry_run: true` to validate first.
+This creates a `.changeset/{random-name}.md` file — **commit it in your PR**.
 
-Both paths run the same pipeline: pre-flight validation → build → publish in
-dependency order → verify published artifacts → tag the release commit.
+### Releasing (maintainers)
 
-### What the script validates
+When PRs with changesets merge to `master`, the **Release** GitHub Action
+automatically opens a "Version Packages" PR that:
+- Consumes all pending `.changeset/*.md` files
+- Bumps `package.json` + `openclaw.plugin.json` versions (kept in sync)
+- Generates/updates `CHANGELOG.md` per package
+- Deletes consumed `.changeset/*.md` files
 
-- `package.json` version == `openclaw.plugin.json` version (no drift)
-- local version > registry version (no accidental re-publish)
-- working tree clean (no uncommitted state shipped)
-- npm logged in (real publish only)
-- published tarball contains expected files (deep verification post-publish)
+**Merge the "Version Packages" PR to publish.** On merge, the Release action
+automatically:
+- Builds all packages (`pnpm -r build`)
+- Publishes to npm in dependency order (leaf-first)
+- Verifies published artifacts (`scripts/verify-publish.sh`)
+- Tags the release commit as `{package}-v{version}`
 
-### Tags
+### Version alignment invariant
 
-The script tags each release as `{package}-v{version}`
-(e.g. `autopilot-v3.0.0`). Tags are annotated and pushed automatically.
+`package.json` and `openclaw.plugin.json` (if present) must always have the
+same version. Changesets bumps `package.json` automatically; **you must also
+bump `openclaw.plugin.json`** in the same Version Packages PR. The publish
+script validates this and refuses to publish on drift.
+
+### Local fallback (when CI is unavailable)
+
+```bash
+./scripts/publish.sh --dry-run   # validate (always do this first)
+./scripts/publish.sh             # real publish — same pipeline as CI
+```
+
+This runs: pre-flight validation → build → publish in dependency order →
+verify → tag. Useful when CI is down or for testing pre-release.
 
 ## License
 
