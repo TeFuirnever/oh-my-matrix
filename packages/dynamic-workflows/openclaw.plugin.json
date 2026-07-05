@@ -2,7 +2,7 @@
   "id": "dynamic-workflows",
   "name": "Dynamic Workflows Guard",
   "description": "Runtime subagent guard (before_tool_call priority 11, fail-closed destructive-op blocking for :subagent: sessions) + orchestration skill (.prose generation, 11 patterns, role-prompt templates). Also exports the shared permission primitives (decidePermission, classifyCommand, audit) consumed by @oh-my-matrix/autopilot.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
