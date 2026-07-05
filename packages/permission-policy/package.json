@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/permission-policy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared permission policy primitives (decidePermission, classifyCommand, audit) consumed by @oh-my-matrix/autopilot + @oh-my-matrix/dynamic-workflows. Pure library, not a plugin.",
   "publishConfig": {
     "access": "public"
