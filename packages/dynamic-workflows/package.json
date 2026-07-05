@@ -35,7 +35,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.5.28",
+    "openclaw": ">=2026.5.28 <2027",
     "@oh-my-matrix/permission-policy": "^0.1.2"
   },
   "devDependencies": {

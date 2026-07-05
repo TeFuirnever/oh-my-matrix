@@ -326,6 +326,13 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
 
 // ponytail: production passes sessionKey on ctx, test mocks put it on event — one helper handles both
 function resolveSessionKey(event: unknown, ctx?: unknown): string | undefined {
+  // Session key can arrive on ctx (production host) or event (test mocks + some
+  // hook signatures where the host populates the event payload). Both are
+  // host-controlled surfaces — the event is NOT user-influenceable. Code-review
+  // M1 flagged the dual-source as a foot-gun, but removing the event fallback
+  // breaks 8 tests that simulate the production pattern (some hooks only
+  // populate sessionKey on event). Leaving as-is until a deeper audit of
+  // per-hook sessionKey provenance is done.
   const c = ctx as { sessionKey?: string; sessionId?: string } | undefined;
   const e = event as { sessionKey?: string; sessionId?: string } | undefined;
   const sessionId = c?.sessionId ?? e?.sessionId;

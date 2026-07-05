@@ -41,7 +41,7 @@
     "check": "pnpm lint && pnpm lint:md && pnpm typecheck",
     "verify": "pnpm check && pnpm -r test && pnpm docs:build",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-plugin-versions.cjs",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {

@@ -125,7 +125,27 @@ No environment variables are required. The plugin reads all configuration from `
 
 **Token budget not enforcing?** — Budget enforcement happens at the `before_agent_finalize` turn boundary (`continuation-engine.ts`). Subagent tokens are counted toward the parent run's budget.
 
+## Known limitations
+
+Tracked in [issue #53](https://github.com/TeFuirnever/oh-my-matrix/issues/53):
+
+- **S2 — allow-by-default on the autonomous loop.** Unclassified tools auto-run in the main autopilot session. This is by design: a fail-closed autonomous loop would stall on every unfamiliar tool. The fail-closed surface is the **subagent guard** (`@oh-my-matrix/dynamic-workflows`), which blocks destructive ops for `:subagent:` sessions regardless of classification.
+- **S4 — `process.cwd()` workspace fallback.** When no `workspacePath` is supplied in the activate payload, autopilot falls back to `process.cwd()`. `validateWorkspacePath` rejects untrusted paths, but the fallback itself remains. Always pass `workspacePath` explicitly in production.
+- **S5 — Windows `shell: true`.** On Windows, `command-runner.ts` conditionally enables `shell: true` for cmd-like commands and non-ASCII arguments (mirrors the gateway). This re-enables shell metacharacters that the classifier strips. Mitigated by the binary allowlist + `trustWorkspace` boundary, but Windows deployments should audit command construction.
+
+## Migration from 2.x
+
+The **only breaking change** in 3.0.0 is the `trustWorkspace` default flip:
+
+| behavior | 2.x (default) | 3.0.0 (default) |
+|---|---|---|
+| Workspace-sourced validation commands (`npm run`, `node script.js`, `python -c`) | executed automatically | **not executed** unless `trustWorkspace: true` |
+
+To restore 2.x behavior, set `trustWorkspace: true` in the activate payload or plugin config. See [PR #45](https://github.com/TeFuirnever/oh-my-matrix/pull/45) for the full security rationale (closes the WORKFLOW.md to RCE vector, S1).
+
+All other 3.0.0 changes (model routing, thinking intensity, new BlockedReason values, stall detection for `claimed` runs) are additive and backward-compatible.
+
 ## Status
 
-v3.0.0. Tested with `vitest` (677 tests, 91%+ statement coverage). See the project
+v3.0.0. Tested with `vitest` (787 tests, 91%+ statement coverage). See the project
 [changelog](https://github.com/TeFuirnever/oh-my-matrix/blob/master/CHANGELOG.md).
