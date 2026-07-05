@@ -1,0 +1,70 @@
+name: Release
+
+# Manual release workflow — publishes the three @oh-my-matrix packages to npm.
+# Triggered by a human via the GitHub Actions UI (workflow_dispatch), never
+# automatic. This is a one-way door (public npm publish), so it requires
+# explicit confirmation every time.
+#
+# Prerequisites:
+#   - NPM_TOKEN secret configured in repo settings (npm publish token)
+#   - Version numbers bumped in package.json (and openclaw.plugin.json if applicable)
+#   - Working tree clean on master
+#
+# See CONTRIBUTING.md § Releasing for the full process.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate without publishing)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write  # needed to push release tags
+
+concurrency:
+  group: release
+  cancel-in-progress: false  # never cancel an in-progress publish
+
+jobs:
+  release:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Publish packages
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ./scripts/publish.sh --dry-run
+          else
+            ./scripts/publish.sh
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Release: SUCCESS ✅" >> "$GITHUB_STEP_SUMMARY"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "Dry run completed — no packages were published." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Packages published to npm and tags pushed." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "### Release: FAILED ❌" >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the logs above for which step failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
