@@ -85,6 +85,68 @@ Images in this repo must be reproducible:
 - include tool/backend, date, and license
 - current visual direction is hand-drawn technical diagrams
 
+## Releasing
+
+The repo hosts three npm packages under `@oh-my-matrix`:
+[`permission-policy`](packages/permission-policy),
+[`dynamic-workflows`](packages/dynamic-workflows),
+[`autopilot`](packages/autopilot).
+
+### Publish order (peer-dependency graph)
+
+```
+permission-policy  (leaf — no peerDeps)
+dynamic-workflows  (peerDeps: permission-policy)
+autopilot          (peerDeps: permission-policy)
+```
+
+Always publish leaf-first. The publish script enforces this order.
+
+### Version bumping (manual)
+
+The publish script does NOT auto-bump versions — that is a human decision
+following [semver](https://semver.org/):
+
+| change type | bump | example |
+|---|---|---|
+| Skill/prompt layer (SKILL.md, role-prompts, references) | patch or minor | new role-prompt → minor; typo fix → patch |
+| Runtime code (index.ts, src/) | minor | new hook registration → minor |
+| Public API break (removed export, changed signature) | major | trustWorkspace default flip → 3.0.0 |
+
+When bumping `package.json`, **also bump `openclaw.plugin.json`** (if present)
+to the same version — the publish script validates this alignment and refuses
+to publish on drift.
+
+### Publishing
+
+**Option A — local script:**
+
+```bash
+./scripts/publish.sh --dry-run   # validate first (always do this)
+./scripts/publish.sh             # real publish
+```
+
+**Option B — GitHub Actions:**
+
+Trigger the **Release** workflow from the Actions tab
+(`workflow_dispatch`). Set `dry_run: true` to validate first.
+
+Both paths run the same pipeline: pre-flight validation → build → publish in
+dependency order → verify published artifacts → tag the release commit.
+
+### What the script validates
+
+- `package.json` version == `openclaw.plugin.json` version (no drift)
+- local version > registry version (no accidental re-publish)
+- working tree clean (no uncommitted state shipped)
+- npm logged in (real publish only)
+- published tarball contains expected files (deep verification post-publish)
+
+### Tags
+
+The script tags each release as `{package}-v{version}`
+(e.g. `autopilot-v3.0.0`). Tags are annotated and pushed automatically.
+
 ## License
 
 By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).
