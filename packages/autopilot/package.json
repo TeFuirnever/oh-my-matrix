@@ -40,6 +40,7 @@
       "agent_turn_prepare",
       "before_agent_run",
       "before_tool_call",
+      "before_model_resolve",
       "llm_output"
     ]
   },

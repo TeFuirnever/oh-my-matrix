@@ -109,22 +109,24 @@ describe('audit refCount lifecycle balance', () => {
     expect(countCalls(mockAuditSetMode, 'monitor')).toBe(countCalls(mockAuditSetMode, 'active'));
   });
 
-  // T-SPECIAL: done → re-activate must release old refCount before new acquire
-  it('T-SPECIAL: re-activate from done releases old refCount first', async () => {
+  // T-SPECIAL: done → re-activate must NOT over-release the old refCount.
+  // A done run already released its refcount at complete(); re-activating it
+  // must NOT call setAuditMode('active') again — that would over-release the
+  // shared audit refcount (S8 design). Only stuckRecovery (where oldRun may
+  // still be 'running' and hold an unreleased refcount) releases.
+  it('T-SPECIAL: re-activate from done does NOT over-release old refCount', async () => {
     await activateFullYolo('sess-sp');
     await driveToComplete('sess-sp');
 
     const monitorAfterFirst = countCalls(mockAuditSetMode, 'monitor');
     const activeAfterFirst = countCalls(mockAuditSetMode, 'active');
 
-    // Re-activate from done
+    // Re-activate from done — must NOT add an +active call
     await activateFullYolo('sess-sp');
 
-    // Old done released (+active), new activate acquired (+monitor)
-    expect(countCalls(mockAuditSetMode, 'active')).toBeGreaterThan(activeAfterFirst);
+    // No new +active (done already released at complete); only +monitor for the new run
+    expect(countCalls(mockAuditSetMode, 'active')).toBe(activeAfterFirst);
     expect(countCalls(mockAuditSetMode, 'monitor')).toBeGreaterThan(monitorAfterFirst);
-    // Net still balanced
-    expect(countCalls(mockAuditSetMode, 'monitor')).toBe(countCalls(mockAuditSetMode, 'active'));
   });
 
   // T-S8: cleanup with 2 full_yolo sessions must call active N times
