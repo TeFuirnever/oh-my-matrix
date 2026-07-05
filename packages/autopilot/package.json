@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/autopilot",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Autopilot: OpenClaw-native continuous execution for long-running tasks",
   "publishConfig": {
     "access": "public"
@@ -52,7 +52,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "@oh-my-matrix/permission-policy": "^0.1.1",
+    "@oh-my-matrix/permission-policy": "^0.1.2",
     "openclaw": ">=2026.5.28 <2027"
   },
   "devDependencies": {
