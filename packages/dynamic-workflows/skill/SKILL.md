@@ -106,12 +106,11 @@ OpenClaw permission preflight:
 | Destructive git | Block unless workflow config explicitly allows it and cwd is inside the workspace |
 | Workspace cleanup, system writes, credential access | Block; ask the user to perform or approve outside the workflow |
 
-Destructive git (`reset --hard`, `clean -fdx`, `checkout -- <path>`,
-`restore --source`, `push --force`, branch deletion, `rebase`, `filter-branch`)
-is blocked unless `destructive_git.allow: true` and cwd is inside the workspace.
-For the full blacklist, see `references/failure-recovery.md` § Destructive
-command blacklist. This is also enforced at **runtime**: the
-`@oh-my-matrix/dynamic-workflows` plugin's `before_tool_call` hook (priority 11)
+Destructive git is blocked unless `destructive_git.allow: true` and cwd is
+inside the workspace. For the full blacklist, see
+`references/failure-recovery.md` § Destructive command blacklist. This is also
+enforced at **runtime**: the `@oh-my-matrix/dynamic-workflows` plugin's
+`before_tool_call` hook (priority 11)
 hard-blocks destructive git, credential access, and system writes for any
 `:subagent:` session, so a model that skips this preflight is still blocked at
 the gateway. If a workflow legitimately needs destructive git, run that step in
@@ -224,8 +223,7 @@ never to the workspace root (see Workflow artifact directory).
 
 For the full grammar (indentation, keywords, dispatch forms, pipelines, blocks,
 control flow), see `references/syntax.md`. Key rules that bite if missed:
-2-space indent, ASCII keywords only, `agent name:` is a local template
-(behavior = inline prompt, not the name), all variable names unique across the
+2-space indent, ASCII keywords only, all variable names unique across the
 program, every program ends with a synthesis session.
 
 **🔴 CHECKPOINT · 🛑 STOP**: Show the generated .prose to the user before

@@ -1,4 +1,4 @@
-# Advanced Patterns (4-8)
+# Advanced Patterns (4-11)
 
 Read this file when patterns 1-3 (fan-out-reduce, pipeline, adversarial-verify)
 don't fit your task. These patterns are less common but handle specific shapes.
