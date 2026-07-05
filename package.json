@@ -40,9 +40,14 @@
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm lint && pnpm lint:md && pnpm typecheck",
     "verify": "pnpm check && pnpm -r test && pnpm docs:build",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm -r build && changeset publish",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "@commitlint/cli": "^21.1.0",
     "@commitlint/config-conventional": "^21.1.0",
     "@eslint/js": "^10.0.1",
