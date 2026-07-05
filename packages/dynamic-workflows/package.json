@@ -43,6 +43,6 @@
     "@oh-my-matrix/permission-policy": "workspace:*",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^26.1.0"
   }
 }
