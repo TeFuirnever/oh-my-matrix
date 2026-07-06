@@ -448,5 +448,83 @@ autopilot:
         expect(result.warnings.some((w) => w.includes('/workspace/path'))).toBe(true);
       });
     });
+
+    // ─── L7: model_routing front-matter parsing ─────────────────────────────
+    // parseModelRouting (src/model-routing.ts) is unit-tested in isolation for
+    // both camelCase and snake_case. But the END-TO-END path — WORKFLOW.md
+    // front-matter string → parseSimpleYaml → loadWorkflowConfig →
+    // result.config.modelRouting — was untested. The risk concentrates on the
+    // nested model_ids map surviving the in-house YAML parser.
+    describe('L7 model_routing front-matter parsing', () => {
+      const wf = (modelRoutingYaml: string) => {
+        mockFs.existsSync.mockReturnValue(true);
+        mockFs.readFileSync.mockReturnValue(
+          `---
+autopilot:
+  version: 1
+${modelRoutingYaml}---
+body`,
+        );
+        return loadWorkflowConfig('/repo');
+      };
+
+      it('parses a complete model_routing block (all tiers + model_ids)', () => {
+        const r = wf(`  model_routing:
+    default_tier: standard
+    initial_turn_tier: premium
+    validation_tier: budget
+    subagent_tier: budget
+    model_ids:
+      budget: claude-haiku-4-5
+      standard: claude-sonnet-4-6
+      premium: claude-opus-4-8
+`);
+        expect(r.config.modelRouting).toBeDefined();
+        expect(r.config.modelRouting?.defaultTier).toBe('standard');
+        expect(r.config.modelRouting?.initialTurnTier).toBe('premium');
+        expect(r.config.modelRouting?.validationTier).toBe('budget');
+        expect(r.config.modelRouting?.subagentTier).toBe('budget');
+        expect(r.config.modelRouting?.modelIds?.budget).toBe('claude-haiku-4-5');
+        expect(r.config.modelRouting?.modelIds?.standard).toBe('claude-sonnet-4-6');
+        expect(r.config.modelRouting?.modelIds?.premium).toBe('claude-opus-4-8');
+      });
+
+      it('parses minimal model_routing (default_tier only, no model_ids)', () => {
+        const r = wf(`  model_routing:
+    default_tier: standard
+`);
+        expect(r.config.modelRouting?.defaultTier).toBe('standard');
+        // Other tier fields absent; modelIds absent (optional).
+        expect(r.config.modelRouting?.initialTurnTier).toBeUndefined();
+        expect(r.config.modelRouting?.modelIds).toBeUndefined();
+      });
+
+      it('drops model_routing when default_tier is invalid (parseModelRouting returns undefined)', () => {
+        const r = wf(`  model_routing:
+    default_tier: ultra
+`);
+        // parseModelRouting rejects invalid tier => result.modelRouting not assigned.
+        expect(r.config.modelRouting).toBeUndefined();
+      });
+
+      it('parses a partial model_ids nested map (only configured tiers survive)', () => {
+        const r = wf(`  model_routing:
+    default_tier: standard
+    model_ids:
+      budget: haiku-x
+      premium: opus-x
+`);
+        expect(r.config.modelRouting?.modelIds?.budget).toBe('haiku-x');
+        expect(r.config.modelRouting?.modelIds?.premium).toBe('opus-x');
+        // standard was never declared in model_ids => absent, not undefined-string.
+        expect(r.config.modelRouting?.modelIds?.standard).toBeUndefined();
+      });
+
+      it('leaves modelRouting undefined when no model_routing block is present', () => {
+        const r = wf(``);
+        // modelRouting is an optional field on WorkflowConfig; absent by default.
+        expect(r.config.modelRouting).toBeUndefined();
+      });
+    });
   });
 });

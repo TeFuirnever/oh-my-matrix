@@ -693,6 +693,17 @@ export function register(api: OpenClawPluginApi): void {
     const routing = state.workflow?.modelRouting ?? modelRouting;
     if (!routing?.modelIds) return;
 
+    // INT-3 (ADR-017): a subagent's own declared model wins over the parent
+    // run's subagentTier. The host resolves the child's `.prose model:` (or
+    // agent-definition model) BEFORE firing this hook and surfaces it via
+    // ctx.modelId. When a subagent carries an explicit declared model, we
+    // return without an override so the host keeps it; the parent
+    // subagentTier then only applies to children that declared nothing.
+    if (isSubagentSession(sessionKey) && ctx.modelId) {
+      log(`[autopilot] before_model_resolve: session=${sessionKey} inherit child model=${ctx.modelId}`);
+      return;
+    }
+
     const tier = resolveModelTier(
       state.totalContinuations,
       state.evidence?.status,
