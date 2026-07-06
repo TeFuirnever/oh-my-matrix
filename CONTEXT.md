@@ -32,7 +32,7 @@ OpenProse 的编排 DSL。markdown-first 语法，2 空格缩进，支持 `sessi
 
 ### Dynamic Workflows skill
 
-[`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md) 是给 agent 的操作手册。它规定何时使用 workflow、如何选择 8 种模式、如何验证 `.prose`、如何在 OpenProse 不可用时降级。
+[`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md) 是给 agent 的操作手册。它规定何时使用 workflow、如何选择 11 种编排模式、如何验证 `.prose`、如何在 OpenProse 不可用时降级。
 
 ### OpenProse
 
