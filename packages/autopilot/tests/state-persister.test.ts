@@ -24,7 +24,6 @@ import {
   listResumableCheckpoints,
   clearSessionIndexEntry,
   buildCheckpoint,
-  getCheckpointWriteFailureCount,
   _resetCheckpointFailureCountForTest,
   _clearWriteLocksForTest,
   _flushAllWritesForTest,
