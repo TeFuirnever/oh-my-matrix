@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildEffortInjection, resolveThinkingIntensity } from '../src/effort-injection';
+import { resolveModelTier } from '../src/model-routing';
 
 describe('buildEffortInjection', () => {
   describe('when status is not running', () => {
@@ -67,5 +68,53 @@ describe('resolveThinkingIntensity', () => {
     expect(resolveThinkingIntensity(5, 'passed', 'medium')).toBe('medium');
     expect(resolveThinkingIntensity(0, 'failed', 'medium')).toBe('high');
     expect(resolveThinkingIntensity(5, 'not_started', 'low')).toBe('low');
+  });
+});
+
+// ─── L3: phase-detection alignment between effort-injection and model-routing ─
+// resolveThinkingIntensity and resolveModelTier both derive a phase from
+// (totalContinuations, evidenceStatus) using the SAME conditions (evidence
+// running => validation phase; totalContinuations <= 1 => initial phase).
+// They emit different output types (ThinkingIntensity vs ModelTier), so we do
+// NOT share an abstraction (different semantics + model-routing has a subagent
+// branch). Instead this locks the phase-detection invariant so the two cannot
+// drift — a future edit to one's threshold without the other ships red.
+describe('phase-detection alignment (effort-injection <-> model-routing)', () => {
+  // A model-routing config whose tier names mirror the intensity names so the
+  // alignment assertion reads as "same phase => same label".
+  const cfg = {
+    defaultTier: 'standard' as const,
+    initialTurnTier: 'premium' as const,
+    validationTier: 'budget' as const,
+  };
+
+  it('validation phase: evidence running triggers validationTier AND low intensity', () => {
+    // Same (continuations, evidence) => both must classify as validation phase.
+    const tier = resolveModelTier(0, 'running', false, cfg);
+    const intensity = resolveThinkingIntensity(0, 'running', 'high');
+    expect(tier).toBe('budget'); // validationTier
+    expect(intensity).toBe('low'); // validation intensity
+  });
+
+  it('initial phase: totalContinuations <= 1 triggers initialTurnTier AND high intensity', () => {
+    for (const c of [0, 1]) {
+      const tier = resolveModelTier(c, undefined, false, cfg);
+      const intensity = resolveThinkingIntensity(c, undefined, 'medium');
+      expect(tier).toBe('premium'); // initialTurnTier
+      expect(intensity).toBe('high'); // initial intensity
+    }
+  });
+
+  it('implementation phase: totalContinuations >= 2 triggers defaultTier AND configured intensity', () => {
+    const tier = resolveModelTier(5, undefined, false, cfg);
+    const intensity = resolveThinkingIntensity(5, undefined, 'medium');
+    expect(tier).toBe('standard'); // defaultTier
+    expect(intensity).toBe('medium'); // falls through to configured (not overridden)
+  });
+
+  it('validation phase overrides initial-phase heuristic in BOTH functions', () => {
+    // continuations=0 would be initial, but evidence running must win in both.
+    expect(resolveModelTier(0, 'running', false, cfg)).toBe('budget');
+    expect(resolveThinkingIntensity(0, 'running', 'high')).toBe('low');
   });
 });

@@ -24,6 +24,10 @@ export function buildEffortInjection(
       return '[autopilot-effort] Use moderate effort (some extended thinking) for this turn.';
     case 'high':
       return '[autopilot-effort] Use high effort (extended thinking) for this turn.';
+    default:
+      // Defensive: the union is exhaustive above, but a future member added
+      // under a non-strict tsconfig must not silently return undefined.
+      return null;
   }
 }
 
