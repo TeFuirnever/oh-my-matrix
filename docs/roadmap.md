@@ -93,7 +93,8 @@ Two routing mechanisms that are **conditionally orthogonal**: non-interfering wh
 |---|---|---|
 | Graduated thinking intensity (3-level `effort-injection`) | Binary "use high effort" wastes reasoning time in validation phase; `resolveThinkingIntensity()` adapts per phase | Done 2026-06-29 (#33) |
 | Model tier routing via `before_model_resolve` hook | `appendContext` is advisory-only; only `modelOverride` is consumed by Gateway | Done 2026-06-29 (#33) |
-| `WORKFLOW.md` `model_routing` config surface | Per-phase tier + `modelIds` map needs a user-facing config seam (reuses existing parser) | Planned |
+| `WORKFLOW.md` `model_routing` config parsing + tests | Per-phase tier + `modelIds` map parsed from WORKFLOW.md front-matter (snake_case); covered by `workflow-config.test.ts` L7 cases including nested `model_ids` | Done 2026-07-06 (#6ceb46a, L7) |
+| `WORKFLOW.md` `model_routing` authoring guidance (agent-facing) | A skill/docs surface teaching agents when/how to declare `model_routing` — part of the autopilot skill/authoring layer (separate task) | Planned |
 | Subagent routing (`subagentTier` + `isSubagentSession`) | Workflow subagents should route independently (e.g., screening on budget tier) | Done 2026-06-29 (#33; hook wiring covered by `before_model_resolve` e2e tests) |
 | INT-3: child model intent vs parent `subagentTier` precedence | When both autopilot tier routing and a subagent's own model declaration exist, the child's declared model (`ctx.modelId`) wins; parent `subagentTier` is fallback for undeclared children | Done 2026-07-06 ([ADR-017](adr/017-int3-subagent-declared-model-wins.md)) |
 | SKILL.md tier guidance for `.prose` generation | Map budget/standard/premium into agent-definition guidance so AI picks models systematically — benefits pure-workflow runs without autopilot | Planned (separate task; orthogonal to autopilot code) |
