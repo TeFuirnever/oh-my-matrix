@@ -1176,4 +1176,122 @@ describe('plugin-entry register()', () => {
       expect(respondAfter.mock.calls[0][1]?.projection.totalTokensUsed).toBe(tokensBefore + 700);
     });
   });
+
+  // M1: end-to-end coverage of the before_model_resolve hook wiring.
+  // The pure functions (resolveModelTier/resolveModelId/isSubagentSession) are
+  // covered in model-routing.test.ts, but the HOOK itself — activate→findRun→
+  // precedence→return { modelOverride } — was previously untested. This freezes
+  // the wiring so a regression in any branch ships red.
+  describe('before_model_resolve hook (model routing)', () => {
+    // Config used by the tier-routing scenarios: all three tiers have a modelId.
+    const routingConfig = {
+      defaultTier: 'standard',
+      initialTurnTier: 'premium',
+      validationTier: 'budget',
+      subagentTier: 'budget',
+      modelIds: {
+        budget: 'haiku-4-5',
+        standard: 'sonnet-4-6',
+        premium: 'opus-4-8',
+      },
+    };
+
+    /** Activate a run, return the captured before_model_resolve handler. */
+    async function setupRouting(sessionKey: string, pluginConfig: Record<string, unknown>) {
+      _resetForTest();
+      const m = createMockApi();
+      m.api.pluginConfig = pluginConfig;
+      register(m.api as any);
+
+      const activateHandler = m.gatewayMethods.get('autopilot.activate')!;
+      await activateHandler({ params: { sessionKey }, respond: vi.fn() });
+
+      const hook = m.hooks.get('before_model_resolve')!;
+      return { hook, m };
+    }
+
+    it('initial turn (totalContinuations 0) -> initialTurnTier model', async () => {
+      const { hook } = await setupRouting('sess-mr1', { modelRouting: routingConfig });
+
+      const result = hook({}, { sessionKey: 'sess-mr1' });
+      expect(result).toEqual({ modelOverride: 'opus-4-8' });
+    });
+
+    it('implementation turn (totalContinuations >= 2) -> defaultTier model', async () => {
+      const { hook, m } = await setupRouting('sess-mr2', { modelRouting: routingConfig });
+
+      // Drive two non-completion finalize turns to bump totalContinuations past
+      // the initial-turn threshold (<= 1). Each revise increments the counter.
+      const finalizeHandler = m.hooks.get('before_agent_finalize')!;
+      await driveNonCompletionTurns(finalizeHandler, 'sid-mr2', 'sess-mr2');
+
+      const result = hook({}, { sessionKey: 'sess-mr2' });
+      expect(result).toEqual({ modelOverride: 'sonnet-4-6' });
+    });
+
+    it('subagent session key -> subagentTier model (parent run resolved)', async () => {
+      // Activate the PARENT (main) session; the subagent key must resolve back
+      // to the parent run via isSubagentSession + extractParentSessionKey.
+      const { hook } = await setupRouting('agent:main', { modelRouting: routingConfig });
+
+      const result = hook({}, { sessionKey: 'agent:main:subagent:task-1' });
+      expect(result).toEqual({ modelOverride: 'haiku-4-5' });
+    });
+
+    it('unconfigured modelIds -> no override (inherit declared model)', async () => {
+      // defaultTier set (so parseModelRouting returns a config) but no modelIds
+      // => resolveModelId returns undefined => hook returns undefined. This is
+      // the §6.3 "no interference" contract: unconfigured = inherit.
+      const { hook } = await setupRouting('sess-mr4', {
+        modelRouting: { defaultTier: 'standard' },
+      });
+
+      const result = hook({}, { sessionKey: 'sess-mr4' });
+      expect(result).toBeUndefined();
+    });
+
+    it('run not in running state -> no override', async () => {
+      // No modelRouting configured AND activate leaves status='running', so to
+      // exercise the status gate we stop the run first, then call the hook.
+      const { hook, m } = await setupRouting('sess-mr5', {
+        modelRouting: routingConfig,
+      });
+      const stopHandler = m.gatewayMethods.get('autopilot.stop')!;
+      await stopHandler({ params: { sessionKey: 'sess-mr5' }, respond: vi.fn() });
+
+      const result = hook({}, { sessionKey: 'sess-mr5' });
+      expect(result).toBeUndefined();
+    });
+
+    // ─── INT-3 (ADR-017): child declared model wins over parent subagentTier ─
+    // The host surfaces a subagent's resolved `.prose model:` via ctx.modelId
+    // BEFORE the hook fires. When present, the child's declaration is honored
+    // (no override); the parent subagentTier only applies to children that
+    // declared nothing.
+    it('INT-3: subagent with declared model (ctx.modelId) -> inherit, no override', async () => {
+      const { hook } = await setupRouting('agent:main', { modelRouting: routingConfig });
+
+      // Child declared opus; parent has subagentTier: budget configured.
+      // Child intent wins => no modelOverride => host keeps the declared model.
+      const result = hook({}, { sessionKey: 'agent:main:subagent:judge', modelId: 'declared-opus' });
+      expect(result).toBeUndefined();
+    });
+
+    it('INT-3: subagent WITHOUT declared model -> parent subagentTier fallback', async () => {
+      const { hook } = await setupRouting('agent:main', { modelRouting: routingConfig });
+
+      // Child declared nothing (ctx.modelId absent) => parent subagentTier applies.
+      const result = hook({}, { sessionKey: 'agent:main:subagent:worker' });
+      expect(result).toEqual({ modelOverride: 'haiku-4-5' });
+    });
+
+    it('INT-3: main agent with ctx.modelId still gets tier routing (guard is subagent-only)', async () => {
+      const { hook } = await setupRouting('sess-mr-main', { modelRouting: routingConfig });
+
+      // Main agent (non-subagent key) with a modelId in ctx: the INT-3 guard
+      // must NOT fire — tier routing still applies for the main agent.
+      const result = hook({}, { sessionKey: 'sess-mr-main', modelId: 'some-model' });
+      expect(result).toEqual({ modelOverride: 'opus-4-8' });
+    });
+  });
 });

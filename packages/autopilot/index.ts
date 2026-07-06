@@ -324,6 +324,20 @@ function findRunBySession(sessionKey: string): [string, AutopilotState] | undefi
   return state ? [runId, state] : undefined;
 }
 
+/**
+ * Resolve an autopilot run for a session key, transparently following a
+ * subagent key back to its parent run. Subagent keys have the shape
+ * `agent:<main>:subagent:<sub>`; the parent prefix is the run owner.
+ * Used by before_model_resolve and llm_output so both treat subagent
+ * activity as belonging to the parent run.
+ */
+function findRunBySessionOrParent(sessionKey: string): [string, AutopilotState] | undefined {
+  return findRunBySession(sessionKey)
+    ?? (isSubagentSession(sessionKey)
+      ? findRunBySession(extractParentSessionKey(sessionKey) ?? '')
+      : undefined);
+}
+
 // ponytail: production passes sessionKey on ctx, test mocks put it on event — one helper handles both
 function resolveSessionKey(event: unknown, ctx?: unknown): string | undefined {
   // Session key can arrive on ctx (production host) or event (test mocks + some
@@ -681,17 +695,24 @@ export function register(api: OpenClawPluginApi): void {
 
     // Find the autopilot run: direct, or via parent session for subagents
     // (subagent keys: agent:<main>:subagent:<sub>).
-    const direct = findRunBySession(sessionKey);
-    const entry = direct
-      ?? (isSubagentSession(sessionKey)
-        ? findRunBySession(extractParentSessionKey(sessionKey) ?? '')
-        : undefined);
+    const entry = findRunBySessionOrParent(sessionKey);
     if (!entry?.[1].enabled || entry[1].status !== 'running') return;
 
     const [, state] = entry;
     // WORKFLOW.md model_routing wins over plugin config when present.
     const routing = state.workflow?.modelRouting ?? modelRouting;
     if (!routing?.modelIds) return;
+
+    // INT-3 (ADR-017): a subagent's own declared model wins over the parent
+    // run's subagentTier. The host resolves the child's `.prose model:` (or
+    // agent-definition model) BEFORE firing this hook and surfaces it via
+    // ctx.modelId. When a subagent carries an explicit declared model, we
+    // return without an override so the host keeps it; the parent
+    // subagentTier then only applies to children that declared nothing.
+    if (isSubagentSession(sessionKey) && ctx.modelId) {
+      log(`[autopilot] before_model_resolve: session=${sessionKey} inherit child model=${ctx.modelId}`);
+      return;
+    }
 
     const tier = resolveModelTier(
       state.totalContinuations,
@@ -808,11 +829,7 @@ export function register(api: OpenClawPluginApi): void {
     // already resolves subagents via their parent (agent:<main>:subagent:<id>);
     // token accounting must match, or a run's tokenBudget under-counts real spend
     // (the budget is enforced at the parent's before_agent_finalize turn boundary).
-    const direct = findRunBySession(sessionKey);
-    const entry = direct
-      ?? (isSubagentSession(sessionKey)
-        ? findRunBySession(extractParentSessionKey(sessionKey) ?? '')
-        : undefined);
+    const entry = findRunBySessionOrParent(sessionKey);
     if (!entry?.[1].enabled) return;
 
     const usage = event.usage;
@@ -1063,11 +1080,18 @@ export function register(api: OpenClawPluginApi): void {
           }
           const warnings = trustWorkspace
             ? result.warnings
-            : [...result.warnings, 'untrusted workspace — validation commands disabled (enable via trustWorkspace:true)'];
+            : [...result.warnings, 'untrusted workspace — validation commands + model_routing disabled (enable via trustWorkspace:true)'];
+          // L1: an untrusted workspace must not influence model selection either.
+          // validation.commands are cleared above (RCE boundary); model_routing
+          // from the same WORKFLOW.md is dropped here so an attacker-controlled
+          // workspace cannot force a different/cheaper model tier. Plugin-level
+          // modelRouting (operator config) still applies regardless.
+          const { modelRouting: _ignoredModelRouting, ...configWithoutRouting } = result.config;
+          const trustedConfig = trustWorkspace ? result.config : configWithoutRouting;
           return {
             ...s,
             workflow: {
-              ...result.config,
+              ...trustedConfig,
               validation: { ...result.config.validation, commands },
               warnings,
             },

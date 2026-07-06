@@ -326,6 +326,49 @@ describe('E2E register() → activate → state.workflow round-trip', () => {
     expect(workflow!.warnings.some((w) => w.includes('untrusted workspace'))).toBe(true);
   });
 
+  it('L1: untrusted workspace → model_routing dropped (no model-tier influence)', async () => {
+    // Same trust boundary as validation.commands: an attacker-controlled
+    // workspace must not force a different/cheaper model tier. Untrusted =>
+    // modelRouting absent from state.workflow even if WORKFLOW.md declares it.
+    writeWorkflowMd(`autopilot:
+  version: 1
+  model_routing:
+    default_tier: standard
+    initial_turn_tier: premium
+    model_ids:
+      budget: claude-haiku
+      standard: claude-sonnet
+      premium: claude-opus`);
+    await activateWithWorkspace('wf-sess-l1-untrusted', tmpDir);
+    const workflow = await getStatusWorkflow('wf-sess-l1-untrusted');
+    expect(workflow).toBeDefined();
+    expect(workflow!.modelRouting).toBeUndefined();
+    expect(workflow!.warnings.some((w) => w.includes('untrusted workspace'))).toBe(true);
+  });
+
+  it('L1: trusted workspace → model_routing loaded into state.workflow', async () => {
+    // When the operator opts in (trustWorkspace:true), model_routing from
+    // WORKFLOW.md is honored — same trust level as validation.commands.
+    writeWorkflowMd(`autopilot:
+  version: 1
+  model_routing:
+    default_tier: standard
+    initial_turn_tier: premium
+    model_ids:
+      premium: claude-opus`);
+    const activateHandler = mock.gatewayMethods.get('autopilot.activate')!;
+    const respond = vi.fn();
+    await activateHandler({ params: { sessionKey: 'wf-sess-l1-trusted', workspacePath: tmpDir, trustWorkspace: true }, respond });
+    await mock.hooks.get('session_start')!({ sessionId: 'sid-l1', sessionKey: 'wf-sess-l1-trusted' });
+
+    const workflow = await getStatusWorkflow('wf-sess-l1-trusted');
+    expect(workflow).toBeDefined();
+    expect(workflow!.modelRouting).toBeDefined();
+    expect(workflow!.modelRouting?.defaultTier).toBe('standard');
+    expect(workflow!.modelRouting?.initialTurnTier).toBe('premium');
+    expect(workflow!.modelRouting?.modelIds?.premium).toBe('claude-opus');
+  });
+
   it('S1-residual A: payload trustWorkspace:false overrides pluginConfig trustWorkspace:true', async () => {
     // Guards the ?? chain (payload ?? config ?? false): an explicit `false` must
     // win over a pluginConfig `true`. A mistaken `||` would treat false as falsy
