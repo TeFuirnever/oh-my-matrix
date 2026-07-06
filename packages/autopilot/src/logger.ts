@@ -9,6 +9,14 @@
  *
  * JSON mode emits one JSON object per line: { ts, level, msg, ...ctx }
  * Text mode emits plain string args (backward-compatible with existing behavior).
+ *
+ * DRIFT REFERENCE: this logger is intentionally byte-equivalent in its
+ * safety-relevant parts (emitJson try/catch + fallback shape, splitArgs) to
+ * packages/dynamic-workflows/src/logger.ts. If you change the try/catch or
+ * fallback here, change the sibling too. The two per-package logger tests
+ * (tests/p0-structured-logger.test.ts here, dynamic-workflows/tests/logger.test.ts)
+ * are the drift guard until a third consumer justifies extracting createLogger()
+ * (boundary doc §5.2). The logger must NEVER throw into a hook.
  */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
