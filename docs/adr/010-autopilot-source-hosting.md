@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-06-19).
+Accepted (2026-06-19). **Updated 2026-07-06**: npm registry publishing is now
+the primary distribution path (Follow-up #2 closed); the offline `file:` tgz
+path remains as a host-vendoring option, not the sole channel. See the
+"Decision" and "Follow-ups" sections below.
 
 ## Context
 
@@ -14,13 +17,14 @@ The plugin itself is fully self-contained — zero host-internal imports, a sing
 
 ## Decision
 
-**Host the canonical `@oh-my-matrix/autopilot` source in omm at `packages/autopilot/`, making omm a pnpm monorepo. The host consumes the plugin as an offline npm package via `pnpm pack` + the `file:` protocol.**
+**Host the canonical `@oh-my-matrix/autopilot` source in omm at `packages/autopilot/`, making omm a pnpm monorepo. Distribute via the npm registry as the primary path; the host may additionally vendor a tgz for offline self-containment.**
 
-This is **hosting, not reimplementation.** The decision strengthens ADR-008: there is now exactly one autopilot source in the whole stack (omm's `packages/autopilot/`), and the host consumes it as a package rather than owning a forked copy.
+This is **hosting, not reimplementation.** The decision strengthens ADR-008: there is now exactly one autopilot source in the whole stack (omm's `packages/autopilot/`), and consumers reach it as a package rather than owning a forked copy.
 
 - omm becomes a pnpm workspace (`pnpm-workspace.yaml` → `packages/*`).
 - `packages/autopilot/` holds source, 43 test files, `openclaw.plugin.json`, and a `pnpm pack` build.
-- The host declares `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"` and bundles the tgz into its bundled-plugin directory, so the host is self-contained and does not depend on the sibling omm repo at install time.
+- **Primary distribution (since the release pipeline landed):** the three `@oh-my-matrix/*` packages are published to the npm registry via Changesets + `scripts/publish.sh` (see CONTRIBUTING.md § Releasing). Any consumer declares `"@oh-my-matrix/autopilot": "^3.0.0"` and installs from the registry.
+- **Offline host-vendoring option (the original channel):** a host that must be self-contained at install time may instead declare `"@oh-my-matrix/autopilot": "<a versioned file: tgz dependency>"` and bundle the tgz into its bundled-plugin directory. This is now an *option*, not *the* channel.
 - Plugin discovery in the host (the host's plugin-discovery module) resolves the plugin from `node_modules` (dev) and the host's bundled-plugin directory when packaged.
 
 ## Consequences
@@ -34,13 +38,13 @@ This is **hosting, not reimplementation.** The decision strengthens ADR-008: the
 
 **Negative:**
 
-- **Distribution ceremony.** A source change requires `pnpm build && pnpm pack` in omm, then copying the new tgz into the host's `resources/autopilot/` and bumping the version in the host's `package.json`. CI automation is a future improvement.
-- **Two repos must stay in sync.** A change to autopilot source in omm is invisible to the host until the tgz is refreshed. The version in the tgz filename is the contract.
+- **Host-vendoring ceremony (only for hosts that choose the offline tgz path).** A source change requires `pnpm build && pnpm pack` in omm, then copying the new tgz into the host's `resources/autopilot/` and bumping the version in the host's `package.json`. **For registry consumers this cost is gone** — a version bump in the consumer's `package.json` suffices.
+- **Two repos must stay in sync (only for offline-vendoring hosts).** A change to autopilot source in omm is invisible to a vendoring host until its tgz is refreshed. **Registry consumers see the new version as soon as `publish.sh` runs.** The version in the tgz filename (offline) or the npm semver (registry) is the contract.
 
 ## Follow-ups
 
-1. **Automate the tgz refresh.** A script or CI step that rebuilds and copies the tgz on autopilot source change.
-2. **Optional npm publish.** If a second consumer appears, publish `@oh-my-matrix/autopilot` to a registry and replace the `file:` dependency with a versioned one.
+1. **Done — automated versioning via Changesets.** The Release GitHub Action (`.github/workflows/release.yml`) opens a "Version Packages" PR on every master push when changesets are pending. `scripts/publish.sh` performs the manual npm publish with pre-flight validation and post-publish verification. See CONTRIBUTING.md § Releasing.
+2. **Done — npm registry publishing.** All three `@oh-my-matrix/*` packages are published to the npm registry with `publishConfig: { access: "public" }`. The original "if a second consumer appears" condition is satisfied: any consumer can now `npm install @oh-my-matrix/autopilot`. The offline `file:` tgz path remains available for hosts that need install-time self-containment.
 
 ## Related ADRs
 
