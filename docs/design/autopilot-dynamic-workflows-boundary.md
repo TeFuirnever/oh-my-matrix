@@ -7,7 +7,7 @@
 
 ## 0. 一句话结论
 
-omm 的三模块架构**已经踩在业界主流微内核范式上**（host-mediated 协调、零插件互依赖、单一共享内核库、priority-ordered filter chain、session-key scope 分区、event-shape 契约测试）。当前**唯一的隐式耦合**是 hook priority（11/10/9）没有单一真相源；此外有 1 个真 bug（DW logger 可抛进 guard）和 3 处需文档化的"隐性穿透耦合"（都来自 autopilot 单向对 subagent 的部分归并）。**增量目标只有一个方向：把隐式契约显式化，而非重构边界。**
+omm 的三模块架构**已经踩在业界主流微内核范式上**（host-mediated 协调、零插件互依赖、单一共享内核库、priority-ordered filter chain、session-key scope 分区、event-shape 契约测试）。当前**唯一的隐式耦合**是 hook priority（11/10/9）没有单一真相源（其 ordering 已由 CI check 守护，见 §5.1 注）。原列的 DW logger 真 bug（DEC-2）与 INT-3 子模型覆盖均已修复（分别见 §5.2、§5.4）。**增量目标只有一个方向：把隐式契约显式化，而非重构边界。**
 
 ---
 
@@ -68,7 +68,7 @@ tool call ──► DW guard (pri 11, 只管 :subagent:, block 短路)
 | **DEC-2** | **DW logger `emitJson` 缺 try/catch**（autopilot 版有）→ guard 内可抛 → 误 block 合法 subagent | 🐛 **真 bug** | **§5.2 补安全护栏** |
 | INT-1 | `:subagent:` 识别两包各自 inline（漂移风险） | ⚠️ 意外耦合 | §5.3 文档化为共享约定；Rule-of-Three 前不抽 |
 | INT-2 | subagent token 计入 autopilot 父 budget（可 pause 父 run） | ⚠️ 隐性穿透（对所有 subagent 有意，对 workflow 分支顺带） | §4 文档化为"资源归并"双轨语义 |
-| INT-3 | subagent 模型被父 routing `subagentTier` 改写 | ⚠️ 潜在配置冲突（子模型意图可能被父覆盖） | §4 需决策：子 WORKFLOW.md 模型 vs 父 subagentTier 优先级 |
+| INT-3 | subagent 模型被父 routing `subagentTier` 改写 | ✅ 已解决（ADR-017，2026-07-06） | 子声明的 `ctx.modelId` 优先；父 `subagentTier` 仅作 fallback。见 §5.4 |
 | INT-4 | **"半归并"subagent**：token/model 归并、权限/审计/编排/续跑**不**归并 | ⚠️ 结构 gap（资源上算你的，治理上不算你的） | §4 明确双轨设计意图 + 守护红线 |
 | INT-8 | 共享 audit sink `.autopilot/audit-*.jsonl`：条件混流 + 完整度不对称 | ⚠️ 意外耦合 | §4 文档化；`autopilot.status` 读不全子 block 是已知限制 |
 | INT-9 | DW projection 读共享 `PermissionAuditEntry`（未接线，ADR-014 gated） | ⚠️ WIP gap | 保持 gated；接线时即成正式只读集成 seam |
@@ -103,28 +103,31 @@ autopilot 的 8 个 hook 对 subagent **不一致归并**——**资源类归并
 
 **守护红线**：
 1. **一致性**：未来任何"让 autopilot 感知 subagent"的改动（如审计 subagent、evidence gate 感知扇出）必须先明确落在哪条轴，不得再制造第三种半归并。
-2. **INT-3 需修正**：模型解析用**父** `state.workflow.modelRouting` 覆盖子模型，会吞掉子 WORKFLOW.md 的模型意图。裁决：**子自身模型意图优先**——`before_model_resolve` 对 subagent 应先看子 session 是否有独立配置，无才 fallback 父 `subagentTier`。（列为 §5.4 action item，需确认 host 是否传递子配置。）
+2. **INT-3 已解决**（ADR-017，2026-07-06）：`before_model_resolve` 对 subagent 先看 `ctx.modelId`（子声明的模型）；子有声明则不覆盖，无声明才 fallback 父 `subagentTier`。原"需确认 host 是否传递子配置"的阻塞已消除——host 经 `ctx.modelId` 暴露子已解析的声明模型，无需 host 改动。
 3. **INT-8 已知限制**：`autopilot.status` 用 `loadRecentAuditEntries(父 workspace)` 读不到写在子 cwd 的子 block audit。文档化为已知限制；若要 status 显示子 block，需 projection 层（ADR-014）统一读，而非 autopilot 伸手读子目录。
 
 ---
 
 ## 5. Action Items（按性价比排序）
 
-### 5.1 【应做·消除唯一隐式耦合】hook priority 单一真相源
-把 11/10/9 从"两个文件的 magic number + 注释"升格为**被测试守护的契约**：
-- 在 `permission-policy` 导出 `HOOK_PRIORITIES = { subagentGuard: 11, autopilotRunScoped: 10, audit: 9 }`（audit priority 本就与 permission-policy 的 audit 职责同域，归属合理）。
+### 5.1 【ordering 守卫已落地·常量化仍可选】hook priority 单一真相源
+**ordering 不变量已守护**：CI 跑 "Hook priority ordering (DW > autopilot > 9)" check（`.github/workflows/ci.yml:98` + `scripts/check-hook-priority.cjs`），读两包的 `BEFORE_TOOL_CALL_PRIORITY` 常量并断言 `dw > ap > 9`。这满足了"ordering 被测试守护"的核心目标。
+
+**仍可演进（非阻塞）**：把 11/10/9 从"两个文件的 magic number + 注释"进一步升格为**单一共享常量**：
+- 在 `permission-policy` 导出 `HOOK_PRIORITIES = { subagentGuard: 11, autopilotRunScoped: 10, audit: 9 }`。
 - autopilot / DW 从此常量读，不再各写裸 int。
-- permission-policy 加断言测试：`subagentGuard > autopilotRunScoped > audit`。
 - **保持零互依赖**：两插件仍只依赖 permission-policy，不互相 import。
 
-### 5.2 【应做·真 bug】DW logger 安全护栏（DEC-2）
-`dynamic-workflows/src/logger.ts` 的 `emitJson` 补 autopilot 版已有的 try/catch（围 `JSON.stringify`，防循环引用/BigInt 抛进 guard）+ `splitArgs`（对象结构进 ctx，非 `[object Object]`）。最小 diff 止血；长期可抽 `createLogger(envPrefix)` 共享工厂（但**不**放 permission-policy——logger 非权限原语，会污染安全 kernel 职责）。
+当前 CI check 路线 vs 常量化路线的取舍：CI check 不引入跨包常量依赖（更贴合"零互依赖"红线），但 magic number 仍分散在两文件；常量化收敛起源但增加一处共享 API。两者都达成"ordering 不可静默漂移"。选哪条作为终态是可选演进，不阻塞当前架构。
+
+### 5.2 【已做·真 bug 已修】DW logger 安全护栏（DEC-2）— DONE 2026-07-06 (#106)
+`dynamic-workflows/src/logger.ts` 的 `emitJson` 已补 autopilot 版的 try/catch（围 `JSON.stringify`，防循环引用/BigInt 抛进 guard）+ `splitArgs`（对象结构进 ctx，非 `[object Object]`）。发版：`@oh-my-matrix/dynamic-workflows@0.1.4`。回归测试 `tests/logger.test.ts` 覆盖 throw 路径。长期可抽 `createLogger(envPrefix)` 共享工厂（但**不**放 permission-policy——logger 非权限原语，会污染安全 kernel 职责），N=3 时再抽；当前两份 logger 已加双向 DRIFT REFERENCE 注释互指为字节级等价锚。
 
 ### 5.3 【可选·文档化】`:subagent:` 约定为显式共享契约
 两包 inline 的 `isSubagentSession` 靠巧合一致。Rule-of-Three 未到，**不强抽**（它是 host session-key 约定，非权限决策，抽进 permission-policy 会注入 host 知识）。当前动作：在本文档 + 两处代码注释交叉引用同一约定来源，标注"若 OpenClaw 改 key 格式，两包需同步"。
 
-### 5.4 【需确认·潜在 bug】INT-3 子模型意图被父覆盖
-确认 host 是否向 `before_model_resolve` 传递 subagent 自身的 workflow 配置；若传递，则 subagent 应优先用自身模型意图，父 `subagentTier` 仅作 fallback。需要 host 语义确认后再改。
+### 5.4 【已确认并已修·INT-3】子模型意图优先 — DONE 2026-07-06 (ADR-017)
+**原阻塞已消除**：host 经 `ctx.modelId` 暴露子已解析的声明模型（无需传整个 workflow config 对象）。**裁决**（[ADR-017](../adr/017-int3-subagent-declared-model-wins.md)）：子声明的 `ctx.modelId` 优先——`before_model_resolve` 对 subagent 先看 `ctx.modelId`，有则不覆盖；父 `subagentTier` 仅在子未声明时作 fallback。实现：`index.ts` 的 ~6 行 child-first guard。测试：`tests/plugin-entry.test.ts` 覆盖 3 个 INT-3 场景。
 
 ### 5.5 【已由 ADR-014 正确 gated】DW projection 只读集成 seam
 保持 gated。接线时死守两条红线：projection 只读（不 mutate runtime / 不 filesystem discovery）；不塞无稳定数据源的字段（cost/confidence/recommendation）。这层长成 controller 之日，即微内核架构破功之时（P-12）。
@@ -137,7 +140,7 @@ autopilot 的 8 个 hook 对 subagent **不一致归并**——**资源类归并
 |------|----------|----------|
 | 瘦内核 + 隔离插件（P-1） | VSCode ext host、OSGi | ✅ OpenClaw host + 可禁用插件 |
 | 声明式 contribution（P-2） | VSCode contributes | ✅ `openclaw.plugin.json` hooks[]；建议加 manifest↔实现一致性测试 |
-| Priority filter chain（P-3） | Envoy、Servlet Filter | ✅ before_tool_call 11>10>9；⚠️ 见 §5.1 |
+| Priority filter chain（P-3） | Envoy、Servlet Filter | ✅ before_tool_call 11>10>9；ordering 由 CI check 守护（见 §5.1） |
 | Host-mediated 协调（P-4） | K8s controller、Redux | ✅ 零互依赖，经 host + kernel |
 | Scope 分区（P-5） | K8s ownerRef、VLAN | ✅ session-key 分区（本文档已显式化） |
 | 共享 context 流动（P-6） | ESLint context、Envoy metadata | ✅ (event, ctx) + audit sink |
