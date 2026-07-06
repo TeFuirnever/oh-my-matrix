@@ -19,5 +19,26 @@
     "prompt": "Fix the typo in README.md line 42.",
     "expected": "Skill does NOT activate (≤3 files, single agent handles it); DO-NOT-USE gate fires; direct fix without workflow overhead",
     "tier": "negative"
+  },
+  {
+    "id": 4,
+    "scenario": "direct-session fallback — OpenProse unavailable",
+    "prompt": "I need 4 independent security audits of these 4 service files. There's no /prose command available, but you can spawn sub-sessions.",
+    "expected": "Skill activates; Step 0 detects OpenProse unavailable but session-spawn capable → Direct mode announced; .prose still generated as the plan; manual validation path taken; sessions spawned within ≤5 fallback cap; synthesis labels verified/partial/blocked",
+    "tier": "happy"
+  },
+  {
+    "id": 5,
+    "scenario": "plan-only — no execution capability",
+    "prompt": "Design a multi-agent workflow to audit 15 endpoints for race conditions. Just give me the plan — I'll run it elsewhere.",
+    "expected": "Skill activates; Step 0 detects neither OpenProse nor session-spawn available → Plan-only mode announced; .prose written and validated; execution STOPPED before spawn; missing capability listed; user asked whether to enable a workflow runtime",
+    "tier": "happy"
+  },
+  {
+    "id": 6,
+    "scenario": "custom-role checkpoint fires",
+    "prompt": "Audit these 8 API handlers for GDPR compliance — I need a specialist that knows EU data-protection law, not just a generic security reviewer.",
+    "expected": "Skill activates; Step 1.5 finds no standard role matches GDPR-law → declares agent custom_gdpr_auditor with ⚠ marker; Step 2 checkpoint surfaces the custom_* agent for explicit approval; does NOT proceed past checkpoint without user OK; standard roles (security-auditor, reviewer) marked ✓ where reused",
+    "tier": "happy"
   }
 ]

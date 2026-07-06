@@ -2,8 +2,8 @@
 
 OpenClaw plugin providing the **subagent runtime guard** — blocks destructive
 operations (destructive git, file cleanup, credential access, shell substitution,
-wrapper-exec) for `:subagent:` sessions. Also re-exports the permission-policy
-library API consumed by [`@oh-my-matrix/autopilot`](../autopilot).
+wrapper-exec) for `:subagent:` sessions. Imports permission primitives from
+[`@oh-my-matrix/permission-policy`](../permission-policy).
 
 Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime stack.
 
@@ -26,5 +26,5 @@ command.
 
 ## Status
 
-v0.1.0. Tested with `vitest`. See the project
+v0.1.3. Tested with `vitest`. See the project
 [changelog](https://github.com/TeFuirnever/oh-my-matrix/blob/master/CHANGELOG.md).

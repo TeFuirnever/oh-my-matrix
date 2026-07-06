@@ -36,7 +36,7 @@ export type {
 
 export const id = 'dynamic-workflows';
 export const name = 'Dynamic Workflows Guard';
-export const version = '0.1.2';
+export const version = '0.1.3';
 
 /**
  * before_tool_call priority — higher than autopilot (10) and
