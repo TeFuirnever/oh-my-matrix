@@ -2,7 +2,7 @@
   "id": "autopilot",
   "name": "Autopilot Continuous Mode",
   "description": "OpenClaw-native continuous execution for long-running tasks",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
@@ -42,12 +42,16 @@
       },
       "excludedAgents": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": []
       },
       "highRiskTools": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": []
       },
       "tokenBudget": {
@@ -60,7 +64,11 @@
       },
       "thinkingIntensity": {
         "type": "string",
-        "enum": ["low", "medium", "high"],
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
         "default": "high",
         "description": "Thinking intensity for autopilot turns. 'high' = extended thinking (default), 'medium' = moderate, 'low' = standard effort."
       },
@@ -73,16 +81,53 @@
         "type": "object",
         "description": "Model tier routing per execution phase. Maps tiers to concrete model IDs via modelIds; tiers without a modelId inherit the declared model.",
         "properties": {
-          "defaultTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "standard" },
-          "initialTurnTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "premium" },
-          "validationTier": { "type": "string", "enum": ["budget", "standard", "premium"], "default": "standard" },
-          "subagentTier": { "type": "string", "enum": ["budget", "standard", "premium"] },
+          "defaultTier": {
+            "type": "string",
+            "enum": [
+              "budget",
+              "standard",
+              "premium"
+            ],
+            "default": "standard"
+          },
+          "initialTurnTier": {
+            "type": "string",
+            "enum": [
+              "budget",
+              "standard",
+              "premium"
+            ],
+            "default": "premium"
+          },
+          "validationTier": {
+            "type": "string",
+            "enum": [
+              "budget",
+              "standard",
+              "premium"
+            ],
+            "default": "standard"
+          },
+          "subagentTier": {
+            "type": "string",
+            "enum": [
+              "budget",
+              "standard",
+              "premium"
+            ]
+          },
           "modelIds": {
             "type": "object",
             "properties": {
-              "budget": { "type": "string" },
-              "standard": { "type": "string" },
-              "premium": { "type": "string" }
+              "budget": {
+                "type": "string"
+              },
+              "standard": {
+                "type": "string"
+              },
+              "premium": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }
