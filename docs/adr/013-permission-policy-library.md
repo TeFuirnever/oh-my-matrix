@@ -2,16 +2,19 @@
 
 ## Status
 
-> **⚠ KNOWN BUG (found 2026-06-27 by adversarial review, NOT STARTED):** The shipped
-> guard is **fail-open in production** — it reads `event.args` / `event.toolKind`, which
-> do not exist on the real OpenClaw event (the real shape is `params: Record` +
-> `toolKind: "code_mode_exec"` only). The component tests pass only because they feed a
-> fictional event shape the host never emits. The "verified / works" claims in this ADR
-> and in the §11.3.3 / §11.8 B1 design-doc rows **predate this finding and are wrong**.
-> Fix spec: [`docs/fixes/runtime-guard-event-shape.md`](../fixes/runtime-guard-event-shape.md).
-> This bug is PRE-EXISTING (from the host's autopilot, migrated in `be05e49`); ADR-011/012/013
-> inherited it. The decoupling itself (the architectural work this ADR records) is sound;
-> the guard's event-shape plumbing is what's broken.
+> **✅ Previously-known bug FIXED 2026-06-28** (`e178c34`, see
+> [`docs/fixes/runtime-guard-event-shape.md`](../fixes/runtime-guard-event-shape.md)):
+> the shipped guard was a **placebo in production** — it read `event.args` /
+> `event.toolKind`, which do not exist on the real OpenClaw event (real shape is
+> `params: Record` + `toolKind: "code_mode_exec"`), so it failed OPEN. Component
+> tests passed only because they fed a fictional event shape. Fixed by capturing
+> the real event shape first, then teaching the guard + tests to read it;
+> verified via deployed-dist `verify-guard` driving the real shape (destructive
+> / `cd && git reset --hard` / `rm -rf` blocked; `git status` / main-session
+> allowed). This bug was PRE-EXISTING (from the host's autopilot, migrated in
+> `be05e49`); ADR-011/012/013 inherited it. The decoupling itself (the
+> architectural work this ADR records) was always sound; the guard's event-shape
+> plumbing was the broken part, fixed as of 2026-06-28.
 
 Accepted (2026-06-27). **Refines [ADR-012](012-dynamic-workflows-plugin-extraction.md)**
 — the runtime guard stays in `@oh-my-matrix/dynamic-workflows`, but the shared permission
