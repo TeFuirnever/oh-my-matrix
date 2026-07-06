@@ -24,6 +24,14 @@ npm install openclaw@">=2026.5.28" @oh-my-matrix/permission-policy
 - **Model routing** — cost-aware tier selection per execution phase (budget/standard/premium).
 - **Permission-policy integration** — coordinates the run-scoped policy with
   [`@oh-my-matrix/permission-policy`](../permission-policy).
+- **Crash recovery** — run state is checkpointed to
+  `{workspace}/.autopilot/checkpoints/{runId}.json` at stable transitions
+  (orchestration-state / blocked-reason / evidence changes). On gateway restart,
+  `register()` restores all runs still in an active state
+  (`running`/`claimed`/`retry_queued`/`released`/`unclaimed`) whose workspace
+  still exists, marked `degraded:true`. Terminal runs (`done`/`user_stopped`)
+  delete their checkpoint to prevent file leaks. `status` is **never** trusted
+  from disk — always re-derived via `deriveStatus` (ADR-016 sole-writer invariant).
 
 ## Plugin config
 
