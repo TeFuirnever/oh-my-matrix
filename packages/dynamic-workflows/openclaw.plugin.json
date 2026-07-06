@@ -2,7 +2,7 @@
   "id": "dynamic-workflows",
   "name": "Dynamic Workflows Guard",
   "description": "Runtime subagent guard (before_tool_call priority 11, fail-closed destructive-op blocking for :subagent: sessions) + orchestration skill (.prose generation, 11 patterns, role-prompt templates). Imports permission primitives (decidePermission, classifyCommand, audit) from @oh-my-matrix/permission-policy.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
@@ -19,7 +19,9 @@
       },
       "highRiskTools": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "default": []
       }
     }
