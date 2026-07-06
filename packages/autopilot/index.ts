@@ -30,6 +30,15 @@ import { detectValidationCommands } from './src/project-detector';
 import { appendAuditEntry, loadRecentAuditEntries } from '@oh-my-matrix/permission-policy';
 import { statSync } from 'fs';
 import { isAbsolute } from 'path';
+import {
+  saveCheckpoint,
+  loadCheckpoint,
+  deleteCheckpoint,
+  lookupRunIdBySessionKey,
+  listResumableCheckpoints,
+  clearSessionIndexEntry,
+  _disableCheckpointingForTest,
+} from './src/state-persister';
 
 // Public re-export so consumers import AutopilotProjection from the package
 // barrel (@oh-my-matrix/autopilot), not the deep dist/src/projection path.
@@ -178,7 +187,65 @@ export function _resetForTest(): void {
   canaryFired = new Set();
   noUsageWarned = new Set();
   enqueueInjectionFn = undefined;
+  // Test isolation: disable checkpoint persistence so the existing 50+ test suite
+  // (which calls register() in the repo root and would otherwise both WRITE
+  // checkpoints to disk AND load them back on the next test's register()) doesn't
+  // cross-contaminate stateByRun. Tests that exercise persistence explicitly
+  // re-enable it via _enableCheckpointingForTest().
+  _disableCheckpointingForTest();
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
+}
+
+/**
+ * Resolve the workspace root under which checkpoints are stored for a run.
+ * Prefers the run's own workspace.root (the containment boundary the run was
+ * activated under); falls back to process.cwd() so checkpointing still works
+ * for runs activated before a workspace record is attached.
+ */
+function resolveCheckpointRoot(state: AutopilotState): string {
+  return state.workspace?.root ?? process.cwd();
+}
+
+/**
+ * Decide whether a state transition should trigger a checkpoint write. We write
+ * only at STABLE POINTS — orchestrationState / blockedReason / evidence status
+ * changes — not on every setState (agent_activity fires per token batch and
+ * would drown the disk). This is the Review #5 "transition filter, not signature
+ * hash" recommendation: 3-line field comparison, no debouncing complexity.
+ */
+function shouldCheckpoint(prev: AutopilotState | undefined, next: AutopilotState): boolean {
+  if (!prev) return true; // first write for a run — persist immediately
+  if (prev.orchestrationState !== next.orchestrationState) return true;
+  if (prev.blockedReason !== next.blockedReason) return true;
+  if (prev.evidence?.status !== next.evidence?.status) return true;
+  if (prev.enabled !== next.enabled) return true;
+  // Reviewer #1 Finding 5a fix: goal/progress changes (via setGoal gateway RPC)
+  // must reach disk, else crash-resume continues toward a stale goal.
+  if (prev.goal !== next.goal) return true;
+  if (prev.progress !== next.progress) return true;
+  return false;
+}
+
+/**
+ * Checkpoint + terminal-state cleanup hook. Called from setState after a
+ * transition-worthy change. Handles:
+ *   - persisting the slim checkpoint (fail-silent, per-runId locked)
+ *   - deleting the checkpoint when the run reaches a terminal state (done /
+ *     non-resumable blocked) so done-run files don't leak (Review #4 #6)
+ */
+function persistAfterTransition(runId: string, prev: AutopilotState | undefined, next: AutopilotState): void {
+  // Terminal cleanup FIRST — once a run is done/non-resumable, delete its file
+  // so it can't be resurrected stale on a later restart, and clear the index.
+  const orch = next.orchestrationState;
+  if (orch === 'done' || (orch === 'blocked' && next.blockedReason === 'user_stopped')) {
+    const root = resolveCheckpointRoot(next);
+    deleteCheckpoint(runId, root);
+    clearSessionIndexEntry(root, next.sessionKey);
+    return;
+  }
+  if (shouldCheckpoint(prev, next)) {
+    saveCheckpoint(next, runId, resolveCheckpointRoot(next));
+  }
 }
 
 /** Test-only: inject a mock audit_setMode so the closed-over _auditSetMode reference is replaceable. */
@@ -278,6 +345,8 @@ function evictOldestRuns(): void {
     const oldestState = stateByRun.get(oldestRunId);
     // S8: release audit refCount for an evicted still-running run before delete.
     if (oldestState?.status === 'running') setAuditMode('active');
+    // Review #4 #6b: also delete the checkpoint so evicted runs don't leak files.
+    if (oldestState) deleteCheckpoint(oldestRunId, resolveCheckpointRoot(oldestState));
     stateByRun.delete(oldestRunId);
     if (oldestState) {
       sessionKeyToRunId.delete(oldestState.sessionKey);
@@ -295,8 +364,12 @@ function evictOldestRuns(): void {
 }
 
 function setState(runId: string, state: AutopilotState): void {
+  const prev = stateByRun.get(runId);
   stateByRun.set(runId, state);
   if (stateByRun.size > MAX_RUN_STATES) evictOldestRuns();
+  // Crash-recovery: persist at stable points (orchState/blockedReason/evidence/enabled
+  // transitions). Fail-silent + per-runId locked inside saveCheckpoint.
+  persistAfterTransition(runId, prev, state);
 }
 
 /** GAP-23: Cleanup all state on shutdown */
@@ -407,6 +480,31 @@ export function register(api: OpenClawPluginApi): void {
     ...(typeof uc.trustWorkspace === 'boolean' ? { trustWorkspace: uc.trustWorkspace } : {}),
   };
   log(`[autopilot] config: maxAttemptsPerTurn=${config.maxAttemptsPerTurn} maxTotalContinuations=${config.maxTotalContinuations} toolErrorThreshold=${config.toolErrorThreshold} excludedAgents=${JSON.stringify(config.excludedAgents)} highRiskTools=${JSON.stringify(config.highRiskTools)} tokenBudget=${config.tokenBudget}`);
+
+  // Crash-recovery: restore ALL resumable runs at process init (Review #3 multi-run
+  // gap). session_start only fires for the session that reconnects, but a gateway
+  // restart may orphan runs owned by OTHER sessions. Scanning the checkpoints dir
+  // here restores every run still in an active family (running/claimed/retry_queued/
+  // released/unclaimed) whose workspace still exists. Restored runs are marked
+  // degraded:true so operators can tell a restored run from a fresh one.
+  {
+    const root = process.cwd();
+    const resumable = listResumableCheckpoints(root);
+    for (const runId of resumable) {
+      const restored = loadCheckpoint(runId, root);
+      if (restored) {
+        stateByRun.set(runId, restored);
+        sessionKeyToRunId.set(restored.sessionKey, runId);
+        if (restored.needsCrossTurnResume) {
+          // A restored run that was mid-cross-turn needs a kick to restart the
+          // agent loop; defer to kickResumedTurn once enqueueInjectionFn is set.
+        }
+      }
+    }
+    if (resumable.length > 0) {
+      log(`[autopilot] crash-recovery: restored ${stateByRun.size} run(s) from checkpoints`);
+    }
+  }
 
   // --- Hooks (use api.on for typed hooks when available, registerHook as fallback) ---
   const registerHook = api.on?.bind(api) ?? api.registerHook?.bind(api);
@@ -869,6 +967,25 @@ export function register(api: OpenClawPluginApi): void {
       sessionIdToKey.set(event.sessionId, event.sessionKey);
       log(`[autopilot] session_start: ${event.sessionId} → ${event.sessionKey}`);
     }
+    // Crash-recovery resume (Review #4 BLOCKER #2): after a gateway restart the
+    // in-memory sessionKeyToRunId Map is empty, so we consult the durable
+    // session-index.json to locate the checkpoint for this session. register()
+    // already restored ALL resumable runs at process init; this path covers the
+    // case where a session reconnects (e.g. resumedFrom) and its run isn't yet
+    // in memory (different process, late-arriving session_start).
+    const sessionKey = event.sessionKey;
+    if (sessionKey && !findRunBySession(sessionKey)) {
+      const root = process.cwd();
+      const runId = lookupRunIdBySessionKey(root, sessionKey);
+      if (runId) {
+        const restored = loadCheckpoint(runId, root);
+        if (restored) {
+          stateByRun.set(runId, restored);
+          sessionKeyToRunId.set(sessionKey, runId);
+          log(`[autopilot] session_start: resumed run ${runId} for session=${sessionKey} orchState=${restored.orchestrationState ?? 'n/a'}`);
+        }
+      }
+    }
   });
 
   registerHook('session_end', (event: PluginHookSessionEndEvent) => {
@@ -881,6 +998,13 @@ export function register(api: OpenClawPluginApi): void {
       // S8: release the audit monitor refCount for still-running runs before
       // deleting state, mirroring cleanupAll. A leak here pins monitor mode.
       if (state.status === 'running') setAuditMode('active');
+      // Crash-recovery: for non-terminal runs, the in-memory state is the most
+      // up-to-date copy — ensure it's checkpointed BEFORE deleting from memory
+      // so a crash between session_end and the next activity doesn't lose work.
+      // (Terminal runs already had their checkpoint deleted in setState.)
+      if (state.orchestrationState !== 'done' && state.orchestrationState !== 'blocked') {
+        saveCheckpoint(state, runId, resolveCheckpointRoot(state));
+      }
       stateByRun.delete(runId);
       sessionKeyToRunId.delete(sessionKey);
       canaryFired.delete(sessionKey);
