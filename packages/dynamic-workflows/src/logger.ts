@@ -5,6 +5,14 @@
  *
  *   DYNAMIC_WORKFLOWS_LOG_LEVEL  — debug | info (default) | warn | error | silent
  *   DYNAMIC_WORKFLOWS_LOG_FORMAT — text (default) | json
+ *
+ * DRIFT REFERENCE: this logger is intentionally byte-equivalent in its
+ * safety-relevant parts (emitJson try/catch + fallback shape, splitArgs) to
+ * packages/autopilot/src/logger.ts. If you change the try/catch or fallback
+ * here, change the sibling too. The two per-package logger tests
+ * (tests/logger.test.ts here, autopilot/tests/p0-structured-logger.test.ts) are
+ * the drift guard until a third consumer justifies extracting createLogger()
+ * (boundary doc §5.2). The logger must NEVER throw into the fail-closed guard.
  */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
@@ -53,10 +61,19 @@ function emitText(level: Exclude<LogLevel, 'silent'>, args: unknown[]): void {
   else console.log(...args);
 }
 
+/**
+ * Split variadic log args into a message string + a merged context object.
+ * Object args have their structure PRESERVED (merged into ctx) instead of being
+ * flattened to "[object Object]"; primitive/array args join into the message.
+ * This is what lets JSON-mode `log('x', { runId })` emit a real runId field
+ * instead of a lost blob. Text mode is unaffected (it passes raw args through).
+ */
 function splitArgs(args: unknown[]): { msg: string; ctx: Record<string, unknown> } {
   const parts: string[] = [];
   let ctx: Record<string, unknown> = {};
   for (const a of args) {
+    // Arrays are object-typed but flatten poorly into ctx ({0:..,1:..}); keep
+    // them in the message like before. Only plain objects merge into ctx.
     if (a !== null && typeof a === 'object' && !Array.isArray(a)) {
       ctx = { ...ctx, ...(a as Record<string, unknown>) };
     } else {

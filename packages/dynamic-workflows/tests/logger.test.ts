@@ -75,6 +75,22 @@ describe('logger — JSON format mode', () => {
     expect(parsed.runId).toBe('run-9');
     expect(arg).not.toContain('[object Object]');
   });
+
+  // ── DEC-2 regression via the variadic path (log → splitArgs → emitJson) ──────
+  // logWithContext bypasses splitArgs; this sibling case proves the throw-safety
+  // invariant also holds when an object arg flows through splitArgs into emitJson,
+  // so a future change to splitArgs cannot re-open the mis-block path.
+  it('log() does not throw on a circular object arg (splitArgs → emitJson path)', async () => {
+    const { log } = await import('../src/logger');
+    const circular: Record<string, unknown> = { sessionKey: 'sk-via-variadic' };
+    circular.self = circular;
+    expect(() => log('blocked via variadic', circular)).not.toThrow();
+    const arg = consoleSpy.mock.calls[0][0] as string;
+    expect(() => JSON.parse(arg)).not.toThrow();
+    const parsed = JSON.parse(arg);
+    expect(parsed.msg).toBe('blocked via variadic');
+    expect(parsed.ctxError).toBe('unserializable');
+  });
 });
 
 describe('logger — logWithContext (the DEC-2 throw path)', () => {
