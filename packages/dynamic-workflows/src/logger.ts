@@ -35,7 +35,13 @@ function shouldLog(level: LogLevel): boolean {
 
 function emitJson(level: Exclude<LogLevel, 'silent'>, msg: string, ctx?: Record<string, unknown>): void {
   const record: Record<string, unknown> = { ts: Date.now(), level, msg, ...ctx };
-  const line = JSON.stringify(record);
+  let line: string;
+  try {
+    line = JSON.stringify(record);
+  } catch {
+    // Circular ref or BigInt in ctx — the logger must never throw into the guard hook.
+    line = JSON.stringify({ ts: record.ts, level, msg, ctxError: 'unserializable' });
+  }
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
   else console.log(line);
@@ -47,22 +53,41 @@ function emitText(level: Exclude<LogLevel, 'silent'>, args: unknown[]): void {
   else console.log(...args);
 }
 
+function splitArgs(args: unknown[]): { msg: string; ctx: Record<string, unknown> } {
+  const parts: string[] = [];
+  let ctx: Record<string, unknown> = {};
+  for (const a of args) {
+    if (a !== null && typeof a === 'object' && !Array.isArray(a)) {
+      ctx = { ...ctx, ...(a as Record<string, unknown>) };
+    } else {
+      parts.push(String(a));
+    }
+  }
+  return { msg: parts.join(' '), ctx };
+}
+
 export function log(...args: unknown[]): void {
   if (!shouldLog('info')) return;
-  if (isJsonFormat()) emitJson('info', args.map(String).join(' '));
-  else emitText('info', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('info', msg, ctx);
+  } else emitText('info', args);
 }
 
 export function warn(...args: unknown[]): void {
   if (!shouldLog('warn')) return;
-  if (isJsonFormat()) emitJson('warn', args.map(String).join(' '));
-  else emitText('warn', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('warn', msg, ctx);
+  } else emitText('warn', args);
 }
 
 export function error(...args: unknown[]): void {
   if (!shouldLog('error')) return;
-  if (isJsonFormat()) emitJson('error', args.map(String).join(' '));
-  else emitText('error', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('error', msg, ctx);
+  } else emitText('error', args);
 }
 
 /** Structured log: JSON `{ts,level,msg,...ctx}` in json mode, `[level] msg k=v` in text mode. */
