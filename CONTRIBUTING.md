@@ -129,28 +129,57 @@ Packages" PR that:
 - Generates/updates `CHANGELOG.md` per package
 - Deletes consumed `.changeset/*.md` files
 
-**Step 2 — sync openclaw.plugin.json (manual):** Changesets does not bump
-`openclaw.plugin.json`. Before merging the Version Packages PR, bump
-`openclaw.plugin.json` (if present) to match `package.json`.
+**Step 2 — sync openclaw.plugin.json + index.ts (automated):** The
+`version-packages` script runs `changeset version && node scripts/sync-plugin-versions.cjs`,
+which propagates each `package.json` version into `openclaw.plugin.json` (if
+present) **and** the `export const version` in `index.ts` (if present). No
+manual bump is needed. (Earlier docs said this was manual — it was automated
+after the S14 version-const drift recurred; see `scripts/sync-plugin-versions.cjs`.)
 
 **Step 3 — merge the Version Packages PR.**
 
 **Step 4 — npm publish (manual, local):**
 
 ```bash
-./scripts/publish.sh --dry-run   # validate first (always)
-./scripts/publish.sh             # real publish — build + publish + verify + tag
+./scripts/publish.sh --dry-run                # validate first (always)
+./scripts/publish.sh                          # publish all three (in dependency order)
+./scripts/publish.sh --only <pkg>             # publish a single package
 ```
 
-This runs: pre-flight validation (version alignment, clean tree, npm login) →
-build → publish in dependency order → verify published artifacts → tag.
+This runs: pre-flight validation (version alignment across package.json +
+plugin.json + index.ts const, clean tree, npm login) → build → publish in
+dependency order → verify published artifacts → tag. Use `--only` to ship a
+subset (e.g. a security fix without riding along unrelated work awaiting host
+verification).
 
 ### Version alignment invariant
 
-`package.json` and `openclaw.plugin.json` (if present) must always have the
-same version. Changesets bumps `package.json` automatically; **you must
-manually bump `openclaw.plugin.json`** in the Version Packages PR (Step 2).
-The publish script validates this and refuses to publish on drift.
+`package.json`, `openclaw.plugin.json` (if present), and the
+`export const version` in `index.ts` (if present) must always carry the same
+version. `scripts/sync-plugin-versions.cjs` propagates `package.json` into the
+other two automatically as part of the Version Packages PR. The publish script
+validates all three on every run and refuses to publish on drift, pointing at
+the sync script as the fix.
+
+### Release ownership & security-fix SLA
+
+Releases are **not automated** — npm publish is a manual, credentialed step
+(see Step 4). To prevent security fixes from rotting on `master` (a prior
+incident left classifier bypass fixes unreleased for 6 days), observe these
+bounds:
+
+| change severity | max time on `master` before publish | owner |
+|---|---|---|
+| `critical` / `high` security fix (classifier bypass, fail-open guard, RCE vector) | **≤ 72 hours** | the maintainer who merged it, or the current release owner (`@TeFuirnever` or delegate) |
+| `medium` / `low` security or correctness fix | **≤ 7 days**, or the next scheduled release | any maintainer |
+| feature / non-security | next scheduled release | any maintainer |
+
+The release owner is accountable for the publish step, not for writing the fix.
+If you merge a security fix, **file the changeset in the same PR** and ping the
+owner — do not assume "someone will publish it." The `--only <pkg>` flag exists
+specifically so a security fix can ship immediately without waiting on
+unrelated work in other packages (e.g. autopilot crash-recovery awaiting host
+verification).
 
 ## License
 
