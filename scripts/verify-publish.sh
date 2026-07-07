@@ -3,9 +3,24 @@
 # expected content. Downloads each tarball from the registry and checks key
 # files/symbols. Run after `publish.sh` (or manually to spot-check).
 #
-# Usage: ./scripts/verify-publish.sh
+# Usage:
+#   ./scripts/verify-publish.sh                    # verify all three
+#   ./scripts/verify-publish.sh --only <pkg>       # verify a single package
+#
 # Exit: 0 if all checks pass, 1 if any package fails verification.
 set -euo pipefail
+
+ONLY=""
+if [ "${1:-}" = "--only" ]; then
+  ONLY="$2"
+  case "$ONLY" in
+    permission-policy|dynamic-workflows|autopilot) ;;
+    *) echo "FAIL: --only '$ONLY' is not a known package"; exit 1 ;;
+  esac
+fi
+
+# A package runs when no --only was passed, or when --only selected it.
+run_pkg() { [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
@@ -23,10 +38,11 @@ check() {
   fi
 }
 
-echo "=== Verifying published packages ==="
+echo "=== Verifying published packages${ONLY:+ ($ONLY)} ==="
 
 # ── permission-policy: critical API exports ─────────────────────────────────
 
+if run_pkg permission-policy; then
 echo "--- @oh-my-matrix/permission-policy ---"
 pp_v=$(node -p "require('./packages/permission-policy/package.json').version")
 (cd "$TMPDIR" && npm pack "@oh-my-matrix/permission-policy@${pp_v}" > /dev/null 2>&1)
@@ -36,9 +52,11 @@ tar -xzf "$TMPDIR"/oh-my-matrix-permission-policy-*.tgz -C "$TMPDIR/pp"
 grep -q "decidePermissionForEvent" "$TMPDIR/pp/package/dist/index.js" && check "decidePermissionForEvent export" 0 || check "decidePermissionForEvent export" 1
 grep -q "tokenizeShell" "$TMPDIR/pp/package/dist/index.js" && check "tokenizeShell export" 0 || check "tokenizeShell export" 1
 grep -q "extractCommandSegments" "$TMPDIR/pp/package/dist/index.js" && check "extractCommandSegments export" 0 || check "extractCommandSegments export" 1
+fi
 
 # ── dynamic-workflows: skill layer + guard ──────────────────────────────────
 
+if run_pkg dynamic-workflows; then
 echo "--- @oh-my-matrix/dynamic-workflows ---"
 dw_v=$(node -p "require('./packages/dynamic-workflows/package.json').version")
 (cd "$TMPDIR" && npm pack "@oh-my-matrix/dynamic-workflows@${dw_v}" > /dev/null 2>&1)
@@ -63,9 +81,11 @@ pl_v=$(node -p "require('$TMPDIR/dw/package/openclaw.plugin.json').version")
 
 # guard registers before_tool_call
 grep -q "before_tool_call" "$TMPDIR/dw/package/dist/index.js" && check "guard registers before_tool_call" 0 || check "guard registers before_tool_call" 1
+fi
 
 # ── autopilot: C1 fix + H1 fix + major-bump markers ─────────────────────────
 
+if run_pkg autopilot; then
 echo "--- @oh-my-matrix/autopilot ---"
 ap_v=$(node -p "require('./packages/autopilot/package.json').version")
 (cd "$TMPDIR" && npm pack "@oh-my-matrix/autopilot@${ap_v}" > /dev/null 2>&1)
@@ -83,6 +103,7 @@ grep -q "trustWorkspace" "$TMPDIR/ap/package/dist/index.js" && check "trustWorks
 
 # Version in dist matches package
 grep -q "$ap_v" "$TMPDIR/ap/package/dist/index.js" && check "version ${ap_v} in dist" 0 || check "version ${ap_v} not found in dist" 1
+fi
 
 # ── Result ──────────────────────────────────────────────────────────────────
 
