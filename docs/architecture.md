@@ -77,7 +77,7 @@ The split prevents duplicated safety logic and lets future OpenClaw plugins reus
 ### Multi-Agent Workflow
 
 1. Agent decides the task needs workflow scale.
-2. Dynamic Workflows skill generates a `.prose` program using one or more of the 8 orchestration patterns.
+2. Dynamic Workflows skill generates a `.prose` program using one or more of the 11 orchestration patterns.
 3. OpenProse compiles and executes the program.
 4. Subagents fan out through OpenClaw sessions.
 5. `@oh-my-matrix/dynamic-workflows` guards each `:subagent:` tool call.
