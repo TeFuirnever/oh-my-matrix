@@ -3,23 +3,51 @@
 # with pre-flight validation and post-publish verification.
 #
 # Usage:
-#   ./scripts/publish.sh              # real publish
-#   ./scripts/publish.sh --dry-run    # validate without publishing
+#   ./scripts/publish.sh                          # real publish (all three)
+#   ./scripts/publish.sh --dry-run                # validate without publishing
+#   ./scripts/publish.sh --only <pkg>             # publish a single package
+#   ./scripts/publish.sh --only <pkg> --dry-run   # validate a single package
 #
 # Publish order is fixed by the peer-dependency graph (leaf first):
 #   permission-policy  (leaf, no peerDeps)
 #   dynamic-workflows  (peerDeps: permission-policy)
 #   autopilot          (peerDeps: permission-policy)
 #
+# --only: publish a subset (e.g. to ship a security fix without riding along
+# unrelated work). The selected package(s) still must each be version-ahead of
+# the registry. Order is preserved; dependents are NOT auto-included (if you
+# --only permission-policy, dynamic-workflows/autopilot are not republished).
+#
 # See CONTRIBUTING.md § Releasing for version-bump guidance.
 set -euo pipefail
 
-DRY_RUN="${1:-}"
-PACKAGES=("permission-policy" "dynamic-workflows" "autopilot")
+ALL_PACKAGES=("permission-policy" "dynamic-workflows" "autopilot")
+DRY_RUN=""
+ONLY=""
+
+# ── 0. Parse args ────────────────────────────────────────────────────────────
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN="--dry-run"; shift ;;
+    --only)
+      ONLY="$2"; shift 2
+      if ! printf '%s\n' "${ALL_PACKAGES[@]}" | grep -qx "$ONLY"; then
+        echo "FAIL: --only '$ONLY' is not one of: ${ALL_PACKAGES[*]}"; exit 1
+      fi
+      ;;
+    *) echo "FAIL: unknown arg '$1'"; exit 1 ;;
+  esac
+done
+
+if [ -n "$ONLY" ]; then
+  PACKAGES=("$ONLY")
+else
+  PACKAGES=("${ALL_PACKAGES[@]}")
+fi
 
 # ── 1. Pre-flight validation ────────────────────────────────────────────────
 
-echo "=== 1. Pre-flight validation ==="
+echo "=== 1. Pre-flight validation (${PACKAGES[*]}) ==="
 
 # 1a. Working tree must be clean (avoid publishing uncommitted state)
 if [ -n "$(git status --porcelain)" ]; then
@@ -29,12 +57,22 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # 1b. Version alignment: package.json must match openclaw.plugin.json (if present)
+#     AND index.ts `export const version` (if present). S14 drift guard.
 for pkg in "${PACKAGES[@]}"; do
   pj_v=$(node -p "require('./packages/' + '${pkg}' + '/package.json').version")
   if [ -f "packages/${pkg}/openclaw.plugin.json" ]; then
     pl_v=$(node -p "require('./packages/' + '${pkg}' + '/openclaw.plugin.json').version")
     if [ "$pj_v" != "$pl_v" ]; then
       echo "FAIL: ${pkg} version drift (package.json=${pj_v} plugin.json=${pl_v})"
+      exit 1
+    fi
+  fi
+  if [ -f "packages/${pkg}/index.ts" ]; then
+    # Extract the `export const version = '<v>';` value from index.ts source.
+    idx_v=$(grep -E "export\s+const\s+version\s*=" "packages/${pkg}/index.ts" | head -1 | sed -E "s/.*version\s*=\s*'([^']*)'.*/\1/")
+    if [ -n "$idx_v" ] && [ "$pj_v" != "$idx_v" ]; then
+      echo "FAIL: ${pkg} version drift (package.json=${pj_v} index.ts=${idx_v})"
+      echo "  fix: run 'node scripts/sync-plugin-versions.cjs' to sync, or hand-edit packages/${pkg}/index.ts"
       exit 1
     fi
   fi
@@ -82,7 +120,11 @@ done
 
 if [ "$DRY_RUN" != "--dry-run" ]; then
   echo "=== 4. Verify published artifacts ==="
-  bash "$(dirname "$0")/verify-publish.sh"
+  if [ -n "$ONLY" ]; then
+    bash "$(dirname "$0")/verify-publish.sh" --only "$ONLY"
+  else
+    bash "$(dirname "$0")/verify-publish.sh"
+  fi
 
   echo "=== 5. Tag the release commit ==="
   for pkg in "${PACKAGES[@]}"; do
