@@ -153,7 +153,13 @@ To restore 2.x behavior, set `trustWorkspace: true` in the activate payload or p
 
 All other 3.0.0 changes (model routing, thinking intensity, new BlockedReason values, stall detection for `claimed` runs) are additive and backward-compatible.
 
+### Behavioral changes within 3.x
+
+These are not 2.x→3.0.0 migration steps — they are **already-shipped precedence flips** inside the 3.x line that may affect existing configurations:
+
+- **3.0.2 (ADR-017): a subagent's declared `model:` overrides the parent `subagentTier`.** Prior to 3.0.2, an active autopilot run with `modelIds` configured would silently override a subagent's `.prose` `model:` declaration with the parent's `subagentTier` (e.g. `budget`). As of 3.0.2, if a subagent declares `model: opus` and the parent sets `subagentTier: budget`, the subagent runs on Opus. If you relied on `subagentTier` to cap costs for subagents that declare an expensive model, those subagents use their declared model under 3.0.2+. Mitigation: remove the expensive `model:` declaration from the `.prose` if cost control matters more, or set `modelIds` to empty (the escape hatch documented in the [model-routing design](../../docs/design/model-routing-thinking-intensity-design.md) §6.3).
+
 ## Status
 
-v3.0.0. Tested with `vitest` (787 tests, 91%+ statement coverage). See the project
+v3.0.3. Tested with `vitest` (836 tests, 91%+ statement coverage). See the project
 [changelog](https://github.com/TeFuirnever/oh-my-matrix/blob/master/CHANGELOG.md).
