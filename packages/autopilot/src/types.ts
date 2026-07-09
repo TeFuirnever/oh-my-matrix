@@ -176,6 +176,14 @@ export interface EvidenceCommandResult {
   status: 'passed' | 'failed' | 'timeout' | 'skipped';
   exitCode?: number;
   durationMs: number;
+  /**
+   * Content contract (code-review 2a): on failure/timeout, carries the
+   * truncated stderr/error message (sourced from command-runner.ts:65,
+   * `e.stderr ?? e.message ?? String(err)`, capped 300 chars); on pass,
+   * empty string. Consumed by buildRetryInstruction (Enhancement B) to
+   * re-surface the failure signal into the next retry turn — so changes
+   * to this field's content semantics silently affect that injection.
+   */
   summary: string;
 }
 
@@ -281,6 +289,13 @@ export interface AutopilotState {
   evidence?: EvidenceSummary;
   workflow?: WorkflowConfig;
   workflowConfigError?: string;
+  /**
+   * Enhancement C (ADR-019): per-run trust decision (payload ?? config ?? false),
+   * stamped at activate time. Used by minTurnsBeforeComplete to raise the
+   * early-completion threshold for verifiable trusted tasks. Persisted through
+   * the checkpoint allowlist so crash-recovered runs retain their trust level.
+   */
+  trustWorkspace?: boolean;
   permissionAudit?: PermissionAuditEntry[];
   inputTokensUsed?: number;
   outputTokensUsed?: number;
@@ -341,6 +356,9 @@ export function createInitialState(
     enabled: false,
     totalTokensUsed: 0,
     tokenBudget: config.tokenBudget,
+    // Enhancement C (ADR-019): carry trustWorkspace onto state so
+    // minTurnsBeforeComplete can condition the early-completion threshold.
+    trustWorkspace: config.trustWorkspace ?? false,
     degraded: false,
   };
 }

@@ -18,6 +18,29 @@ interface FinalizeEvent {
  * lower for snappier simple-task handling.
  */
 const MIN_TURNS_BEFORE_COMPLETE = 2;
+/**
+ * Enhancement C (ADR-019): raised threshold for verifiable trusted tasks.
+ * When a run has non-empty validation commands AND trustWorkspace is true,
+ * the model must produce more concrete work before a textual completion
+ * signal is trusted — closing the gap where it could satisfy "all done" on
+ * turn 2 before validation meaningfully ran. Trades one turn of happy-path
+ * latency for false-completion prevention (non-eliminable tradeoff, per
+ * ADR-019 design doc §4 Enhancement C).
+ */
+const MIN_TURNS_BEFORE_COMPLETE_VERIFIABLE = 3;
+
+/**
+ * Enhancement C (ADR-019): resolve the per-run early-completion threshold.
+ * Returns 3 for verifiable trusted runs (validation commands present + trust
+ * enabled), 2 otherwise (the historical default). Pure function of state.
+ */
+export function minTurnsBeforeComplete(state: AutopilotState): number {
+  const hasValidationCommands = (state.workflow?.validation.commands.length ?? 0) > 0;
+  if (hasValidationCommands && state.trustWorkspace === true) {
+    return MIN_TURNS_BEFORE_COMPLETE_VERIFIABLE;
+  }
+  return MIN_TURNS_BEFORE_COMPLETE;
+}
 
 export function decideContinuation(
   state: AutopilotState,
@@ -32,10 +55,10 @@ export function decideContinuation(
   }
 
   if (isTaskComplete(event.lastAssistantMessage, event.stopHookActive)) {
-    // P1-2: don't trust an early completion signal. If too few continuations
-    // have elapsed, demote to revise so the run continues and the model can
-    // demonstrate concrete progress before being allowed to complete.
-    if (state.totalContinuations < MIN_TURNS_BEFORE_COMPLETE) {
+    // P1-2 + Enhancement C: don't trust an early completion signal. The
+    // threshold is now per-run: verifiable trusted tasks require more
+    // continuations before completion is allowed.
+    if (state.totalContinuations < minTurnsBeforeComplete(state)) {
       return {
         action: 'revise',
         retryInstruction: '[Autopilot] An early completion signal was detected. If the task is genuinely done, briefly state the concrete changes made; otherwise continue from where you left off. (early-completion guard)',

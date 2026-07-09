@@ -105,6 +105,36 @@ describe('saveCheckpoint + loadCheckpoint round-trip', () => {
     const raw = JSON.parse(fs.readFileSync(cpPath, 'utf-8'));
     expect(raw.permissionAudit).toBeUndefined();
   });
+
+  // Enhancement C (ADR-019): trustWorkspace MUST survive checkpoint round-trip.
+  // AutopilotCheckpoint is an explicit allowlist — forgetting to persist this
+  // field would silently degrade a crashed trusted-verifiable run's threshold
+  // from 3 to 2 on recovery. This test guards the allowlist entry.
+  it('persists trustWorkspace through checkpoint round-trip (Enhancement C)', async () => {
+    const state = makeState({ trustWorkspace: true });
+    saveCheckpoint(state, 'run-tw', tmpRoot);
+    await flushWrites();
+
+    const loaded = loadCheckpoint('run-tw', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.trustWorkspace).toBe(true);
+  });
+
+  it('old checkpoint without trustWorkspace loads as undefined (backward compat)', async () => {
+    // Simulate a pre-Enhancement-C checkpoint by saving one then deleting the field.
+    const state = makeState({ trustWorkspace: true });
+    saveCheckpoint(state, 'run-old', tmpRoot);
+    await flushWrites();
+
+    const cpPath = path.join(tmpRoot, '.autopilot', 'checkpoints', 'run-old.json');
+    const raw = JSON.parse(fs.readFileSync(cpPath, 'utf-8'));
+    delete raw.trustWorkspace;
+    fs.writeFileSync(cpPath, JSON.stringify(raw), 'utf-8');
+
+    const loaded = loadCheckpoint('run-old', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.trustWorkspace).toBeUndefined();
+  });
 });
 
 describe('BLOCKER #1 — status is re-derived on load, never trusted', () => {

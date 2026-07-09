@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { decideContinuation, buildRetryInstruction } from '../src/continuation-engine';
-import { createInitialState, type AutopilotState, type EvidenceSummary } from '../src/types';
+import { decideContinuation, buildRetryInstruction, minTurnsBeforeComplete } from '../src/continuation-engine';
+import { createInitialState, type AutopilotState, type EvidenceSummary, type WorkflowConfig } from '../src/types';
 
 function runningState(overrides: Partial<AutopilotState> = {}): AutopilotState {
   return {
@@ -327,6 +327,92 @@ describe('continuation-engine', () => {
       });
       const result = buildRetryInstruction(state);
       expect(result).toContain('timed out after 120000ms');
+    });
+  });
+
+  // ─── Enhancement C (ADR-019): conditional early-completion threshold ──
+  describe('minTurnsBeforeComplete (Enhancement C)', () => {
+    function workflowWithCommands(commands: unknown[]): WorkflowConfig {
+      return {
+        version: 1,
+        source: 'default',
+        maxConcurrent: 1,
+        maxRetries: 3,
+        stallTimeoutMs: 300000,
+        maxRetryBackoffMs: 60000,
+        workspace: { root: '/tmp', cleanup: 'manual', branchPrefix: 'ap', allowDirtyBase: false },
+        validation: { commands: commands as never, failOnOptional: false },
+        destructiveGit: { allow: false },
+        warnings: [],
+      };
+    }
+
+    it('returns 2 (default) when no validation commands', () => {
+      const state = runningState({ trustWorkspace: true });
+      expect(minTurnsBeforeComplete(state)).toBe(2);
+    });
+
+    it('returns 2 (default) when trustWorkspace is false even with commands', () => {
+      const state = runningState({
+        trustWorkspace: false,
+        workflow: workflowWithCommands([{ id: 'test', command: 'npm test', timeoutMs: 60000, required: true }]),
+      });
+      expect(minTurnsBeforeComplete(state)).toBe(2);
+    });
+
+    it('returns 2 (default) when trustWorkspace is undefined', () => {
+      const state = runningState({
+        trustWorkspace: undefined,
+        workflow: workflowWithCommands([{ id: 'test', command: 'npm test', timeoutMs: 60000, required: true }]),
+      });
+      expect(minTurnsBeforeComplete(state)).toBe(2);
+    });
+
+    it('returns 3 (verifiable) when commands present AND trustWorkspace true', () => {
+      const state = runningState({
+        trustWorkspace: true,
+        workflow: workflowWithCommands([{ id: 'test', command: 'npm test', timeoutMs: 60000, required: true }]),
+      });
+      expect(minTurnsBeforeComplete(state)).toBe(3);
+    });
+
+    it('decideContinuation demotes completion at totalContinuations=2 for verifiable trusted run', () => {
+      // At turn 2: default threshold (2) would allow complete, but verifiable
+      // threshold (3) demotes to revise — the core Enhancement C behavior.
+      const state = runningState({
+        totalContinuations: 2,
+        trustWorkspace: true,
+        workflow: workflowWithCommands([{ id: 'test', command: 'npm test', timeoutMs: 60000, required: true }]),
+      });
+      const result = decideContinuation(state, { lastAssistantMessage: '所有任务已完成。' });
+      expect(result.action).toBe('revise');
+    });
+
+    it('decideContinuation allows completion at totalContinuations=3 for verifiable trusted run', () => {
+      const state = runningState({
+        totalContinuations: 3,
+        trustWorkspace: true,
+        workflow: workflowWithCommands([{ id: 'test', command: 'npm test', timeoutMs: 60000, required: true }]),
+      });
+      const result = decideContinuation(state, { lastAssistantMessage: '所有任务已完成。' });
+      expect(result.action).toBe('complete');
+    });
+
+    it('regression: non-verifiable run still completes at totalContinuations=2 (backward compat)', () => {
+      // No workflow / no commands / untrusted → threshold stays 2 → turn 2 completes.
+      const state = runningState({ totalContinuations: 2 });
+      const result = decideContinuation(state, { lastAssistantMessage: '所有任务已完成。' });
+      expect(result.action).toBe('complete');
+    });
+
+    it('createInitialState carries trustWorkspace from config (default false)', () => {
+      const state = createInitialState('s', 'r');
+      expect(state.trustWorkspace).toBe(false);
+    });
+
+    it('createInitialState carries trustWorkspace true when config sets it', () => {
+      const state = createInitialState('s', 'r', { maxAttemptsPerTurn: 5, maxTotalContinuations: 50, toolErrorThreshold: 3, trustWorkspace: true });
+      expect(state.trustWorkspace).toBe(true);
     });
   });
 });
