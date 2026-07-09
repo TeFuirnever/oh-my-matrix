@@ -120,6 +120,16 @@ export function buildRetryInstruction(state: AutopilotState): string {
  * Returns null when there is no failed evidence to report (absent, passed,
  * skipped — or failed but with no command details). The block is inserted
  * BEFORE the closing "Continue from where you left off." line.
+ *
+ * Security note (code-review M1): `cmd.summary` is untrusted command output
+ * (stderr, per command-runner.ts:65). It is injected into the agent-facing
+ * retry instruction. This is an accepted diagnostic-context risk, not a new
+ * trust boundary: the same stderr already reached the model via the original
+ * tool_result; this re-surfaces it (valuable after compaction evicts it). The
+ * `[Autopilot] Last validation failed:` framing signals to the model this is
+ * diagnostic context to reason about, not an instruction to obey. The 300-char
+ * cap + 2-command limit bound the volume. No sanitization is applied because
+ * the model is the consumer, not an executor of this text.
  */
 function buildFailureBlock(evidence: AutopilotState['evidence']): string | null {
   if (!evidence || evidence.status !== 'failed') return null;
