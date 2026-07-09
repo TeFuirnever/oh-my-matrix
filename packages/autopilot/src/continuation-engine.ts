@@ -77,6 +77,8 @@ export function decideContinuation(
 }
 
 const MAX_INSTRUCTION_LENGTH = 2000;
+const MAX_COMMAND_SUMMARY_LENGTH = 300;
+const MAX_FAILED_COMMANDS = 2;
 
 export function buildRetryInstruction(state: AutopilotState): string {
   const goal = state.goal?.substring(0, 500) || '继续执行当前任务';
@@ -87,6 +89,87 @@ export function buildRetryInstruction(state: AutopilotState): string {
   if (progress) {
     parts.push(`[Autopilot] Progress so far: ${progress}`);
   }
+
+  // Enhancement B (ADR-019): when the last evidence gate run FAILED, re-surface
+  // the failure signal (failed-command stderr summaries) into the next retry
+  // instruction. This is most valuable after compaction may have evicted the
+  // original tool stderr from the context window. The command `summary` is the
+  // payload (it carries stderr from command-runner.ts:65); `failureReason` is
+  // low-value decoration ("required command(s) failed: <id>"). Prioritize
+  // summaries; include failureReason only if budget remains.
+  const failureBlock = buildFailureBlock(state.evidence);
+  if (failureBlock) {
+    parts.push(failureBlock);
+  }
   parts.push('[Autopilot] Continue from where you left off.');
-  return parts.join('\n').substring(0, MAX_INSTRUCTION_LENGTH);
+
+  // Truncation must preserve the closing line. The closing line is always last;
+  // if goal+progress+failureBlock already consume most of the budget, the naive
+  // substring(0, MAX) would clip the closing line. Instead: join, and if over
+  // budget, rebuild by truncating the failure block down to whatever space
+  // remains between the prefix (goal+progress) and the closing line.
+  const joined = parts.join('\n');
+  if (joined.length <= MAX_INSTRUCTION_LENGTH) {
+    return joined;
+  }
+  return truncatePreservingClosing(parts);
+}
+
+/**
+ * Build a concise failure-signal block from a failed EvidenceSummary.
+ * Returns null when there is no failed evidence to report (absent, passed,
+ * skipped — or failed but with no command details). The block is inserted
+ * BEFORE the closing "Continue from where you left off." line.
+ */
+function buildFailureBlock(evidence: AutopilotState['evidence']): string | null {
+  if (!evidence || evidence.status !== 'failed') return null;
+
+  const failedCommands = (evidence.commands ?? [])
+    .filter((c) => c.status === 'failed' || c.status === 'timeout')
+    .slice(0, MAX_FAILED_COMMANDS);
+
+  // No command-level detail (e.g. evidence failed but commands array is empty
+  // or all skipped) — fall back to failureReason alone if present.
+  if (failedCommands.length === 0) {
+    if (!evidence.failureReason) return null;
+    return `[Autopilot] Last validation failed: ${truncate(evidence.failureReason, MAX_COMMAND_SUMMARY_LENGTH)}`;
+  }
+
+  const lines = ['[Autopilot] Last validation failed:'];
+  for (const cmd of failedCommands) {
+    // command id + the stderr-bearing summary are the payload.
+    const summary = truncate(cmd.summary || '', MAX_COMMAND_SUMMARY_LENGTH);
+    lines.push(`  - ${cmd.id}: ${summary}`);
+  }
+  // failureReason is decorative ("required command(s) failed: <id>") — include
+  // only when it adds info beyond the command lines, truncated to a small cap.
+  if (evidence.failureReason) {
+    lines.push(`  (reason: ${truncate(evidence.failureReason, 120)})`);
+  }
+  return lines.join('\n');
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.substring(0, max - 3) + '...' : s;
+}
+
+/**
+ * Re-truncate the instruction so the closing line always survives. Drops the
+ * failure block entirely if the prefix (goal+progress) already consumes too
+ * much budget; otherwise shrinks the failure block to fit.
+ */
+function truncatePreservingClosing(parts: string[]): string {
+  const closingLine = parts[parts.length - 1];
+  // parts[0] = goal, [1] = progress (optional), [2] = failureBlock (optional)
+  const failureIdx = parts.length - 2;
+  const prefix = parts.slice(0, failureIdx).join('\n');
+  const sep = '\n';
+  // Budget after prefix + separator + closing line + its separator.
+  const budgetForFailure = MAX_INSTRUCTION_LENGTH - prefix.length - (sep.length * 2) - closingLine.length;
+  if (budgetForFailure <= 10) {
+    // Failure block can't fit meaningfully — drop it entirely; keep goal+progress+closing.
+    return `${prefix}${sep}${closingLine}`;
+  }
+  const truncatedFailure = parts[failureIdx].substring(0, budgetForFailure);
+  return `${prefix}${sep}${truncatedFailure}${sep}${closingLine}`;
 }

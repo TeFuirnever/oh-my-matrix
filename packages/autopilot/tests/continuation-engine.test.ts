@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { decideContinuation } from '../src/continuation-engine';
-import { createInitialState, type AutopilotState } from '../src/types';
+import { decideContinuation, buildRetryInstruction } from '../src/continuation-engine';
+import { createInitialState, type AutopilotState, type EvidenceSummary } from '../src/types';
 
 function runningState(overrides: Partial<AutopilotState> = {}): AutopilotState {
   return {
@@ -179,6 +179,154 @@ describe('continuation-engine', () => {
       const result = decideContinuation(state, { lastAssistantMessage: 'working...' });
       expect(result.action).toBe('pause');
       expect(result.pauseReason).toBe('token_budget_exceeded');
+    });
+  });
+
+  // ─── Enhancement B (ADR-019): failure-signal injection ───────────────
+  describe('buildRetryInstruction — failure-signal injection (Enhancement B)', () => {
+    function failedEvidence(overrides: Partial<EvidenceSummary> = {}): EvidenceSummary {
+      return {
+        status: 'failed',
+        commands: [],
+        completedAt: Date.now(),
+        failureReason: 'required command(s) failed: node-test',
+        ...overrides,
+      };
+    }
+
+    it('includes failed command summary when evidence status is failed', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: failedEvidence({
+          commands: [{
+            id: 'node-test',
+            command: 'npm test',
+            status: 'failed',
+            exitCode: 1,
+            durationMs: 5000,
+            summary: 'AssertionError: expected 3 to equal 4 at index.test.ts:12',
+          }],
+        }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('AssertionError: expected 3 to equal 4');
+      expect(result).toContain('Last validation failed');
+      expect(result).toContain('Continue from where you left off.');
+    });
+
+    it('includes failureReason as decoration when no command details', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: failedEvidence({ commands: [], failureReason: 'required command(s) failed: node-test' }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('required command(s) failed: node-test');
+      expect(result).toContain('Continue from where you left off.');
+    });
+
+    it('caps at 2 failed commands', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: failedEvidence({
+          commands: [
+            { id: 'cmd-1', command: 'a', status: 'failed', durationMs: 1, summary: 'fail-1' },
+            { id: 'cmd-2', command: 'b', status: 'failed', durationMs: 1, summary: 'fail-2' },
+            { id: 'cmd-3', command: 'c', status: 'failed', durationMs: 1, summary: 'fail-3' },
+          ],
+        }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('fail-1');
+      expect(result).toContain('fail-2');
+      expect(result).not.toContain('fail-3');
+    });
+
+    it('preserves closing line even when goal+progress consume most of the budget', () => {
+      // goal at 500 + progress at 500 + a long failure block — closing line must survive.
+      const longGoal = 'g'.repeat(500);
+      const longProgress = 'p'.repeat(500);
+      const state = runningState({
+        goal: longGoal,
+        progress: longProgress,
+        evidence: failedEvidence({
+          commands: [{
+            id: 'big-test',
+            command: 'npm test',
+            status: 'failed',
+            durationMs: 1,
+            summary: 'x'.repeat(300),
+          }],
+        }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('Continue from where you left off.');
+      expect(result.length).toBeLessThanOrEqual(2000);
+    });
+
+    it('does not exceed MAX_INSTRUCTION_LENGTH (2000) in any case', () => {
+      const state = runningState({
+        goal: 'g'.repeat(500),
+        progress: 'p'.repeat(500),
+        evidence: failedEvidence({
+          failureReason: 'f'.repeat(200),
+          commands: [
+            { id: 'c1', command: 'a', status: 'failed', durationMs: 1, summary: 's'.repeat(300) },
+            { id: 'c2', command: 'b', status: 'failed', durationMs: 1, summary: 's'.repeat(300) },
+          ],
+        }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result.length).toBeLessThanOrEqual(2000);
+    });
+
+    it('regression: produces no failure block when evidence is absent', () => {
+      const state = runningState({ goal: 'fix the bug' });
+      const result = buildRetryInstruction(state);
+      expect(result).not.toContain('Last validation failed');
+      expect(result).toContain('Current goal: fix the bug');
+      expect(result).toContain('Continue from where you left off.');
+    });
+
+    it('regression: produces no failure block when evidence passed', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: { status: 'passed', commands: [], completedAt: Date.now() },
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).not.toContain('Last validation failed');
+      expect(result).toContain('Continue from where you left off.');
+    });
+
+    it('regression: produces no failure block when evidence skipped', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: { status: 'skipped', commands: [], completedAt: Date.now(), failureReason: 'no commands' },
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).not.toContain('Last validation failed');
+    });
+
+    it('regression: default goal when state.goal is undefined', () => {
+      const state = runningState({ goal: undefined });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('继续执行当前任务');
+    });
+
+    it('includes timeout-status commands in the failure block', () => {
+      const state = runningState({
+        goal: 'fix the bug',
+        evidence: failedEvidence({
+          commands: [{
+            id: 'slow-test',
+            command: 'npm test',
+            status: 'timeout',
+            durationMs: 120000,
+            summary: 'timed out after 120000ms',
+          }],
+        }),
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('timed out after 120000ms');
     });
   });
 });
