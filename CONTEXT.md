@@ -24,7 +24,12 @@ OpenClaw-native continuous execution plugin。它让一个长程任务跨 turn �
 
 AI agent 根据用户自然语言任务生成的 `.prose` 编排程序。包含 agent 定义、并行/管道/循环/条件控制流、上下文传递，经 OpenProse 执行。
 
-适用场景：大范围审计、并行调研、跨模型/跨角色验证、候选方案筛选、递归搜索。
+适用场景（按是否带反驳门划分）：
+
+- **带反驳门（refute gate）**：大范围审计、并行调研、跨模型/跨角色验证、候选方案筛选、递归搜索，以及反驳兼容的生产性编排——实现↔review 迭代（duel-loop）、生成-筛选（generate-and-filter）、候选择优（tournament）。这些任务的"门"（skeptic/filter/reviewer/judge）映射到 refute 语义，`verified/partial/blocked` 标签一致。
+- **不带反驳门（非本 skill 范围）**：纯并行实现（N agent 各写独立模块、无 review）、纯批量迁移（仅 build/test 门、无 refute）。这两类指向单 agent 或 Autopilot。
+
+> 注：生产性编排是现有 pattern 已支持场景的显式化，非新增能力；边界见 [`packages/dynamic-workflows/skill/SKILL.md`](packages/dynamic-workflows/skill/SKILL.md) § Refute-gate compatibility。
 
 ### .prose 程序
 
