@@ -69,7 +69,10 @@ for pkg in "${PACKAGES[@]}"; do
   fi
   if [ -f "packages/${pkg}/index.ts" ]; then
     # Extract the `export const version = '<v>';` value from index.ts source.
-    idx_v=$(grep -E "export\s+const\s+version\s*=" "packages/${pkg}/index.ts" | head -1 | sed -E "s/.*version\s*=\s*'([^']*)'.*/\1/")
+    # `|| true` guards: a pure-library package (e.g. permission-policy) may
+    # have an index.ts but no `export const version` — grep returns 1 on no
+    # match, which under `set -euo pipefail` would silently kill the script.
+    idx_v=$(grep -E "export[[:space:]]+const[[:space:]]+version[[:space:]]*=" "packages/${pkg}/index.ts" | head -1 | sed -E "s/.*version[[:space:]]*=[[:space:]]*'([^']*)'.*/\1/" || true)
     if [ -n "$idx_v" ] && [ "$pj_v" != "$idx_v" ]; then
       echo "FAIL: ${pkg} version drift (package.json=${pj_v} index.ts=${idx_v})"
       echo "  fix: run 'node scripts/sync-plugin-versions.cjs' to sync, or hand-edit packages/${pkg}/index.ts"
