@@ -127,9 +127,11 @@ describe('Evidence Gate wiring', () => {
       await mockWithCmd.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-cmd', trustWorkspace: true }, respond: activateRespond });
       await mockWithCmd.hooks.get('session_start')!({ sessionId: 'sid-cmd', sessionKey: 'sess-ev-cmd' });
 
-      // P1-2: drive two non-completion turns so the completion signal is trusted.
+      // P1-2 + Enhancement C: drive THREE non-completion turns so the completion
+      // signal is trusted. This run has validation commands + trustWorkspace=true,
+      // so minTurnsBeforeComplete returns 3 (not the default 2).
       const finalizeCmd = mockWithCmd.hooks.get('before_agent_finalize')!;
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         await finalizeCmd({ sessionId: 'sid-cmd', sessionKey: 'sess-ev-cmd', stopHookActive: false, lastAssistantMessage: 'still working...' });
       }
       await finalizeCmd({
@@ -175,9 +177,10 @@ describe('Evidence Gate wiring', () => {
       await mockFail.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-fail', trustWorkspace: true }, respond: activateRespond });
       await mockFail.hooks.get('session_start')!({ sessionId: 'sid-fail', sessionKey: 'sess-ev-fail' });
 
-      // P1-2: drive two non-completion turns so the completion signal is trusted.
+      // P1-2 + Enhancement C: drive THREE non-completion turns (trustWorkspace=true
+      // + validation commands → threshold 3) so the completion signal is trusted.
       const finalizeFail = mockFail.hooks.get('before_agent_finalize')!;
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         await finalizeFail({ sessionId: 'sid-fail', sessionKey: 'sess-ev-fail', stopHookActive: false, lastAssistantMessage: 'still working...' });
       }
       await finalizeFail({
@@ -232,7 +235,8 @@ describe('Evidence Gate wiring', () => {
       await mockBlocked.hooks.get('session_start')!({ sessionId: 'sid-blocked-throw', sessionKey: 'sess-ev-blocked-throw' });
 
       const finalizeBlocked = mockBlocked.hooks.get('before_agent_finalize')!;
-      for (let i = 0; i < 2; i++) {
+      // Enhancement C: trustWorkspace=true + validation commands → threshold 3.
+      for (let i = 0; i < 3; i++) {
         await finalizeBlocked({ sessionId: 'sid-blocked-throw', sessionKey: 'sess-ev-blocked-throw', stopHookActive: false, lastAssistantMessage: 'still working...' });
       }
       // This must NOT throw.

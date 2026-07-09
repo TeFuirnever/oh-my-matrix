@@ -1180,6 +1180,14 @@ export function register(api: OpenClawPluginApi): void {
         const next = { ...s };
         if (payloadMaxContinuations != null) next.maxTotalContinuations = Math.min(500, Math.max(1, Math.round(payloadMaxContinuations)));
         if (payloadTokenBudget != null) next.tokenBudget = payloadTokenBudget;
+        // Enhancement C (ADR-019): stamp the EFFECTIVE per-run trust decision
+        // (payload ?? config ?? false) onto state. createInitialState copies
+        // config.trustWorkspace (plugin-level), but the payload override must
+        // win — without this, a payload-trusted run would keep the plugin-level
+        // value and minTurnsBeforeComplete would not raise the threshold.
+        // applyPayload runs after createInitialState and before applyWorkflowConfig
+        // in both activate branches, so this is the single correct stamp point.
+        next.trustWorkspace = payloadTrustWorkspace ?? config.trustWorkspace ?? false;
         return next;
       };
 

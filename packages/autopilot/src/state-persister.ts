@@ -116,6 +116,10 @@ export interface AutopilotCheckpoint {
   /** Workflow config (Reviewer #1 Finding 2c fix): restored runs otherwise skip
    * validation commands, reset stallTimeoutMs, and lose modelRouting. */
   workflow?: WorkflowConfig;
+  /** Enhancement C (ADR-019): per-run trust decision; without this a crashed
+   * trusted-verifiable run silently degrades the early-completion threshold
+   * (3 -> 2) on recovery. Must be in the allowlist, not auto-serialized. */
+  trustWorkspace?: boolean;
   /** Millisecond epoch of the checkpoint write. */
   savedAt: number;
 }
@@ -154,6 +158,7 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     workspace: state.workspace,
     retry: state.retry,
     workflow: state.workflow,
+    trustWorkspace: state.trustWorkspace,
     savedAt: Date.now(),
   };
 }
@@ -302,6 +307,7 @@ export function loadCheckpoint(
     workspace: cp.workspace,
     retry: cp.retry,
     workflow: cp.workflow,
+    trustWorkspace: cp.trustWorkspace,
   } as AutopilotState;
 
   // BLOCKER #1: re-derive status. Never trust cp.status.
