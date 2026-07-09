@@ -59,7 +59,7 @@ Exit criteria:
 |---|---|---|
 | Projection contract (`DynamicWorkflowProjection`) | Large fan-out runs need a stable, read-only data shape for UI/consumers | Done 2026-07-03 (Milestone C, #70) |
 | Host/UI rendering of branch graph, blocked calls, evidence | The projection is built but no host renders it yet | Planned (Milestone D) |
-| Pattern examples gallery | The 8 workflow modes need realistic examples | Planned |
+| Pattern examples gallery | The 11 workflow patterns need realistic examples (the "8" historically refers to the OpenProse-covered core patterns per ADR-009 E2; SKILL.md lists 11 including judge-panel, completeness-critic, multi-lens-sweep). Audit/review templates exist; refute-gate-compatible productive templates (implement-review-duel, test-generation-filter, candidate-tournament) added 2026-07-09 — remaining gaps are pure parallel-implement and batch-migrate, which are out of scope (no natural refute gate; see `skill/SKILL.md` § Refute-gate compatibility). | In progress |
 
 Design references:
 

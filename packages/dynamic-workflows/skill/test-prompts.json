@@ -40,5 +40,33 @@
     "prompt": "Audit these 8 API handlers for GDPR compliance — I need a specialist that knows EU data-protection law, not just a generic security reviewer.",
     "expected": "Skill activates; Step 1.5 finds no standard role matches GDPR-law → declares agent custom_gdpr_auditor with ⚠ marker; Step 2 checkpoint surfaces the custom_* agent for explicit approval; does NOT proceed past checkpoint without user OK; standard roles (security-auditor, reviewer) marked ✓ where reused",
     "tier": "happy"
+  },
+  {
+    "id": 7,
+    "scenario": "implement-review-duel — productive task with natural refute gate",
+    "prompt": "Implement the retry-backoff change across the 4 service files, then have a reviewer try to break it — keep revising until it survives review.",
+    "expected": "Skill activates; chooses duel-loop (implement-then-review class); Step 1.5 maps to implementer (✓, write-capable, owns a DISJOINT file set per branch) + reviewer (✓, refute side); reviewer FAIL = REFUTED, PASS = SURVIVES; bounded max 3 rounds (one-shot DAG, NOT an autonomous loop); synthesis reports SURVIVED or REFUTED with standard verified/partial/blocked labels; parallel builders never share a file set",
+    "tier": "happy"
+  },
+  {
+    "id": 8,
+    "scenario": "test-generation-filter — productive generate-then-filter",
+    "prompt": "Generate candidate test cases for the auth module — overproduce ideas, then filter to the ones that cover real edges, and write those.",
+    "expected": "Skill activates; chooses generate-and-filter (generate-then-filter class); Step 1.5 maps to test-author (✓ generation+author side) + skeptic/judge (✓ filter = refute gate); candidates that fail the rubric are REFUTED; survivors written with fresh test output; synthesis reports surviving tests + REFUTED ideas + coverage gaps",
+    "tier": "happy"
+  },
+  {
+    "id": 9,
+    "scenario": "candidate-tournament — productive select-via-judge",
+    "prompt": "I have 3 candidate implementations for the cache layer — produce a 4th from a different angle, then have a judge pick the strongest via pairwise comparison.",
+    "expected": "Skill activates; chooses tournament (select-via-judge class); Step 1.5 maps to contestant (✓ or custom_ if distinct approach needs one) + judge (✓ refute side, eliminates weaker entries); each pairwise round REFUTES the loser; winner SURVIVES all rounds; if contestants write files each owns a DISJOINT set; ≤5 parallel branches respected",
+    "tier": "happy"
+  },
+  {
+    "id": 10,
+    "scenario": "below-refute-gate — pure parallel implementation, should NOT activate (negative)",
+    "prompt": "Split this feature across 5 agents — each implements one service module in parallel, no review needed, just merge when done.",
+    "expected": "Skill does NOT activate as a fan-out-of-independent-writers; the Refute-gate compatibility section fires — pure parallel implementation has no natural refute gate and parallel writes carry merge hazards the prompt-level guard cannot enforce; agent should recommend a single agent with a script, OR the host Autopilot, OR explicitly compose pipeline + adversarial-verify so each artifact is refuted before it survives; does NOT silently spawn 5 write-capable subagents with no gate",
+    "tier": "negative"
   }
 ]
