@@ -81,7 +81,7 @@ The split prevents duplicated safety logic and lets future OpenClaw plugins reus
 3. OpenProse compiles and executes the program.
 4. Subagents fan out through OpenClaw sessions.
 5. `@oh-my-matrix/dynamic-workflows` guards each `:subagent:` tool call.
-6. Final synthesis separates verified findings from failed or uncertain branches.
+6. Final synthesis separates verified results (findings, implementations, or candidates that survived the refute gate) from failed or uncertain branches.
 
 ## Safety Model
 
