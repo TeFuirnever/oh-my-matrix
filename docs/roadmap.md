@@ -105,6 +105,25 @@ Exit criteria:
 - When `modelIds` is unconfigured, autopilot returns no override — `.prose` `model:` declarations fully win (no silent interference).
 - `pnpm --filter @oh-my-matrix/autopilot test` remains green (667 existing tests unaffected; backward compat via `'high'` default).
 
+## P6: Conditional Evidence Judging
+
+Decision record: [`ADR-019`](adr/019-conditional-evidence-judging-boundary.md). Design: [`autopilot-conditional-judging-design.md`](design/autopilot-conditional-judging-design.md). Academic background: [`eb2ef245013a4216ad9eb1c2c0fb4c8d.md`](eb2ef245013a4216ad9eb1c2c0fb4c8d.md) (note: written for a different artifact; path inventory does not apply here).
+
+Autopilot's judging capability is **conditional**, not universal: ground-truth completion judging applies only to tasks with verifiable validation commands. Model-level judging (independent Evaluator, adversarial prompts) is deferred — `runtime.llm.complete` with the default model is available without host opt-in, but mandates its own implementation ADR.
+
+| Deliverable | Why | Status |
+|---|---|---|
+| Enhancement B: failure-signal injection into retry instructions | Model got "continue" with zero failure context after a failed validation; stderr re-surfaced (valuable post-compaction) | Done 2026-07-09 (#118) |
+| Enhancement C: conditional `MIN_TURNS_BEFORE_COMPLETE` (2→3 for verifiable trusted) | Model could satisfy "all done" on turn 2 before validation ran, on the tasks where we *can* verify | Done 2026-07-09 (#119) |
+| Enhancement A: re-run validation on `passed` before trusting it | Evidence can go stale between the gate check and run completion | Planned (touches `complete` branch timing) |
+| `runtime.llm` default-model adversarial judging | Portable calibration technique (adversarial framing, ~15pp overconfidence reduction); available without host opt-in | Planned (needs own ADR + structured-JSON fallback design) |
+| `runtime.subagent.run` ownership separation | True judgment-execution separation via isolated evaluator session | Planned (subagent capability boundary unverified) |
+
+Exit criteria:
+
+- Enhancements B/C shipped in 3.1.0; backward compatible (no change for runs without validation commands or `trustWorkspace`).
+- ADR-016 sole-writer invariant preserved across all enhancements (no `status` writes; judging signals shape only the revise/complete branch condition).
+
 ## Historical v0.x Snapshot
 
 The old roadmap phases for ralph/team/MCP/hooks/agent prompt libraries are historical. They remain useful for design archaeology only:

@@ -19,6 +19,11 @@ npm install openclaw@">=2026.5.28" @oh-my-matrix/permission-policy
 - **Continuation engine** — resumes long tasks across turns with exponential-backoff retry.
 - **Stall / completion detection** — surfaces when a run is stuck or genuinely done.
 - **Evidence gate** — blocks completion until validation commands pass (opt-in via `trustWorkspace`).
+  When validation fails, the failed commands' stderr is injected into the next retry
+  instruction so the model gets an explicit correction signal (Enhancement B, ADR-019).
+  For verifiable trusted runs (`trustWorkspace: true` + validation commands), the
+  early-completion threshold is raised (2→3) to prevent premature "all done" signals
+  (Enhancement C, ADR-019).
 - **Orchestrator reducer** — pure-function state machine (7 states, immutable transitions).
 - **Projection + goal manager** — preserves run state and goal across compaction.
 - **Model routing** — cost-aware tier selection per execution phase (budget/standard/premium).

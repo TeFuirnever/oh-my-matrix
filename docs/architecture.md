@@ -43,12 +43,12 @@ It owns:
 - orchestration state: `claimed` / `running` / `retry_queued` / `blocked` / `done`
 - goal snapshot / restore
 - retry queue and stall detection
-- evidence collection and validation results
+- evidence collection and validation results — judging is **conditional** (verifiable tasks with validation commands only; model-level judging is deferred per [ADR-019](adr/019-conditional-evidence-judging-boundary.md))
 - compact projection for host UI
 - `WORKFLOW.md` autopilot config parsing
 - token budget and tool-error controls
 
-The plugin registers 11 OpenClaw hooks declared in `packages/autopilot/package.json`.
+The plugin registers 12 OpenClaw hooks declared in `packages/autopilot/package.json`.
 
 ### Dynamic Workflows
 
