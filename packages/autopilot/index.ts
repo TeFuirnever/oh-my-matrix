@@ -71,7 +71,7 @@ export const name = 'Autopilot Continuous Mode';
 // These three are the release-time single source of truth for the plugin version.
 // Kept aligned automatically by scripts/sync-plugin-versions.cjs (do not hand-edit
 // without also updating package.json — the sync script rewrites this line).
-export const version = '3.0.3';
+export const version = '3.1.0';
 
 /** GAP-25: Maximum number of concurrent run states before eviction kicks in */
 const MAX_RUN_STATES = 50;
