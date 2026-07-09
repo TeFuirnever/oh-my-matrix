@@ -176,6 +176,14 @@ export interface EvidenceCommandResult {
   status: 'passed' | 'failed' | 'timeout' | 'skipped';
   exitCode?: number;
   durationMs: number;
+  /**
+   * Content contract (code-review 2a): on failure/timeout, carries the
+   * truncated stderr/error message (sourced from command-runner.ts:65,
+   * `e.stderr ?? e.message ?? String(err)`, capped 300 chars); on pass,
+   * empty string. Consumed by buildRetryInstruction (Enhancement B) to
+   * re-surface the failure signal into the next retry turn — so changes
+   * to this field's content semantics silently affect that injection.
+   */
   summary: string;
 }
 
