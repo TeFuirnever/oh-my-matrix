@@ -57,7 +57,7 @@
   },
   "devDependencies": {
     "@oh-my-matrix/permission-policy": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^3.2.6",
     "openclaw": "2026.5.28",
     "typescript": "^5.0.0",
