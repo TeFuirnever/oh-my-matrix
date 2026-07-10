@@ -1,5 +1,11 @@
 # @oh-my-matrix/dynamic-workflows
 
+## 0.2.0
+
+### Minor Changes
+
+- [`fb0857f`](https://github.com/TeFuirnever/oh-my-matrix/commit/fb0857f3163f30597d613f4a759f448941ac95c7) - Open refute-gate-compatible productive patterns in the skill: implement-then-review (duel-loop), generate-then-filter (test-gen), select-via-judge (tournament) templates, Refute-gate compatibility section, disclosed Resource limits + Safety references, writing-great-skills optimization (description sharpening, single-source-of-truth, progressive disclosure). Explicitly excludes pure parallel-implement and pure batch-migrate (no natural refute gate).
+
 ## 0.1.4
 
 ### Patch Changes
