@@ -59,7 +59,7 @@
     "@oh-my-matrix/permission-policy": "workspace:*",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.6",
-    "openclaw": "2026.5.28",
+    "openclaw": "2026.6.11",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   }
