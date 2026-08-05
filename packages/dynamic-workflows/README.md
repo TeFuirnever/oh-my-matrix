@@ -12,7 +12,7 @@ Part of the [oh-my-matrix](https://github.com/TeFuirnever/oh-my-matrix) runtime 
 ```bash
 npm install @oh-my-matrix/dynamic-workflows
 # peer dependencies
-npm install openclaw@">=2026.5.28" @oh-my-matrix/permission-policy
+npm install openclaw@">=2026.7.1-2" @oh-my-matrix/permission-policy
 ```
 
 ## Use

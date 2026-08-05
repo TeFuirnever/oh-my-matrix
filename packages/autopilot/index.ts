@@ -867,8 +867,10 @@ export function register(api: OpenClawPluginApi): void {
     });
 
     // Real OpenClaw event: {toolName, params:{command?, workdir?}, runId, toolCallId}.
-    // NO event.args / event.toolKind / event.cwd (verified live 2026-06-28). Command
-    // lives in params.command; cwd in params.workdir.
+    // No event.args / event.cwd (verified live 2026-06-28). NOTE: openclaw 2026.7.1 may
+    // also populate optional event.toolKind / toolInputKind / derivedPaths (host
+    // discriminators); this hook does not read them. Command lives in params.command;
+    // cwd in params.workdir.
     const { cwd: eventCwd } = extractCommandSegments(event);
     const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
     const decision = isConfiguredHighRisk

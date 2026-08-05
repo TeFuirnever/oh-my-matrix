@@ -8,10 +8,12 @@
  * fail-open at runtime (the hook would read `undefined` and degrade to
  * classifying by `toolName` alone, letting shell commands through unchecked).
  *
- * Mirrors dynamic-workflows/src/event-shape.contract.ts. Verified live shape
- * (2026-06-28 capture): top-level keys are exactly `toolName` / `params` /
- * `runId` / `toolCallId` — NO `args`, `toolKind`, or `cwd`. The command lives in
- * `params.command` (shell string); cwd in `params.workdir`.
+ * Mirrors dynamic-workflows/src/event-shape.contract.ts. Captured shape
+ * (2026-06-28, openclaw 2026.5.28): top-level keys `toolName` / `params` /
+ * `runId` / `toolCallId` — no `args` or `cwd`. NOTE: openclaw 2026.7.1 added
+ * optional `toolKind` / `toolInputKind` / `derivedPaths` (host-authoritative
+ * discriminators) the host may now populate; this hook does not read them yet.
+ * Command lives in `params.command` (shell string); cwd in `params.workdir`.
  *
  * Not re-exported from the package barrel: this is a build-time assertion, not
  * part of autopilot's public API.

@@ -2,7 +2,7 @@
 
 > 版本：v15（业界对标调研 + 2 轮对抗审查 + 结构性修复）· 日期：2026-06-26
 > 审查链：3 人对抗 Claude 审查团 + Codex 两轮（含源码做实）+ v6 对抗审查 + E1-E4 技术预研 + Autopilot 实现。
-> OpenClaw 源码锚点：git HEAD `e9321608`，tag/version `v2026.5.28`。
+> OpenClaw 源码锚点：`v2026.7.1-2`（npm `latest`，upstream tag → commit `be8b8a9e`）/ `openclaw@2026.7.1-2`。
 
 ---
 

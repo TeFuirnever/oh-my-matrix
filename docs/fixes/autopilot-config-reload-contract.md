@@ -7,6 +7,11 @@
 > `plugins` hot-reload rule. Every code-level fix proposed was either redundant
 > or a regression. This doc records the contract and the trap so it isn't
 > re-litigated.
+>
+> **Anchor note (2026-08-05):** version cite below updated to `openclaw@2026.7.1-2`. The
+> dist-hash evidence chain (`dist/server-reload-handlers-4pMoRutv.js`, …) was captured
+> against `2026.5.28`; bundle hashes change every build, so the `register()` re-invocation
+> contract must be re-verified against `2026.7.1-2` dist before relying on it anew.
 
 ## The reported bug (and why it's mostly a non-bug)
 
@@ -23,7 +28,7 @@ re-read for the process lifetime" part is **false**.
 
 ## The self-heal (verified against the SDK)
 
-OpenClaw (`openclaw@2026.5.28`) re-invokes the plugin's `register()` on every
+OpenClaw (`openclaw@2026.7.1-2`) re-invokes the plugin's `register()` on every
 autopilot config change. The chain, with evidence:
 
 1. **chokidar watcher** on `openclaw.json`

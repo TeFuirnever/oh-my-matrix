@@ -110,8 +110,10 @@ export function register(api: OpenClawPluginApi): void {
     try {
       const toolName = event.toolName as string;
       // Real OpenClaw event shape: {toolName, params:{command?, workdir?}, runId, toolCallId}.
-      // There is NO event.args / event.toolKind / event.cwd (verified live 2026-06-28).
-      // The command lives in params.command (shell string); cwd in params.workdir.
+      // No event.args / event.cwd (verified live 2026-06-28). NOTE: openclaw 2026.7.1 may
+      // also populate optional event.toolKind / toolInputKind / derivedPaths (host
+      // discriminators); this guard does not read them. Command lives in params.command
+      // (shell string); cwd in params.workdir.
       const { cwd: eventCwd } = extractCommandSegments(event);
       const cwd = eventCwd ?? process.cwd();
 

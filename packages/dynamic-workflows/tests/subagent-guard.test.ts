@@ -4,8 +4,10 @@
  * The guard registers before_tool_call (priority 11) and fail-closed blocks
  * destructive ops for :subagent: sessions. Events use the REAL OpenClaw shape
  * (verified live 2026-06-28): {toolName, params:{command?, workdir?}, runId,
- * toolCallId} — NO args / toolKind / cwd at top level. The prior tests fed a
- * fictional {toolKind:'destructive_git', args:[...]} shape the host never emits;
+ * toolCallId} — no args / cwd at top level. NOTE: openclaw 2026.7.1 added optional
+ * toolKind / toolInputKind / derivedPaths the host may now populate; these test
+ * events omit them (still valid). The prior tests fed a fictional
+ * {toolKind:'destructive_git', args:[...]} shape the 2026.5.28 host never emitted;
  * those green lies are what let the fail-open bug ship. See
  * docs/fixes/runtime-guard-event-shape.md.
  */

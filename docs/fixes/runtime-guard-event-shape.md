@@ -41,7 +41,7 @@ But the guard reads `event.args` + `event.toolKind` as if they were the autopilo
 - `packages/autopilot/index.ts` (the run-scoped `before_tool_call` handler, ~lines 579/587) — same `event.args` bug (pre-existing, came from MA's autopilot).
 - `classifyCommand(toolName, [], toolKind)` then runs against an **empty arg list** → most commands fall through to `unknown`/`safe_git` → **allow**.
 
-Compounding: every test in `packages/dynamic-workflows/tests/subagent-guard.test.ts` + `packages/autopilot/tests/permission-wiring.test.ts` feeds `{ toolKind: 'destructive_git', args: ['reset','--hard',...] }` — values **the host never emits** (`toolKind` is only ever `"code_mode_exec"`). So the tests are green lies: they assert blocking against a fictional shape that cannot occur in production.
+Compounding: every test in `packages/dynamic-workflows/tests/subagent-guard.test.ts` + `packages/autopilot/tests/permission-wiring.test.ts` feeds `{ toolKind: 'destructive_git', args: ['reset','--hard',...] }` — values **the 2026.5.28 host never emitted** (`toolKind` was only ever `"code_mode_exec"`). (Note: openclaw 2026.7.1+ may now *optionally* populate `toolKind`/`toolInputKind`/`derivedPaths`, but the guard still does not read them.) So the tests were green lies: they asserted blocking against a fictional shape that could not occur in production on 2026.5.28.
 
 **Net: in production, a subagent running `git reset --hard` (or `rm -rf`, `git push --force`) is NOT blocked.** The `enabled:false` warning is the only honest log line in the package.
 
@@ -77,6 +77,10 @@ via `sessions_spawn` fan-out). **All assumptions below replaced by fact.**
 - ❌ no `args` → `index.ts:83` always `[]` (root cause, confirmed)
 - ❌ no `toolKind` → `index.ts:82` always `undefined` (drop it, confirmed)
 - ❌ no `cwd` → `index.ts:84` falls back to `process.cwd()` (wrong; real cwd is `params.workdir`)
+
+> **Update (openclaw 2026.7.1):** the host may now *optionally* populate `toolKind` /
+> `toolInputKind` / `derivedPaths`. The 2026-06-28 capture above (2026.5.28) carried
+> none of these; the guard still does not read them.
 
 **`params` by toolName (all real):**
 | toolName | params | → extractCommand |
