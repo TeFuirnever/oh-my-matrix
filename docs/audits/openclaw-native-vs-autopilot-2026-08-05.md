@@ -39,6 +39,10 @@
 
 ## Ticket 执行顺序
 
+> **进度（2026-08-06）**：第一批 5 张全部完成（T0 · M1 · M3 · M4 · M5，MA 侧 `e7d7d2ea0`）。下一张 **E4+E7**。
+> T0 结论推翻了原始判读——那个「零轮死亡」的 run 实际 71 秒完成了任务，死于**完成检测失灵**而非 loop 故障；
+> 详见 MatrixAssistant `docs/core/autopilot/long-horizon-autonomy.md` §4 P0-1 与 §7「实施状态」。
+
 ### 第一批：T0 + MA 零依赖（可立即开工）
 
 | Ticket | 仓 | 说明 |
