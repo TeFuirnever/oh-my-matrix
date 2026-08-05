@@ -34,6 +34,7 @@
     ".autopilot/**",
     ".omc/**",
     ".omx/**",
+    ".zcode/**",
     "packages/*/*.tgz",
     "graphify-out/**"
   ]
