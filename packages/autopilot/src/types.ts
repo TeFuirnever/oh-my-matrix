@@ -251,7 +251,10 @@ export type OrchestratorEvent =
   // ADR-020: degraded cross-turn fallback (was a bare spread at index.ts:1058).
   // Folds totalContinuations++/needsCrossTurnResume/turnAttempts/degraded into the
   // reducer so it is the sole writer of those coupled aux fields.
-  | { type: 'cross_turn_degraded'; runId: string; now: number };
+  | { type: 'cross_turn_degraded'; runId: string; now: number }
+  // ADR-020 step 2: clears needsCrossTurnResume when the resumed turn begins
+  // finalizing (before_agent_finalize handshake, NOT agent_turn_started).
+  | { type: 'cross_turn_resume_consumed'; runId: string; now: number };
 
 // ─── Core State ───────────────────────────────────────────────
 

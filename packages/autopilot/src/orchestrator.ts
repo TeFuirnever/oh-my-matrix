@@ -384,6 +384,19 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
+    case 'cross_turn_resume_consumed': {
+      // ADR-020 step 2: clear needsCrossTurnResume when the resumed turn begins
+      // finalizing (before_agent_finalize handshake). Without this, the host
+      // driver re-sends chat.send on every sessions.changed broadcast (the
+      // infinite-loop fix that was a bare spread at index.ts:530). Idempotent —
+      // a no-op when the flag was already false.
+      return {
+        ...state,
+        needsCrossTurnResume: false,
+        lastActivityAt: event.now,
+      };
+    }
+
     default: {
       // Unknown event type — no-op
       return state;

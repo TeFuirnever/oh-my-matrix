@@ -525,10 +525,12 @@ export function register(api: OpenClawPluginApi): void {
 
     const [runId, rawState] = entry;
 
-    // Fix: clear needsCrossTurnResume at start of new turn triggered by cross-turn resume.
-    // Without this, sessions.changed keeps firing with needsCrossTurnResume=true → infinite loop.
+    // ADR-020 step 2: clear needsCrossTurnResume via the reducer (was a bare
+    // spread). The flag is the host-driver handshake; without clearing it, the
+    // host re-sends chat.send on every sessions.changed broadcast (infinite
+    // loop). The reducer is the sole writer of needsCrossTurnResume.
     const state = rawState.needsCrossTurnResume
-      ? { ...rawState, needsCrossTurnResume: false }
+      ? orchestratorReducer(rawState, { type: 'cross_turn_resume_consumed', runId, now: Date.now() })
       : rawState;
     if (rawState.needsCrossTurnResume) setState(runId, state);
 
