@@ -1052,16 +1052,13 @@ export function register(api: OpenClawPluginApi): void {
             if (injectResult && typeof injectResult === 'object' && injectResult.enqueued === false) {
               warn(`[autopilot] agent_end: degraded fallback enqueue rejected for session=${sessionKey}`);
             } else {
-              // H-1: Merge cross-turn fields onto current state (preserves intermediate changes)
+              // H-1 / ADR-020 step 1: degraded cross-turn now dispatches through the
+              // reducer (was a bare spread). The reducer is the sole writer of these
+              // coupled aux fields; it also stamps lastActivityAt (the original
+              // spread did not — a deliberate correction, this is real activity).
               const current = stateByRun.get(runId);
               if (current) {
-                setState(runId, {
-                  ...current,
-                  totalContinuations: current.totalContinuations + 1,
-                  needsCrossTurnResume: true,
-                  turnAttempts: 0,
-                  degraded: true,
-                });
+                setState(runId, orchestratorReducer(current, { type: 'cross_turn_degraded', runId, now: Date.now() }));
               } else {
                 setState(runId, continued);
               }

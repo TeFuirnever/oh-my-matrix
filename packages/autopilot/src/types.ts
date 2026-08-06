@@ -247,7 +247,11 @@ export type OrchestratorEvent =
   // fallback) and sets orchState='blocked'. TENSION 3: this event is status-only
   // — if the reducer already moved off the running family (e.g. via
   // agent_turn_finished → retry_queued/blocked), pause_requested no-ops.
-  | { type: 'pause_requested'; runId: string; reason: PauseReason; now: number };
+  | { type: 'pause_requested'; runId: string; reason: PauseReason; now: number }
+  // ADR-020: degraded cross-turn fallback (was a bare spread at index.ts:1058).
+  // Folds totalContinuations++/needsCrossTurnResume/turnAttempts/degraded into the
+  // reducer so it is the sole writer of those coupled aux fields.
+  | { type: 'cross_turn_degraded'; runId: string; now: number };
 
 // ─── Core State ───────────────────────────────────────────────
 

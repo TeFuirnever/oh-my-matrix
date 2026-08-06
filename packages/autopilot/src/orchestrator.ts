@@ -368,6 +368,22 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
+    case 'cross_turn_degraded': {
+      // ADR-020: degraded cross-turn fallback (was bare spread at index.ts:1058).
+      // Guard: only from an active state. released/claimed/etc all derive to
+      // 'running', so a status check covers them. Silent no-op on guard fail —
+      // the caller (index.ts) warns if it needs observability.
+      if (state.status !== 'running') return state;
+      return {
+        ...state,
+        totalContinuations: state.totalContinuations + 1,
+        needsCrossTurnResume: true,
+        turnAttempts: 0,
+        degraded: true,
+        lastActivityAt: event.now,
+      };
+    }
+
     default: {
       // Unknown event type — no-op
       return state;
