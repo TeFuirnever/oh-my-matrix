@@ -163,6 +163,10 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       await activateAndStart(mock, 'sess-life4', 'sid-life4');
       const finalize = mock.hooks.get('before_agent_finalize')!;
       await driveTurns(finalize, 'sid-life4', 'sess-life4', 2);
+      // agent_turn_prepare advances orchState claimed → running so the complete
+      // path reaches done via the reducer (running→released→done), not the
+      // complete() backdoor (ADR-020 Decision #2, removed).
+      await mock.hooks.get('agent_turn_prepare')!({}, { sessionKey: 'sess-life4' });
       await finalize({
         sessionId: 'sid-life4', sessionKey: 'sess-life4', stopHookActive: false,
         lastAssistantMessage: 'all tasks completed',
@@ -211,6 +215,10 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       await activateAndStart(mock, 'sess-guard2', 'sid-guard2');
 
       const finalize = mock.hooks.get('before_agent_finalize')!;
+      // hasNoActionableTask short-circuits to complete; fire agent_turn_prepare
+      // first so the run is in 'running' and the evidence-gate reducer chain can
+      // reach done without the removed complete() backdoor.
+      await mock.hooks.get('agent_turn_prepare')!({}, { sessionKey: 'sess-guard2' });
       const result = await finalize({
         sessionId: 'sid-guard2',
         sessionKey: 'sess-guard2',
@@ -269,6 +277,7 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       await activateAndStart(mock, 'sess-rs-done', 'sid-rs-done');
       const finalize = mock.hooks.get('before_agent_finalize')!;
       await driveTurns(finalize, 'sid-rs-done', 'sess-rs-done', 2);
+      await mock.hooks.get('agent_turn_prepare')!({}, { sessionKey: 'sess-rs-done' });
       await finalize({
         sessionId: 'sid-rs-done', sessionKey: 'sess-rs-done', stopHookActive: false,
         lastAssistantMessage: 'all tasks completed',

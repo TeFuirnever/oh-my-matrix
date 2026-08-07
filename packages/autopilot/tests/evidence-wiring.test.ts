@@ -63,6 +63,13 @@ describe('Evidence Gate wiring', () => {
       const sessionStartHandler = mock.hooks.get('session_start')!;
       await sessionStartHandler({ sessionId: 'sid-1', sessionKey });
 
+      // Drive the turn lifecycle: activate left the run in 'claimed'; fire
+      // agent_turn_prepare so it reaches 'running' — then the evidence-gate
+      // reducer chain (running→released→done) completes without the complete()
+      // backdoor (ADR-020 Decision #2).
+      const prepareHandler = mock.hooks.get('agent_turn_prepare')!;
+      prepareHandler({ prompt: 'task' }, { sessionKey });
+
       const finalizeHandler = mock.hooks.get('before_agent_finalize')!;
       // P1-2: completion requires totalContinuations >= MIN_TURNS_BEFORE_COMPLETE.
       // Drive two non-completion turns first so the completion signal is trusted.
@@ -126,6 +133,9 @@ describe('Evidence Gate wiring', () => {
       const activateRespond = vi.fn();
       await mockWithCmd.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-ev-cmd', trustWorkspace: true }, respond: activateRespond });
       await mockWithCmd.hooks.get('session_start')!({ sessionId: 'sid-cmd', sessionKey: 'sess-ev-cmd' });
+
+      // Drive the turn lifecycle to 'running' (see activateAndComplete note).
+      mockWithCmd.hooks.get('agent_turn_prepare')!({ prompt: 'task' }, { sessionKey: 'sess-ev-cmd' });
 
       // P1-2 + Enhancement C: drive THREE non-completion turns so the completion
       // signal is trusted. This run has validation commands + trustWorkspace=true,

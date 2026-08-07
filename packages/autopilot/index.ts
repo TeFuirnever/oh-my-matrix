@@ -8,7 +8,6 @@ import {
   activate,
   deactivate,
   pause,
-  complete,
   resume,
   incrementTurn,
   incrementTotal,
@@ -643,25 +642,15 @@ export function register(api: OpenClawPluginApi): void {
         // into complete() — producing a false 'done' + enabled:false, which stranded
         // the run (the stall interval's retry_due guard checks state.enabled).
         // See docs/audits/autopilot-correctness-review-2026-07-04.md HIGH finding.
-        // ADR-020 Decision #2 (observability step): the single path to `done`
-        // should be the reducer's evidence_finished branch. When evidence
-        // passed/skipped but the run is not yet `done` (reducer no-oped because
-        // orchState !== 'released' — a stop/stall/retry race, or a run whose
-        // turn-lifecycle events were never driven), surfacing this beats masking
-        // it silently. WARN so the masked completion is diagnosable. The full fix
-        // (delete complete(), preserve orchState) is ADR-020 Decision #2's end
-        // state and requires migrating the test harness to drive the real turn
-        // lifecycle (agent_turn_started) — a later ADR-020 step; until then
-        // complete() remains the path to `done` for under-driven runs.
+        // ADR-020 Decision #2 (end state): the single path to `done` is the
+        // reducer's evidence_finished branch. If evidence passed/skipped but the
+        // run is not `done` (reducer no-oped — orchState !== 'released', i.e. a
+        // stop/stall/retry race), do NOT force done via complete(); warn and
+        // preserve the pre-race orchState. The race is surfaced, not masked.
         if (evidenceSummary.status !== 'failed' && updated.status !== 'done') {
-          warn(`[autopilot] evidence gate: evidence ${evidenceSummary.status} but run not in 'done' (orchState=${updated.orchestrationState ?? 'n/a'}, status=${updated.status}); completing via complete() backdoor — ADR-020 #2 full removal pending test-lifecycle migration`);
+          warn(`[autopilot] evidence gate: evidence ${evidenceSummary.status} but run not in 'done' (orchState=${updated.orchestrationState ?? 'n-a'}, status=${updated.status}); preserving state, not completing (ADR-020 #2)`);
         }
-        setState(runId,
-          evidenceSummary.status === 'failed'
-            ? { ...updated, evidence: evidenceSummary }
-            : updated.status === 'done'
-              ? { ...updated, evidence: evidenceSummary }
-              : complete({ ...updated, evidence: evidenceSummary }));
+        setState(runId, { ...updated, evidence: evidenceSummary });
         logWithContext('info', 'evidence gate result', { sessionKey, runId, evidenceStatus: evidenceSummary.status, failureReason: evidenceSummary.failureReason });
         // Release audit monitor when task completes — session is done, no more tool calls needed.
         setAuditMode('active');

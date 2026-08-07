@@ -578,6 +578,9 @@ describe('plugin-entry register()', () => {
 
       const finalizeHandler = mock.hooks.get('before_agent_finalize')!;
       await driveNonCompletionTurns(finalizeHandler, 'sid-done1', 'sess-done1');
+      // ADR-020: advance orchState claimed → running so completion reaches done
+      // via the reducer, not the removed complete() backdoor.
+      mock.hooks.get('agent_turn_prepare')!({ prompt: 'task' }, { sessionKey: 'sess-done1' });
       await finalizeHandler({
         sessionId: 'sid-done1',
         sessionKey: 'sess-done1',
@@ -1053,6 +1056,8 @@ describe('plugin-entry register()', () => {
       // Complete the session
       const finalizeHandler = mock.hooks.get('before_agent_finalize')!;
       await driveNonCompletionTurns(finalizeHandler, 'sid-m4-1', 'sess-m4-1');
+      // ADR-020: advance orchState claimed → running (see done-restart test).
+      mock.hooks.get('agent_turn_prepare')!({ prompt: 'task' }, { sessionKey: 'sess-m4-1' });
       await finalizeHandler({
         sessionId: 'sid-m4-1',
         sessionKey: 'sess-m4-1',

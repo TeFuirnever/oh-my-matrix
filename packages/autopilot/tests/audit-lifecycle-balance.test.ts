@@ -58,6 +58,9 @@ describe('audit refCount lifecycle balance', () => {
 
   async function driveToComplete(sessionKey: string) {
     const finalize = mock.hooks.get('before_agent_finalize')!.handler;
+    // ADR-020: advance orchState claimed → running so the complete path reaches
+    // done via the reducer, not the removed complete() backdoor.
+    mock.hooks.get('agent_turn_prepare')!.handler({}, { sessionKey });
     // P1-2: drive two non-completion turns so the completion signal is trusted
     // (totalContinuations must reach MIN_TURNS_BEFORE_COMPLETE before complete fires).
     for (let i = 0; i < 2; i++) {
