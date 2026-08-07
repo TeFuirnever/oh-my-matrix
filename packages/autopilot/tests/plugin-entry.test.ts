@@ -817,6 +817,42 @@ describe('plugin-entry register()', () => {
       expect(projection.degraded).toBe(true);
     });
 
+    // code-review finding #1 (ADR-020 step 1 race): if the run transitions off
+    // 'running' during the degraded enqueue await (concurrent stop/pause/stall),
+    // the host has already enqueued a cross-turn. cross_turn_degraded must NOT
+    // be recorded — otherwise the user's stop is overridden for an uncounted
+    // turn and a false success warn fires. The stale injection fires once but
+    // before_agent_finalize returns 'finalize' for a non-running run.
+    it('does not record cross_turn_degraded when the run races off running during enqueue (code-review #1)', async () => {
+      await activateSession('sess-race1');
+
+      // Simulate a concurrent stop arriving during the enqueue await: the host
+      // enqueued the cross-turn, but by the time the await resolves the run has
+      // transitioned off running.
+      mock.api.enqueueNextTurnInjection.mockImplementationOnce(async (injection: { sessionKey: string }) => {
+        const stop = mock.gatewayMethods.get('autopilot.stop')!;
+        await stop({ params: { sessionKey: injection.sessionKey }, respond: vi.fn() });
+        return { enqueued: true, id: 'inj-race', sessionKey: injection.sessionKey };
+      });
+
+      const agentEndHandler = mock.hooks.get('agent_end')!;
+      await agentEndHandler({
+        sessionId: 'sid-race1',
+        sessionKey: 'sess-race1',
+        success: true,
+        messages: [],
+      });
+
+      const statusHandler = mock.gatewayMethods.get('autopilot.status')!;
+      const respond = vi.fn();
+      await statusHandler({ params: { sessionKey: 'sess-race1' }, respond });
+      const projection = respond.mock.calls[0][1]?.projection;
+      // cross_turn_degraded was NOT dispatched: degraded stayed false and
+      // totalContinuations was not incremented, despite enqueue succeeding.
+      expect(projection.degraded).toBe(false);
+      expect(projection.totalContinuations).toBe(0);
+    });
+
     it('does not mark degraded when before_agent_finalize has fired', async () => {
       await activateSession('sess-canary2');
 

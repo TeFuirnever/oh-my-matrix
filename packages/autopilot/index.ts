@@ -643,18 +643,22 @@ export function register(api: OpenClawPluginApi): void {
         // into complete() — producing a false 'done' + enabled:false, which stranded
         // the run (the stall interval's retry_due guard checks state.enabled).
         // See docs/audits/autopilot-correctness-review-2026-07-04.md HIGH finding.
+        // ADR-020 Decision #2 (observability step): the single path to `done`
+        // should be the reducer's evidence_finished branch. When evidence
+        // passed/skipped but the run is not yet `done` (reducer no-oped because
+        // orchState !== 'released' — a stop/stall/retry race, or a run whose
+        // turn-lifecycle events were never driven), surfacing this beats masking
+        // it silently. WARN so the masked completion is diagnosable. The full fix
+        // (delete complete(), preserve orchState) is ADR-020 Decision #2's end
+        // state and requires migrating the test harness to drive the real turn
+        // lifecycle (agent_turn_started) — a later ADR-020 step; until then
+        // complete() remains the path to `done` for under-driven runs.
+        if (evidenceSummary.status !== 'failed' && updated.status !== 'done') {
+          warn(`[autopilot] evidence gate: evidence ${evidenceSummary.status} but run not in 'done' (orchState=${updated.orchestrationState ?? 'n/a'}, status=${updated.status}); completing via complete() backdoor — ADR-020 #2 full removal pending test-lifecycle migration`);
+        }
         setState(runId,
-          // failed → the reducer moved to retry_queued (will retry) or blocked (max
-          // retries). Keep the run enabled in retry_queued so the stall interval can
-          // fire retry_due. When blocked, the reducer already set orchState='blocked'
-          // + blockedReason + derived status='paused' — do NOT call pause() (it would
-          // throw: pause() requires status='running' but the reducer derived 'paused').
-          // Just attach the evidence summary; the state is already correct.
           evidenceSummary.status === 'failed'
             ? { ...updated, evidence: evidenceSummary }
-            // passed/skipped → reducer already set orchState='done' + status='done'
-            // when the evidence reducer ran; if it didn't run (orchState unchanged),
-            // complete() advances status to done. Either way the run finishes.
             : updated.status === 'done'
               ? { ...updated, evidence: evidenceSummary }
               : complete({ ...updated, evidence: evidenceSummary }));
@@ -1059,11 +1063,26 @@ export function register(api: OpenClawPluginApi): void {
               // coupled aux fields; it also stamps lastActivityAt (the original
               // spread did not — a deliberate correction, this is real activity).
               const current = stateByRun.get(runId);
-              if (current) {
-                setState(runId, orchestratorReducer(current, { type: 'cross_turn_degraded', runId, now: Date.now() }));
-              } else {
+              if (!current) {
+                // Run vanished during the await — re-create from the pre-await
+                // snapshot so the host's queued cross-turn is accounted for.
                 setState(runId, continued);
+                warn(`[autopilot] agent_end: degraded fallback cross-turn for session=${sessionKey}`);
+                return;
               }
+              if (current.status !== 'running') {
+                // Race: the run transitioned off the active-running family during
+                // the await (concurrent stop/pause/stall_timeout). The host already
+                // has the queued cross-turn injection; do NOT dispatch
+                // cross_turn_degraded — the reducer would no-op (status !== running)
+                // and we'd emit a false success warn, leaving an uncounted turn that
+                // ignores the user's stop. The stale injection fires once; the
+                // before_agent_finalize handler returns 'finalize' for a non-running
+                // run, so it does not actually continue. (code-review finding #1.)
+                warn(`[autopilot] agent_end: degraded cross-turn enqueued for session=${sessionKey} but run raced to status=${current.status} (orchState=${current.orchestrationState ?? 'n/a'}); not recording cross-turn, stale injection will finalize without continuing`);
+                return;
+              }
+              setState(runId, orchestratorReducer(current, { type: 'cross_turn_degraded', runId, now: Date.now() }));
               warn(`[autopilot] agent_end: degraded fallback cross-turn for session=${sessionKey}`);
               return;
             }
