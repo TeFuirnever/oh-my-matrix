@@ -2,7 +2,23 @@
 
 ## Status
 
-**Proposed** (2026-08-06). Not yet implemented. Companion design detail lives in the authoritative design doc: MatrixAssistant `docs/core/autopilot/design.md` [§8.2.1](../../../../MatrixAssistant/docs/core/autopilot/design.md). This ADR records the decision; implementation is a 6-step incremental migration tracked separately.
+**Accepted / partially implemented** (2026-08-06, implementation in progress 2026-08-07). Companion design detail lives in the authoritative design doc: MatrixAssistant `docs/core/autopilot/design.md` [§8.2.1](../../../../MatrixAssistant/docs/core/autopilot/design.md). This ADR records the decision; implementation is a 6-step incremental migration.
+
+**Migration progress** (see Follow-ups for the step list):
+
+| Step | Scope | State |
+|---|---|---|
+| 1 | `cross_turn_degraded` event + migrate spread `index.ts:1058` | **done** (`b4652b0`, race fix `693cda7`) |
+| 2 | clear `needsCrossTurnResume` via reducer (was spread `index.ts:530`) | **done** (`db94b1c`) — see the lifecycle correction under Decision 5 |
+| 3 | `evidence_finished` race-warn + delete `complete()` call site | **done** (`052d2d0` pins the reducer no-op; `6f2cd7f` removes the caller backdoor) |
+| 4 | fold `activate`/`pause`/`resume` setters | pending |
+| 5 | fold `deactivate` → `stop_requested` | pending |
+| 6 | delete throw-guards + apology comments | pending |
+
+Steps 4-6 remain: the 5 imperative setters in `autopilot-state.ts` and the
+remaining bare spreads (`index.ts:569`, `index.ts:1075`, `index.ts:1083`) still
+write coupled aux fields, so the sole-writer claim holds today only for
+`status` (ADR-016) plus the three migrated transitions above.
 
 ## Context
 
@@ -42,7 +58,9 @@ The aux resets are not independent of the transition — `resume` clearing `tool
 2. **`complete()` is deleted.** The single path to `done` is the reducer's `evidence_finished` branch. When evidence arrives but `orchestrationState !== 'released'`, the reducer **warns and preserves `orchestrationState`** rather than completing — surfacing the stop/stall race instead of masking it. The `released` guard is a real safety gate (it prevents evaluating evidence in a state not meant for it); `complete()` was its backdoor.
 3. **Throw-guards become warn + no-op.** The reducer stays a pure function (no throws across the dispatch boundary). The bug-detection value of the setters' `if (status !== X) throw` guards is preserved as a warning trail, consistent with #2's warn-don't-mask posture.
 4. **`permissionAudit` stays an index.ts spread.** Event-ing a log ring buffer would treat observation as state transition. This fixes the aux boundary: reducer owns transition + transition-coupled reset; index.ts owns observation.
-5. **Event vocabulary reuses existing events; one new event.** `activate_requested` / `pause_requested` / `resume_requested` / `stop_requested` (for `deactivate`) already exist and carry the transitions. `agent_turn_started` gains a `needsCrossTurnResume=false` reset (was `index.ts:530`). The degraded cross-turn fallback (`index.ts:1058`) becomes a new `cross_turn_degraded` event carrying `totalContinuations++`, `needsCrossTurnResume=true`, `turnAttempts=0`, `degraded=true`.
+5. **Event vocabulary reuses existing events; one new event.** `activate_requested` / `pause_requested` / `resume_requested` / `stop_requested` (for `deactivate`) already exist and carry the transitions. The degraded cross-turn fallback (`index.ts:1058`) becomes a new `cross_turn_degraded` event carrying `totalContinuations++`, `needsCrossTurnResume=true`, `turnAttempts=0`, `degraded=true`.
+
+   **Lifecycle correction (implementation, 2026-08-07).** This decision originally said `agent_turn_started` would gain the `needsCrossTurnResume=false` reset (replacing `index.ts:530`). That is the wrong hook: the flag is the host-driver handshake, and clearing it at turn *start* re-arms the infinite chat.send loop the flag exists to prevent. The reset therefore ships as a **second new event, `cross_turn_resume_consumed`, dispatched from `before_agent_finalize`** — the point at which the resumed turn is finalizing and the handshake is genuinely consumed. Net: **two** new events, not one. Pinned by `tests/orchestrator-cross-turn-resume-consumed.test.ts`.
 
 ## Drivers
 
@@ -61,7 +79,7 @@ The aux resets are not independent of the transition — `resume` clearing `tool
 ## Consequences
 
 **Positive:**
-- H1-class residual (the `complete()` backdoor masking the stop/stall race) structurally eliminated.
+- H1-class residual (the `complete()` backdoor masking the stop/stall race) structurally eliminated. **Realized in step 3** — `index.ts` has zero `complete()` callers; evidence outside `released` now warns and preserves orchState.
 - One writer for transition + coupled aux; the dual-`done` path and the apologetic comments delete with it.
 - Reducer's depth increases — it absorbs transition-coupled reset policy, which is where that policy belongs.
 
@@ -76,10 +94,13 @@ Same posture as ADR-016: single-writer enforced by test gate + machine-checked i
 
 ## Follow-ups
 
-- **Step 1**: add `cross_turn_degraded` event + reducer handler; migrate `index.ts:1058` to dispatch it (dual-track).
-- **Steps 2-6**: the remaining migration order is recorded in design doc §8.2.1.
+- ~~**Step 1**: add `cross_turn_degraded` event + reducer handler; migrate `index.ts:1058` to dispatch it (dual-track).~~ **Done.** Implementation surfaced a call-site race the reducer guard alone could not close: the degraded path `await`s `enqueueNextTurnInjection` before dispatching, so a concurrent stop/pause/stall could move the run off `running` after the host had already queued the cross-turn — the guard then no-oped while a false success warn fired. Fixed at the call site (re-check status after the await; skip the dispatch and emit a race warn) and pinned in `tests/plugin-entry.test.ts`.
+- ~~**Step 2**: clear `needsCrossTurnResume` through the reducer.~~ **Done** as `cross_turn_resume_consumed` at `before_agent_finalize` (see the Decision 5 lifecycle correction).
+- ~~**Step 3**: `evidence_finished` race-warn + delete `complete()`.~~ **Done.** The reducer no-op is pinned by `tests/evidence-finished-race-pin.test.ts`; the `index.ts` caller backdoor is removed, so the single path to `done` is now the reducer. Removing it required migrating 8 tests across 4 files that drove completion without firing `agent_turn_prepare` — their runs sat in `claimed` and reached `done` only via the backdoor. `complete()` remains exported from `autopilot-state.ts` (still unit-tested) but has zero production callers.
+- **Steps 4-6**: fold the `activate`/`pause`/`resume`/`deactivate` setters, then delete the throw-guards and apology comments. Order recorded in design doc §8.2.1.
 - **ADR-016 follow-up W1a** ("route the 8 setter call sites through reducer events") is subsumed by this ADR's migration.
-- **Race-warn observability**: the new warn on evidence-outside-`released` should be observable enough that a mis-ordered upstream is diagnosable, not just silenced.
+- ~~**Race-warn observability**: the new warn on evidence-outside-`released` should be observable enough that a mis-ordered upstream is diagnosable, not just silenced.~~ **Done** — the warn names the evidence status, `orchestrationState` and `status`.
+- **Enforcement gap (open)**: `tests/status-invariant.test.ts` does not yet assert that the 6 coupled aux fields are reducer-only (see Enforcement). Until steps 4-6 land, that invariant would fail by construction — the remaining setters and spreads are still writers. Add the assertion as part of step 6.
 
 ## Related
 

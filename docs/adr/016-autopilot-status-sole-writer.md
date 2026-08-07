@@ -19,6 +19,8 @@ The reducer header claimed "Single-writer constraint: all state transitions go t
 
 **Sole-writer is status-only (explicit scope).** The reducer is NOT the sole writer of the 5 other coupled fields (`enabled`, `pauseReason`, `toolErrorCount`, `needsCrossTurnResume`, `degraded`). `resume()` remains a writer of those fields. Do not over-read "sole writer" as covering the whole state object.
 
+> **Superseded in scope by [ADR-020](020-reducer-sole-writer-extends-to-coupled-aux.md)** (2026-08-06, implementing): that ADR extends sole-writer to those coupled aux fields (plus `lastToolError`), resolving the open question this paragraph deliberately left. `status`-only remains accurate for the un-migrated call sites — see ADR-020's migration progress table for what has actually converged.
+
 **Enforcement**: single-writer + machine-checked invariant + test gate — not structurally impossible. A stray `{...state, status:'x'}` spread compiles but is caught by `tests/status-invariant.test.ts` (`status === deriveStatus(state)` after every setter + reducer event). This is the strongest practical enforcement for a POJO state object that is spread ~30 times.
 
 ## PauseReason → BlockedReason mapping
