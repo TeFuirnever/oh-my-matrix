@@ -1,0 +1,54 @@
+# Autopilot — OMM 侧实现状态（2026-08-08）
+
+> **定位**: 本份是 **OMM 仓**（`packages/autopilot`）的实现状态记录，与 `long-horizon-autonomy.md`（**已弃用**，权威 v2.2 在 MA 仓 `MatrixAssistant/docs/core/autopilot/long-horizon-autonomy.md`，勿改本份）互补。设计文档是方案；本份是「OMM 侧落地了什么」的记账。
+>
+> **更新**: 每次 OMM 引擎改动合入 master 后更新。2026-08-08 第三阶段（E2–E13 全落地）。
+
+## 已落地（master，PR #134–#147）
+
+| ticket | PR | 内容 | bump |
+|---|---|---|---|
+| E8 | #134 | checkpoint 触发 + 阈值修正 | minor |
+| E10 | #135 | 长尾修正（maxBuffer 冤杀、修复轮 premium、isRunStuck 退避守卫、删死事件）| minor |
+| E2 | #136/#137 | 墙钟 + 成本硬上限（60s 巡检、hard_stop 绕过 TENSION 3、winddown）| minor |
+| E3 | #136/#137 | 错误分类重做（429/529/网络 errno 可恢复 + 长退避 + Retry-After；锚定匹配）| minor |
+| E5 | #138/#139 | 进展台账（结构化 ledger 替换 Turn N/M 计数串；exec-only 过滤）| minor |
+| E9 | #140 | 删 `workflow.workspace.root`（ADR-008，从未消费）| **major** |
+| E13 | #141/#142 | 显式 `autopilot.resume_run` RPC（P3-29 OMM 半：crash-recovery 不再 flag 隐式续行）| **major** |
+| E6 | #143 | 停滞检测双向修：在飞守卫（30min cap）+ no_progress 生产力检测 | minor |
+| E7 | #144 | 中途 Evidence Gate（每 N 轮跑 validation，早期纠偏）| minor |
+| E4(1-2) | #145 | evidence gate skipped 区分（not_configured→done / not_executed→blocked evidence_missing）| minor |
+| E12(fold) | #146 | needsCrossTurnResume 全 reducer 写（cross_turn_enqueued + cross_turn_degraded_silent）| minor |
+| — | #147 | RESUMABLE mirror 奇偶修复（E6 漏同步 no_progress）| fix |
+
+**发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）。CHANGELOG 已生成，**未发布**（分支 `chore/release-4.0.0`）。
+
+## OMM frontier 剩余（0 张可立即开）
+
+| 项 | 阻塞 |
+|---|---|
+| E4 step3（resume 守门：resume_requested no-op → respond false）| **M2**（MA `canResume` 字段，跨仓同批）|
+| E12 resume setter fold + 6-aux invariant | ←E4 step3 |
+| X1（vendor 同步脚本）| MA `resources/claw-plugin/` 目标 |
+| M2–M5 | MA 仓 |
+| T0（loop 活性实跑验证）| 非代码，需运行系统 |
+
+**T0 重审**：T0 是运行时验证，非代码依赖——E6/E7/E4 顶着 T0 标签落地证明（E2 亦同）。
+
+## 跨仓依赖（OMM 侧已交付，消费侧在 MA）
+
+- **E13 无双花端到端**：MA driver 须消费 `autopilot.resume_run` RPC（crash-recovery 恢复的 mid-cross-turn run 现等待显式 RPC 或 stall 回落）。OMM 侧已交付 RPC 定义 + 处理。
+- **M2**：resume 按钮须用引擎新增的恢复可恢复性判定（E4 step3）——现按钮只查 `isPaused`。
+- **X1**：引擎产物 vendor 同步（版本错配防复发，M4 只治症状）。
+
+## 审计对照（autopilot-deep-review-2026-07-31）
+
+2026-08-08 第三轮 doc-review（3 agents）结论：**审计发现的 P0 大多已被 E2–E13 修复**（3.1 错误分类、3.2 在飞守卫、3.3 硬上限、3.4 skipped 区分、3.5 isRunStuck、3.8 maxBuffer、3.10 台账）。唯一活 bug（RESUMABLE mirror 漂移）已修 #147。审计文档的 file:line 引用已随代码移动而漂移（历史记录，不追改）。
+
+## 相关文档
+
+- 设计权威份（MA v2.2，勿改本份）：`MatrixAssistant/docs/core/autopilot/long-horizon-autonomy.md`
+- OMM 份（**弃用**）：`docs/core/autopilot/long-horizon-autonomy.md`
+- 审计：`docs/audits/autopilot-deep-review-2026-07-31.md`
+- 设计稿：`docs/design/autopilot-verification-floor-design.md`（方案已全部落地）
+- ticket 索引：`.scratch/README.md`
