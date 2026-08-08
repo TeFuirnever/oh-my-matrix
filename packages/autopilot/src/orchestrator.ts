@@ -311,10 +311,17 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
     case 'stop_requested': {
       const stoppable: OrchestrationState[] = ['running', 'claimed', 'retry_queued', 'released', 'unclaimed'];
       if (!stoppable.includes(state.orchestrationState as OrchestrationState)) return state;
+      // ADR-020 step 5: coupled aux resets ride in — replaces the imperative
+      // deactivate() setter. A stopped run is disabled and has its pause /
+      // cross-turn handshake / degradation cleared.
       return {
         ...state,
         orchestrationState: 'blocked',
         blockedReason: 'user_stopped',
+        enabled: false,
+        pauseReason: undefined,
+        needsCrossTurnResume: false,
+        degraded: false,
         lastActivityAt: event.now,
       };
     }
@@ -338,10 +345,17 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         'running', 'claimed', 'released', 'unclaimed',
       ];
       if (!runningFamily.includes(state.orchestrationState as OrchestrationState)) return state;
+      // ADR-020 step 4: the coupled aux resets (enabled / pauseReason /
+      // needsCrossTurnResume) ride into the reducer atomically with the
+      // transition, so the reducer is the sole writer of these fields. This
+      // replaces the imperative pause() setter at every call site.
       return {
         ...state,
         orchestrationState: 'blocked' as const,
         blockedReason: pauseReasonToBlockedReason(event.reason),
+        enabled: false,
+        pauseReason: event.reason,
+        needsCrossTurnResume: false,
         lastActivityAt: event.now,
       };
     }

@@ -5,9 +5,6 @@ import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-inj
 import { resolveModelTier, resolveModelId, isSubagentSession, parseModelRouting, extractParentSessionKey } from './src/model-routing';
 import { log, warn, error, logWithContext } from './src/logger';
 import {
-  activate,
-  deactivate,
-  pause,
   resume,
   incrementTurn,
   incrementTotal,
@@ -588,7 +585,7 @@ export function register(api: OpenClawPluginApi): void {
         return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
       }
       case 'pause': {
-        setState(runId, pause(state, decision.pauseReason!));
+        setState(runId, orchestratorReducer(state, { type: 'pause_requested', runId, reason: decision.pauseReason!, now: Date.now() }));
         // Release audit monitor during pause — resume will re-acquire when session continues.
         setAuditMode('active');
         return { action: 'finalize' };
@@ -1028,7 +1025,7 @@ export function register(api: OpenClawPluginApi): void {
       // M-4: When at max continuations, pause directly instead of requesting cross-turn
       // (cross-turn would just hit max_total_reached again — wasted IPC round-trip)
       if (state.status === 'running' && state.totalContinuations >= state.maxTotalContinuations) {
-        setState(runId, pause(updated, 'max_total_reached'));
+        setState(runId, orchestratorReducer(updated, { type: 'pause_requested', runId, reason: 'max_total_reached', now: Date.now() }));
         warn(`[autopilot] agent_end: degraded at max continuations, pausing session=${sessionKey}`);
         return;
       }
@@ -1086,7 +1083,7 @@ export function register(api: OpenClawPluginApi): void {
     }
 
     const isBreaker = !event.success && event.error?.toLowerCase().includes('circuit breaker');
-    const afterPause = isBreaker ? pause(state, 'loop_breaker_triggered') : state;
+    const afterPause = isBreaker ? orchestratorReducer(state, { type: 'pause_requested', runId, reason: 'loop_breaker_triggered', now: Date.now() }) : state;
     // GAP-24: Clear degraded when canary fired — system recovered from degradation
     const afterDegradedClear = didFire ? { ...afterPause, degraded: false } : afterPause;
     // Phase 1: Dispatch agent_turn_finished through orchestrator reducer
@@ -1277,7 +1274,7 @@ export function register(api: OpenClawPluginApi): void {
           stateByRun.delete(oldRunId);
           sessionKeyToRunId.delete(sessionKey);
           const runId = generateRunId();
-          let newState = activate(createInitialState(sessionKey, runId, config));
+          let newState = createInitialState(sessionKey, runId, config);
           // Preserve existing goal only if no new goal provided in payload
           const goalForEvent = payloadGoal ?? state.goal ?? newState.goal;
           newState = orchestratorReducer(newState, { type: 'activate_requested', sessionKey, goal: goalForEvent, now: Date.now() });
@@ -1299,7 +1296,7 @@ export function register(api: OpenClawPluginApi): void {
         }
       } else {
         const runId = generateRunId();
-        let state = activate(createInitialState(sessionKey, runId, config));
+        let state = createInitialState(sessionKey, runId, config);
         state = orchestratorReducer(state, { type: 'activate_requested', sessionKey, goal: payloadGoal, now: Date.now() });
         state = applyPayload(state);
         state = applyWorkflowConfig(state);
@@ -1355,7 +1352,7 @@ export function register(api: OpenClawPluginApi): void {
       if (state.status === 'running' || state.status === 'paused' || state.status === 'done') {
         // M2: Dispatch stop_requested through orchestrator reducer for M2 state tracking
         const orchestrated = orchestratorReducer(state, { type: 'stop_requested', runId, now: Date.now() });
-        setState(runId, deactivate(orchestrated));
+        setState(runId, orchestrated);
         log(`[autopilot] stop: session=${sessionKey} ${state.status}→idle`);
       }
       // Release audit monitor refcount when session stops.
