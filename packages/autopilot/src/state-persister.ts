@@ -30,6 +30,7 @@ import type { AutopilotState } from './types';
 import type { WorkspaceRecord, RetryEntry, WorkflowConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { deriveStatus } from './orchestrator';
+import type { Ledger } from './progress-ledger';
 
 const CHECKPOINT_SUBDIR = path.join('.autopilot', 'checkpoints');
 const SESSION_INDEX_FILE = 'session-index.json';
@@ -122,6 +123,8 @@ export interface AutopilotCheckpoint {
   /** E2: per-run hard caps restored on crash recovery. */
   maxDurationMs?: number;
   maxCostUsd?: number;
+  /** E5: progress ledger (bounded). */
+  ledger?: Ledger;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   evidenceStatus?: AutopilotState['evidence'] extends infer E ? (E extends { status: infer S } ? S : undefined) : undefined;
@@ -177,6 +180,7 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     tokenBudget: state.tokenBudget,
     maxDurationMs: state.maxDurationMs,
     maxCostUsd: state.maxCostUsd,
+    ledger: state.ledger,
     inputTokensUsed: state.inputTokensUsed,
     outputTokensUsed: state.outputTokensUsed,
     evidenceStatus: state.evidence?.status,
@@ -326,6 +330,7 @@ export function loadCheckpoint(
     tokenBudget: cp.tokenBudget,
     maxDurationMs: cp.maxDurationMs,
     maxCostUsd: cp.maxCostUsd,
+    ledger: cp.ledger,
     inputTokensUsed: cp.inputTokensUsed,
     outputTokensUsed: cp.outputTokensUsed,
     startedAt: cp.startedAt,

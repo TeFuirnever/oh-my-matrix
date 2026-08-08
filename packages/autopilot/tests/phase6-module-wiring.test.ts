@@ -138,10 +138,13 @@ describe('Phase 6: Backend module wiring', () => {
         success: true,
       });
 
-      // Turn 2: agent_turn_prepare should inject progress
+      // Turn 2: agent_turn_prepare should inject progress. E5: the structured
+      // ledger (populated at agent_end) is injected as "Progress ledger" with a
+      // JSON summary, replacing the old "Turn N/M" counter / "Progress so far".
       const result = prepare({ prompt: 'continue' }, { sessionKey: 'sess-prog3' }) as { appendContext?: string };
       expect(result).toBeDefined();
-      expect(result.appendContext).toContain('Progress so far');
+      expect(result.appendContext).toContain('Progress ledger');
+      expect(result.appendContext).toContain('recentTurns');
     });
   });
 

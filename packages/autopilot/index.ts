@@ -17,6 +17,8 @@ import { projectState } from './src/projection';
 import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx, PauseReason } from './src/types';
 import { detectCapExceeded } from './src/cost';
+import { emptyLedger, recordTurn, buildEntry, summarizeLedger } from './src/progress-ledger';
+import type { CommandClass } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@oh-my-matrix/permission-policy';
@@ -91,6 +93,11 @@ let noUsageWarned = new Set<string>();
 // armed flag prevents re-injecting every 60s tick. Keyed by runId, cleared on
 // termination/eviction.
 let hardStopWinddownArmed = new Set<string>();
+// E5: transient per-run accumulator for the CURRENT turn's tool activity
+// (files touched + commands run). Collected in after_tool_call, finalized into
+// the persisted ledger (state.ledger) at agent_end. Lost on crash — acceptable:
+// it is current-turn detail, and the ledger already holds finalized turns.
+let turnAccumulator = new Map<string, TurnActivity>();
 let stallInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -173,6 +180,55 @@ function injectWinddown(runId: string, state: AutopilotState, reason: PauseReaso
   ).catch((err) => warn(`[autopilot] winddown enqueue failed for session=${state.sessionKey}: ${err}`));
 }
 
+/**
+ * E5: classify a tool call into ledger activity. filesTouched comes ONLY from
+ * write-class tools (workspace_write / system_write); commandsRun ONLY from
+ * exec-class (validation / destructive_git / unknown-uncategorized). Read-only,
+ * safe_git, network, etc. record nothing — a pure-analysis run must not look
+ * "active" just because it read files (this is the E6 no-progress signal too).
+ */
+const LEDGER_WRITE_CLASSES: ReadonlySet<CommandClass> = new Set(['workspace_write', 'system_write']);
+const LEDGER_EXEC_CLASSES: ReadonlySet<CommandClass> = new Set(['validation', 'destructive_git', 'unknown']);
+
+/** Per-turn tool activity accumulated from after_tool_call, finalized at agent_end. */
+interface TurnActivity { files: string[]; cmds: string[] }
+
+/**
+ * Collect string values from params whose key matches `keyRegex`. Flattens
+ * string arrays (a batch/multi-edit tool carrying `files: string[]` records each
+ * item — without this, the common "touched many files" case under-reports).
+ */
+function collectStringsBy(p: Record<string, unknown>, keyRegex: RegExp): string[] {
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(p)) {
+    if (!keyRegex.test(k)) continue;
+    if (typeof v === 'string') {
+      if (v) out.push(v);
+    } else if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string' && item) out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
+function extractLedgerActivity(toolName: string, params: unknown): TurnActivity {
+  let cls: CommandClass;
+  try {
+    cls = classifyCommand(toolName);
+  } catch {
+    cls = 'unknown';
+  }
+  const p = (params && typeof params === 'object' ? params : {}) as Record<string, unknown>;
+  // ponytail: key-based regex on top-level params only. Misses nested param
+  // shapes; acceptable — this shapes a progress summary, not a permission decision.
+  return {
+    files: LEDGER_WRITE_CLASSES.has(cls) ? collectStringsBy(p, /path|file/i) : [],
+    cmds: LEDGER_EXEC_CLASSES.has(cls) ? collectStringsBy(p, /command|cmd|script/i) : [],
+  };
+}
+
 function defaultStallTimeoutMs(hasTokenBudget: boolean): number {
   return hasTokenBudget
     ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs
@@ -223,6 +279,7 @@ export function _resetForTest(): void {
   canaryFired = new Set();
   noUsageWarned = new Set();
   hardStopWinddownArmed = new Set();
+  turnAccumulator = new Map();
   enqueueInjectionFn = undefined;
   // Test isolation: disable checkpoint persistence so the existing 50+ test suite
   // (which calls register() in the repo root and would otherwise both WRITE
@@ -388,6 +445,7 @@ function evictOldestRuns(): void {
       canaryFired.delete(oldestState.sessionKey);
       noUsageWarned.delete(oldestState.sessionKey);
       hardStopWinddownArmed.delete(oldestRunId);
+      turnAccumulator.delete(oldestRunId);
       // GAP-25: also clean up sessionIdToKey to prevent orphaned sid→skey entries
       for (const [sid, skey] of sessionIdToKey) {
         if (skey === oldestState.sessionKey) {
@@ -424,6 +482,7 @@ function cleanupAll(): void {
   canaryFired.clear();
   noUsageWarned.clear();
   hardStopWinddownArmed.clear();
+  turnAccumulator.clear();
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
@@ -715,6 +774,24 @@ export function register(api: OpenClawPluginApi): void {
   registerHook('after_tool_call', (event: PluginHookAfterToolCallEvent, ctx: PluginHookAgentContext) => {
     const sessionKey = resolveSessionKey(event, ctx);
     if (!sessionKey) return;
+
+    // E5: accumulate this tool call's ledger activity into the parent run's
+    // current-turn buffer (finalized at agent_end). Subagent sessionKeys merge
+    // up to the parent via findRunBySessionOrParent — observation only, no
+    // permission change. filesTouched from write tools, commandsRun from exec
+    // tools; read-only calls record nothing (so a pure-analysis run does not
+    // look "active" — the E6 no-progress signal depends on this).
+    const parentEntry = findRunBySessionOrParent(sessionKey);
+    if (parentEntry?.[1].enabled) {
+      const { files, cmds } = extractLedgerActivity(event.toolName, event.params);
+      if (files.length || cmds.length) {
+        const acc = turnAccumulator.get(parentEntry[0]) ?? { files: [], cmds: [] };
+        acc.files.push(...files);
+        acc.cmds.push(...cmds);
+        turnAccumulator.set(parentEntry[0], acc);
+      }
+    }
+
     const entry = findRunBySession(sessionKey);
     if (!entry?.[1].enabled) return;
     const [runId, state] = entry;
@@ -758,6 +835,11 @@ export function register(api: OpenClawPluginApi): void {
     if (entry?.[1].enabled) {
       log(`[autopilot] after_compaction: session=${sessionKey} restoring goal`);
       setState(entry[0], restoreGoalAfterCompaction(entry[1]));
+      // E5: the progress ledger lives in state, so it survives context compaction
+      // untouched (compaction shrinks the model's conversation, not AutopilotState).
+      // The next agent_turn_prepare re-injects summarizeLedger(state.ledger) — the
+      // run never sees a stale counter post-compaction, and never assumes in-context
+      // progress/constraints survived. No injection here: this hook returns void.
     }
   });
 
@@ -808,7 +890,12 @@ export function register(api: OpenClawPluginApi): void {
     if (updated.goal) {
       parts.push(`[Autopilot] Current goal: ${updated.goal}`);
     }
-    if (updated.progress) {
+    // E5: prefer the structured progress ledger over the legacy progress string.
+    // The ledger survives compaction in state; a stale progressSnapshot must not
+    // resurrect the old counter. Fall back to progress only when no ledger exists.
+    if (updated.ledger) {
+      parts.push(`[Autopilot] Progress ledger: ${summarizeLedger(updated.ledger)}`);
+    } else if (updated.progress) {
       parts.push(`[Autopilot] Progress so far: ${updated.progress}`);
     }
 
@@ -1162,13 +1249,23 @@ export function register(api: OpenClawPluginApi): void {
       error: event.error,
       now: Date.now(),
     });
-    // GAP-8: Write progress after each agent turn
+    // GAP-8 / E5: finalize the turn's ledger entry from the accumulator and
+    // replace the "Turn N/M completed" counter with a structured progress summary.
+    // The ledger persists in state (→ checkpoint at the E1-unified root) so it
+    // survives compaction + crash; the summary is re-derived, never a stale counter.
+    const acc = turnAccumulator.get(runId);
+    turnAccumulator.delete(runId);
+    const ledger = recordTurn(
+      afterOrchestrator.ledger ?? emptyLedger(),
+      buildEntry(afterOrchestrator.totalContinuations, acc?.files ?? [], acc?.cmds ?? [], afterOrchestrator.evidence?.status),
+    );
     const afterProgress: AutopilotState = {
       ...afterOrchestrator,
-      progress: `Turn ${afterOrchestrator.totalContinuations}/${afterOrchestrator.maxTotalContinuations} completed`,
+      ledger,
+      progress: summarizeLedger(ledger),
     };
     setState(runId, afterProgress);
-    logWithContext('info', 'agent_end', { sessionKey, runId, success: event.success, isBreaker, orchState: afterProgress.orchestrationState ?? 'n/a', progress: afterProgress.progress });
+    logWithContext('info', 'agent_end', { sessionKey, runId, success: event.success, isBreaker, orchState: afterProgress.orchestrationState ?? 'n/a', ledgerEntries: ledger.entries.length });
   });
 
   // --- Session Extension ---

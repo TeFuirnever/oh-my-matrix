@@ -2,6 +2,7 @@ import type { AutopilotState, ContinuationDecision } from './types';
 import { isTaskComplete, hasNoActionableTask } from './completion-detector';
 import { isThresholdExceeded } from './tool-error-tracker';
 import { detectCostCap } from './cost';
+import { summarizeLedger } from './progress-ledger';
 
 interface FinalizeEvent {
   lastAssistantMessage?: string;
@@ -124,7 +125,11 @@ const RETRY_ESCALATION_THRESHOLD = 3;
 
 export function buildRetryInstruction(state: AutopilotState): string {
   const goal = state.goal?.substring(0, 500) || '继续执行当前任务';
-  const progress = state.progress?.substring(0, 500) || '';
+  // E5: prefer the structured ledger summary over the legacy progress string
+  // (which may be a stale counter restored from progressSnapshot post-compaction).
+  const progress = state.ledger
+    ? summarizeLedger(state.ledger)
+    : (state.progress?.substring(0, 500) || '');
   // Agent-facing instructions (not user-visible) — intentionally bypass i18n.
   // English is used for better model comprehension across all language settings.
   const parts = [`[Autopilot] Current goal: ${goal}`];

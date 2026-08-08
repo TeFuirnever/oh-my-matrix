@@ -155,6 +155,9 @@ export interface ModelRoutingConfig {
 }
 
 // ─── Shared permission types (now in @oh-my-matrix/permission-policy, ADR-012) ───
+// E5: progress ledger — structured record of what a run did (files/commands/
+// evidence), replacing the "Turn N/M" counter. Type-only import (no runtime cycle).
+import type { Ledger } from './progress-ledger';
 // decidePermission + classifyCommand + audit-persister moved to
 // @oh-my-matrix/permission-policy; autopilot is now a CONSUMER of those primitives.
 // Imported locally (AutopilotState.permissionAudit uses PermissionAuditEntry)
@@ -314,6 +317,9 @@ export interface AutopilotState {
   /** E2: per-run hard caps carried from config (persisted for crash recovery). */
   maxDurationMs?: number;
   maxCostUsd?: number;
+  /** E5: structured progress ledger (bounded; persisted via checkpoint at the
+   *  E1-unified root). Replaces the "Turn N/M" counter string. */
+  ledger?: Ledger;
   degraded: boolean;
   // M2 orchestration fields (all optional for backward compat)
   orchestrationState?: OrchestrationState;
