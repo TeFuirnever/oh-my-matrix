@@ -22,6 +22,7 @@ import {
   deleteCheckpoint,
   lookupRunIdBySessionKey,
   listResumableCheckpoints,
+  isResumableBlockedReason,
   clearSessionIndexEntry,
   buildCheckpoint,
   migrateLegacyCheckpoints,
@@ -292,6 +293,21 @@ describe('listResumableCheckpoints — multi-run restore (Review #3)', () => {
     expect(resumable).toContain('r1');
     expect(resumable).toContain('r2');
     expect(resumable).not.toContain('r3'); // done is terminal — not resumable
+  });
+
+  it('E6: the RESUMABLE mirror stays in parity with orchestrator.ts (no_progress included)', () => {
+    // E6 added no_progress to the canonical RESUMABLE_BLOCKED_REASONS; the local
+    // mirror (RESUMABLE_BLOCKED_LOCAL) must match or a no_progress-paused run's
+    // checkpoint is judged terminal and swept after the TTL (state lost). The
+    // sweep decision (isResumableBlockedReason) is what the parity protects.
+    expect(isResumableBlockedReason('no_progress')).toBe(true);
+    // parity with the canonical set (orchestrator.ts RESUMABLE_BLOCKED_REASONS):
+    // every canonical member is resumable in the mirror too.
+    for (const r of ['stalled', 'validation_failed', 'evidence_missing', 'injection_rejected', 'no_progress']) {
+      expect(isResumableBlockedReason(r)).toBe(true);
+    }
+    // and a terminal reason is NOT.
+    expect(isResumableBlockedReason('max_total_reached')).toBe(false);
   });
 
   it('skips runs whose workspace path no longer exists', async () => {
