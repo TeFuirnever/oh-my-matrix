@@ -2,7 +2,7 @@
   "id": "autopilot",
   "name": "Autopilot Continuous Mode",
   "description": "OpenClaw-native continuous execution for long-running tasks",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
