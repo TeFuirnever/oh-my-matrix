@@ -24,10 +24,12 @@ import {
   listResumableCheckpoints,
   clearSessionIndexEntry,
   buildCheckpoint,
+  migrateLegacyCheckpoints,
   _resetCheckpointFailureCountForTest,
   _clearWriteLocksForTest,
   _flushAllWritesForTest,
   _enableCheckpointingForTest,
+  _setCheckpointRootForTest,
 } from '../src/state-persister';
 import type { AutopilotState } from '../src/types';
 
@@ -402,5 +404,80 @@ describe('fail-silent contract', () => {
 
   it('loadCheckpoint returns null when the file is missing', () => {
     expect(loadCheckpoint('never-saved', tmpRoot)).toBeNull();
+  });
+});
+
+describe('E1 — migrateLegacyCheckpoints', () => {
+  let legacyDir: string;
+  let destDir: string;
+
+  beforeEach(() => {
+    legacyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-mig-legacy-'));
+    destDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-mig-dest-'));
+    _setCheckpointRootForTest(destDir); // route getCheckpointRoot() at destDir
+  });
+  afterEach(() => {
+    _setCheckpointRootForTest(undefined);
+    fs.rmSync(legacyDir, { recursive: true, force: true });
+    fs.rmSync(destDir, { recursive: true, force: true });
+  });
+
+  it('moves a resumable checkpoint from a legacy root into the fixed root', async () => {
+    const state = makeState({ sessionKey: 'sess-mig', runId: 'run-mig', orchestrationState: 'claimed', needsCrossTurnResume: true });
+    saveCheckpoint(state, 'run-mig', legacyDir);
+    await flushWrites();
+    expect(loadCheckpoint('run-mig', legacyDir)).not.toBeNull();
+    expect(loadCheckpoint('run-mig', destDir)).toBeNull();
+
+    const migrated = migrateLegacyCheckpoints([legacyDir]);
+
+    expect(migrated).toBe(1);
+    expect(loadCheckpoint('run-mig', destDir)).not.toBeNull(); // now in fixed root
+    expect(loadCheckpoint('run-mig', legacyDir)).toBeNull();   // gone from legacy
+  });
+
+  it('no-ops (does not self-delete) when a legacy root IS the fixed root', async () => {
+    // Regression guard for the symlink trap: passing the fixed root itself must
+    // skip via canonical-dir equality, not load+write+delete the same file.
+    const state = makeState({ sessionKey: 'sess-self', runId: 'run-self', orchestrationState: 'claimed' });
+    saveCheckpoint(state, 'run-self', destDir);
+    await flushWrites();
+
+    const migrated = migrateLegacyCheckpoints([destDir]);
+
+    expect(migrated).toBe(0);
+    expect(loadCheckpoint('run-self', destDir)).not.toBeNull(); // survived
+  });
+
+  it('does not orphan a legacy checkpoint whose workspace vanished (skipped, not deleted)', async () => {
+    const gone = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-mig-gone-'));
+    fs.rmSync(gone, { recursive: true, force: true }); // workspace path no longer exists
+    const state = makeState({
+      sessionKey: 'sess-gone', runId: 'run-gone', orchestrationState: 'claimed',
+      workspace: { root: gone, path: gone, workspaceKey: 'k', branchName: 'b', baseBranch: 'main', createdNow: true, reusable: false },
+    });
+    saveCheckpoint(state, 'run-gone', legacyDir);
+    await flushWrites();
+
+    const migrated = migrateLegacyCheckpoints([legacyDir]);
+
+    // listResumableCheckpoints skips workspace-gone runs → not migrated, not deleted.
+    expect(migrated).toBe(0);
+    expect(loadCheckpoint('run-gone', legacyDir, { validateWorkspace: false })).not.toBeNull();
+  });
+
+  it('listResumableCheckpoints sweeps .tmp.* orphans from a crashed atomic write', () => {
+    // E1/§5.8: a crash mid-atomicWriteFileSync leaves a `${runId}.json.tmp.pid.rand`
+    // orphan next to the target. The directory scan must collect it. Uses tmpRoot
+    // directly (override-agnostic — listResumableCheckpoints takes the root arg).
+    const dir = path.join(tmpRoot, '.autopilot', 'checkpoints');
+    fs.mkdirSync(dir, { recursive: true });
+    const orphan = path.join(dir, 'run-x.json.tmp.1234.abc');
+    fs.writeFileSync(orphan, 'garbage from a crashed write');
+    expect(fs.existsSync(orphan)).toBe(true);
+
+    listResumableCheckpoints(tmpRoot);
+
+    expect(fs.existsSync(orphan)).toBe(false);
   });
 });

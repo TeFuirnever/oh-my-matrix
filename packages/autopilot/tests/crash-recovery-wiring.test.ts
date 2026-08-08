@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { register, _resetForTest, _getInternalStateForTest } from '../index';
-import { saveCheckpoint, _flushAllWritesForTest, _enableCheckpointingForTest, _disableCheckpointingForTest } from '../src/state-persister';
+import { saveCheckpoint, _flushAllWritesForTest, _enableCheckpointingForTest, _disableCheckpointingForTest, _setCheckpointRootForTest } from '../src/state-persister';
 import { createInitialState } from '../src/types';
 
 let tmpRoot: string;
@@ -40,19 +40,24 @@ function createMockApi(pluginConfig?: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  // Use a tmpdir as BOTH the cwd (so process.cwd()-based checkpoint resolution
-  // lands here) and the workspace root. This is the key isolation trick —
-  // production reads process.cwd(), tests chdir into tmp.
+  // Use a tmpdir as the checkpoint root. Production resolves a fixed user-level
+  // root via getCheckpointRoot() (E1/P0-2); tests redirect it here via
+  // _setCheckpointRootForTest. chdir into tmp keeps process.cwd() aligned as the
+  // legacy-migration candidate register() scans.
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-wire-'));
   originalCwd = process.cwd();
   process.chdir(tmpRoot);
   _resetForTest();
   _enableCheckpointingForTest();
+  // E1: route the index.ts checkpoint root (now fixed/user-level) at this tmpdir
+  // so real-disk reads/writes land here, not in ~/.matrix.
+  _setCheckpointRootForTest(tmpRoot);
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
   _disableCheckpointingForTest();
+  _setCheckpointRootForTest(undefined);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -190,6 +195,39 @@ describe('E11 — crash-recovery kicks a restored mid-cross-turn run', () => {
       needsCrossTurnResume: true,
     });
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('E1 — register() migrates a legacy-cwd checkpoint into the fixed root', () => {
+  it('restores a run whose checkpoint lived in the pre-fix cwd location', async () => {
+    // Code-review (Standards) finding: register()'s migrateLegacyCheckpoints
+    // wiring is otherwise untested — in the other tests process.cwd()===override
+    // so migration always hits the canonical-equality skip. Here they differ.
+    const legacyCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-legcwd-'));
+    const fixedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-fixed-'));
+    try {
+      const state = { ...createInitialState('sess-leg', 'run-leg'), orchestrationState: 'claimed' as const, enabled: true };
+      saveCheckpoint(state, 'run-leg', legacyCwd);
+      await _flushAllWritesForTest();
+
+      // Distinct fixed root; chdir to the legacy location so register()'s
+      // migrateLegacyCheckpoints([process.cwd()]) finds and moves the checkpoint.
+      process.chdir(legacyCwd);
+      _resetForTest();
+      _enableCheckpointingForTest();
+      _setCheckpointRootForTest(fixedRoot);
+      const mock = createMockApi({ maxConcurrentAutopilot: 10 });
+      register(mock.api);
+
+      // Restored — proves register()'s wiring migrated legacy→fixed root.
+      // Without migration, listResumableCheckpoints(fixedRoot) returns [].
+      expect(_getInternalStateForTest().stateByRunSize).toBe(1);
+    } finally {
+      process.chdir(originalCwd);
+      _setCheckpointRootForTest(undefined);
+      fs.rmSync(legacyCwd, { recursive: true, force: true });
+      fs.rmSync(fixedRoot, { recursive: true, force: true });
+    }
   });
 });
 

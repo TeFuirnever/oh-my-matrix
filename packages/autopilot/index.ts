@@ -33,7 +33,10 @@ import {
   lookupRunIdBySessionKey,
   listResumableCheckpoints,
   clearSessionIndexEntry,
+  getCheckpointRoot,
+  migrateLegacyCheckpoints,
   _disableCheckpointingForTest,
+  _setCheckpointRootForTest,
 } from './src/state-persister';
 
 // Public re-export so consumers import AutopilotProjection from the package
@@ -194,15 +197,10 @@ export function _resetForTest(): void {
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
-/**
- * Resolve the workspace root under which checkpoints are stored for a run.
- * Prefers the run's own workspace.root (the containment boundary the run was
- * activated under); falls back to process.cwd() so checkpointing still works
- * for runs activated before a workspace record is attached.
- */
-function resolveCheckpointRoot(state: AutopilotState): string {
-  return state.workspace?.root ?? process.cwd();
-}
+// E1/P0-2: checkpoint root is a fixed user-level location (getCheckpointRoot),
+// decoupled from the run's workspace — see state-persister.ts. Callers below
+// all pass getCheckpointRoot(); the run's workspace is persisted ON the
+// checkpoint (containment boundary), only the FILE LOCATION is decoupled.
 
 /**
  * Decide whether a state transition should trigger a checkpoint write. We write
@@ -236,13 +234,13 @@ function persistAfterTransition(runId: string, prev: AutopilotState | undefined,
   // so it can't be resurrected stale on a later restart, and clear the index.
   const orch = next.orchestrationState;
   if (orch === 'done' || (orch === 'blocked' && next.blockedReason === 'user_stopped')) {
-    const root = resolveCheckpointRoot(next);
+    const root = getCheckpointRoot();
     deleteCheckpoint(runId, root);
     clearSessionIndexEntry(root, next.sessionKey);
     return;
   }
   if (shouldCheckpoint(prev, next)) {
-    saveCheckpoint(next, runId, resolveCheckpointRoot(next));
+    saveCheckpoint(next, runId, getCheckpointRoot());
   }
 }
 
@@ -344,7 +342,7 @@ function evictOldestRuns(): void {
     // S8: release audit refCount for an evicted still-running run before delete.
     if (oldestState?.status === 'running') setAuditMode('active');
     // Review #4 #6b: also delete the checkpoint so evicted runs don't leak files.
-    if (oldestState) deleteCheckpoint(oldestRunId, resolveCheckpointRoot(oldestState));
+    if (oldestState) deleteCheckpoint(oldestRunId, getCheckpointRoot());
     stateByRun.delete(oldestRunId);
     if (oldestState) {
       sessionKeyToRunId.delete(oldestState.sessionKey);
@@ -486,7 +484,11 @@ export function register(api: OpenClawPluginApi): void {
   // released/unclaimed) whose workspace still exists. Restored runs are marked
   // degraded:true so operators can tell a restored run from a fresh one.
   {
-    const root = process.cwd();
+    // E1/P0-2: migrate legacy-location checkpoints (the gateway-cwd read
+    // location) into the fixed root, then read from the fixed root. Going
+    // forward every checkpoint lands in the fixed root regardless of workspace.
+    const migratedCount = migrateLegacyCheckpoints([process.cwd()]);
+    const root = getCheckpointRoot();
     const resumable = listResumableCheckpoints(root);
     for (const runId of resumable) {
       const restored = loadCheckpoint(runId, root);
@@ -504,6 +506,9 @@ export function register(api: OpenClawPluginApi): void {
           kickResumedTurn(runId, restored);
         }
       }
+    }
+    if (migratedCount > 0) {
+      log(`[autopilot] checkpoint migration: moved ${migratedCount} run(s) into the fixed root`);
     }
     if (resumable.length > 0) {
       log(`[autopilot] crash-recovery: restored ${stateByRun.size} run(s) from checkpoints`);
@@ -977,7 +982,7 @@ export function register(api: OpenClawPluginApi): void {
     // in memory (different process, late-arriving session_start).
     const sessionKey = event.sessionKey;
     if (sessionKey && !findRunBySession(sessionKey)) {
-      const root = process.cwd();
+      const root = getCheckpointRoot();
       const runId = lookupRunIdBySessionKey(root, sessionKey);
       if (runId) {
         const restored = loadCheckpoint(runId, root);
@@ -1005,7 +1010,7 @@ export function register(api: OpenClawPluginApi): void {
       // so a crash between session_end and the next activity doesn't lose work.
       // (Terminal runs already had their checkpoint deleted in setState.)
       if (state.orchestrationState !== 'done' && state.orchestrationState !== 'blocked') {
-        saveCheckpoint(state, runId, resolveCheckpointRoot(state));
+        saveCheckpoint(state, runId, getCheckpointRoot());
       }
       stateByRun.delete(runId);
       sessionKeyToRunId.delete(sessionKey);
