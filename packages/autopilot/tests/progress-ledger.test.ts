@@ -61,6 +61,24 @@ describe('E5: progress-ledger', () => {
       // shared.ts appears once in the aggregate despite two folded turns touching it
       expect(l.folded.filesTouched.filter((f) => f === 'shared.ts').length).toBe(1);
     });
+
+    it('keeps the NEWEST folded files past the cap, drops the oldest (review follow-up)', () => {
+      // 20 turns, each a distinct file → 14 folded (> MAX_SUMMARY_FILES=12).
+      // slice(-MAX) keeps the newest 12; the earliest 2 are dropped (not frozen).
+      let l = emptyLedger();
+      for (let i = 1; i <= 20; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`cmd${i}`]));
+      }
+      expect(l.folded.turns).toBe(14);
+      // detail window holds turns 15-20; folded holds 1-14, capped to newest 12 (3-14).
+      expect(l.folded.filesTouched).toContain('f14.ts'); // newest folded present
+      expect(l.folded.filesTouched).toContain('f3.ts');  // 12th-newest folded present
+      expect(l.folded.filesTouched).not.toContain('f1.ts'); // oldest dropped
+      expect(l.folded.filesTouched).not.toContain('f2.ts'); // 2nd-oldest dropped
+      expect(l.folded.filesTouched.length).toBeLessThanOrEqual(12);
+      // the most recent turns survive in the detail window
+      expect(l.entries[l.entries.length - 1].filesTouched).toContain('f20.ts');
+    });
   });
 
   describe('summarizeLedger', () => {

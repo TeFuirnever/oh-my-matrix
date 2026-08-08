@@ -82,6 +82,11 @@ function dedup(arr: string[]): string[] {
 /**
  * Fold the oldest detail entry into the aggregate, dropping it from `entries`.
  * The aggregate is MERGED (replace representation), not appended — see FoldedAggregate.
+ *
+ * Review follow-up: cap from the END (slice(-MAX)) so the NEWEST folded files
+ * survive. New folded turns are appended last; slicing the head would freeze
+ * filesTouchedSoFar at the earliest files ever touched and never reflect later
+ * work.
  */
 function foldOldest(ledger: Ledger): Ledger {
   if (ledger.entries.length === 0) return ledger;
@@ -89,8 +94,8 @@ function foldOldest(ledger: Ledger): Ledger {
   return {
     folded: {
       turns: ledger.folded.turns + 1,
-      filesTouched: dedup([...ledger.folded.filesTouched, ...oldest.filesTouched]).slice(0, MAX_SUMMARY_FILES),
-      commandsRun: dedup([...ledger.folded.commandsRun, ...oldest.commandsRun]).slice(0, MAX_SUMMARY_CMDS),
+      filesTouched: dedup([...ledger.folded.filesTouched, ...oldest.filesTouched]).slice(-MAX_SUMMARY_FILES),
+      commandsRun: dedup([...ledger.folded.commandsRun, ...oldest.commandsRun]).slice(-MAX_SUMMARY_CMDS),
     },
     entries: rest,
   };
@@ -134,4 +139,20 @@ export function summarizeLedger(ledger: Ledger | undefined): string {
     openItems: open,
   };
   return JSON.stringify(summary);
+}
+
+/**
+ * Short, human-readable, RPC-safe headline for state.progress (review follow-up:
+ * state.progress is returned verbatim by the autopilot.status RPC, so it must NOT
+ * hold raw JSON). Consumes the same ledger; the detailed JSON (summarizeLedger)
+ * is for agent-facing injections only.
+ */
+export function buildProgressHeadline(ledger: Ledger | undefined): string {
+  const l = ledger ?? emptyLedger();
+  const last = l.entries[l.entries.length - 1];
+  const turn = last?.turn ?? 0;
+  const fileCount = l.folded.filesTouched.length + (last?.filesTouched.length ?? 0);
+  const cmdCount = l.folded.commandsRun.length + (last?.commandsRun.length ?? 0);
+  const foldedNote = l.folded.turns > 0 ? ` · ${l.folded.turns} earlier turn${l.folded.turns === 1 ? '' : 's'} folded` : '';
+  return `Turn ${turn} · ${fileCount} file${fileCount === 1 ? '' : 's'} · ${cmdCount} command${cmdCount === 1 ? '' : 's'}${foldedNote}`;
 }

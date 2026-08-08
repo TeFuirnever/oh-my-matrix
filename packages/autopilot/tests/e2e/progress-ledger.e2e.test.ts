@@ -108,4 +108,30 @@ describe('E2E: E5 progress ledger wiring', () => {
     expect(inj).toContain('src/a.ts');
     expect(inj).toContain('src/c.ts');
   });
+
+  it('degraded agent_end (no before_agent_finalize) still records the turn + clears the accumulator', async () => {
+    // Review #1/#12: the degraded (!didFire) path used to return before finalizing
+    // the ledger, leaking turnAccumulator and collapsing turns. Now the ledger is
+    // finalized once at the top of agent_end — degraded turns are recorded too.
+    await activate(mock, 'sess-degraded');
+    // NOTE: deliberately NO before_agent_finalize → canary never fires → degraded.
+    mock.hooks.get('after_tool_call')!({ toolName: 'write_file', params: { file_path: 'src/d.ts' } }, { sessionKey: 'sess-degraded' });
+    await mock.hooks.get('agent_end')!({ sessionId: 'sid-sess-degraded', sessionKey: 'sess-degraded', success: true });
+    const inj = injectionFor(mock, 'sess-degraded');
+    expect(inj).toContain('src/d.ts'); // degraded turn's work recorded
+  });
+
+  it('a read-only payload via a generic exec tool records nothing (review follow-up)', async () => {
+    // Review #6: `bash cat x` must classify read_only (via tokenized args) and
+    // record nothing — preserving the read-only invariant for the E6 signal.
+    await activate(mock, 'sess-ro');
+    mock.hooks.get('after_tool_call')!({ toolName: 'bash', params: { command: 'cat src/readonly.ts' } }, { sessionKey: 'sess-ro' });
+    await mock.hooks.get('before_agent_finalize')!({
+      sessionId: 'sid-sess-ro', sessionKey: 'sess-ro', lastAssistantMessage: 'working', stopHookActive: false,
+    });
+    await mock.hooks.get('agent_end')!({ sessionId: 'sid-sess-ro', sessionKey: 'sess-ro', success: true });
+    const inj = injectionFor(mock, 'sess-ro');
+    expect(inj).not.toContain('readonly.ts');
+    expect(inj).not.toContain('cat src');
+  });
 });

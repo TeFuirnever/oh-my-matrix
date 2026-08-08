@@ -17,11 +17,11 @@ import { projectState } from './src/projection';
 import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx, PauseReason } from './src/types';
 import { detectCapExceeded } from './src/cost';
-import { emptyLedger, recordTurn, buildEntry, summarizeLedger } from './src/progress-ledger';
+import { emptyLedger, recordTurn, buildEntry, summarizeLedger, buildProgressHeadline } from './src/progress-ledger';
 import type { CommandClass } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
-import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@oh-my-matrix/permission-policy';
+import { classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
 import { runValidationCommands } from './src/command-runner';
@@ -196,7 +196,8 @@ interface TurnActivity { files: string[]; cmds: string[] }
 /**
  * Collect string values from params whose key matches `keyRegex`. Flattens
  * string arrays (a batch/multi-edit tool carrying `files: string[]` records each
- * item — without this, the common "touched many files" case under-reports).
+ * item — without this, the common "touched many files" case under-reports), and
+ * also pulls matching keys from array-of-object items (e.g. `files:[{file_path:..}]`).
  */
 function collectStringsBy(p: Record<string, unknown>, keyRegex: RegExp): string[] {
   const out: string[] = [];
@@ -206,7 +207,13 @@ function collectStringsBy(p: Record<string, unknown>, keyRegex: RegExp): string[
       if (v) out.push(v);
     } else if (Array.isArray(v)) {
       for (const item of v) {
-        if (typeof item === 'string' && item) out.push(item);
+        if (typeof item === 'string') {
+          if (item) out.push(item);
+        } else if (item && typeof item === 'object') {
+          for (const [ik, iv] of Object.entries(item as Record<string, unknown>)) {
+            if (keyRegex.test(ik) && typeof iv === 'string' && iv) out.push(iv);
+          }
+        }
       }
     }
   }
@@ -214,13 +221,19 @@ function collectStringsBy(p: Record<string, unknown>, keyRegex: RegExp): string[
 }
 
 function extractLedgerActivity(toolName: string, params: unknown): TurnActivity {
+  const p = (params && typeof params === 'object' ? params : {}) as Record<string, unknown>;
   let cls: CommandClass;
   try {
-    cls = classifyCommand(toolName);
+    // E5/review: for generic exec tools (bash/sh/...) the real command is in a
+    // param; tokenize it so a read-only payload (`bash cat x`) classifies
+    // read_only and records nothing — preserving the "read-only records nothing"
+    // invariant the E6 no-progress signal depends on.
+    const cmdStr = typeof p.command === 'string' ? p.command : (typeof p.cmd === 'string' ? p.cmd : '');
+    const args = cmdStr ? tokenizeShell(cmdStr) : [];
+    cls = classifyCommand(toolName, args);
   } catch {
     cls = 'unknown';
   }
-  const p = (params && typeof params === 'object' ? params : {}) as Record<string, unknown>;
   // ponytail: key-based regex on top-level params only. Misses nested param
   // shapes; acceptable — this shapes a progress summary, not a permission decision.
   return {
@@ -778,11 +791,12 @@ export function register(api: OpenClawPluginApi): void {
     // E5: accumulate this tool call's ledger activity into the parent run's
     // current-turn buffer (finalized at agent_end). Subagent sessionKeys merge
     // up to the parent via findRunBySessionOrParent — observation only, no
-    // permission change. filesTouched from write tools, commandsRun from exec
-    // tools; read-only calls record nothing (so a pure-analysis run does not
-    // look "active" — the E6 no-progress signal depends on this).
+    // permission change. Only on a SUCCESSFUL call while RUNNING: a failed write
+    // didn't actually touch the file, and a late tool_result after pause must not
+    // attribute to a future turn. filesTouched from write tools, commandsRun from
+    // exec tools; read-only calls record nothing.
     const parentEntry = findRunBySessionOrParent(sessionKey);
-    if (parentEntry?.[1].enabled) {
+    if (parentEntry?.[1].enabled && parentEntry[1].status === 'running' && !event.error) {
       const { files, cmds } = extractLedgerActivity(event.toolName, event.params);
       if (files.length || cmds.length) {
         const acc = turnAccumulator.get(parentEntry[0]) ?? { files: [], cmds: [] };
@@ -894,7 +908,9 @@ export function register(api: OpenClawPluginApi): void {
     // The ledger survives compaction in state; a stale progressSnapshot must not
     // resurrect the old counter. Fall back to progress only when no ledger exists.
     if (updated.ledger) {
-      parts.push(`[Autopilot] Progress ledger: ${summarizeLedger(updated.ledger)}`);
+      // E5/review: cap the JSON so a large ledger can't balloon appendContext.
+      const ls = summarizeLedger(updated.ledger);
+      parts.push(`[Autopilot] Progress ledger: ${ls.length > 700 ? ls.substring(0, 697) + '...' : ls}`);
     } else if (updated.progress) {
       parts.push(`[Autopilot] Progress so far: ${updated.progress}`);
     }
@@ -1135,6 +1151,8 @@ export function register(api: OpenClawPluginApi): void {
       // S8: release the audit monitor refCount for still-running runs before
       // deleting state, mirroring cleanupAll. A leak here pins monitor mode.
       if (state.status === 'running') setAuditMode('active');
+      // E5/review: drop the transient turn accumulator too (terminal-path leak).
+      turnAccumulator.delete(runId);
       // Crash-recovery: for non-terminal runs, the in-memory state is the most
       // up-to-date copy — ensure it's checkpointed BEFORE deleting from memory
       // so a crash between session_end and the next activity doesn't lose work.
@@ -1156,7 +1174,32 @@ export function register(api: OpenClawPluginApi): void {
     const entry = findRunBySession(sessionKey);
     if (!entry) return;
     if (!entry[1].enabled) return;
-    const [runId, state] = entry;
+    const [runId, baseState] = entry;
+
+    // E5/review: finalize the turn's ledger ONCE here, before the degraded/happy
+    // split. The degraded (!didFire) path returns at several points; finalizing
+    // here ensures BOTH paths record the turn's activity — the degraded path
+    // otherwise leaked turnAccumulator + collapsed N degraded turns into one
+    // entry (and grew unbounded). Empty turns (no files/cmds) skip the entry so
+    // the detail window isn't dominated by no-op turns. The updated ledger + a
+    // short RPC-safe headline (state.progress is returned verbatim by the
+    // autopilot.status RPC) thread through every downstream reducer call, which
+    // all spread `state`.
+    const turnAcc = turnAccumulator.get(runId);
+    turnAccumulator.delete(runId);
+    const hasActivity = !!turnAcc && (turnAcc.files.length > 0 || turnAcc.cmds.length > 0);
+    const finalizedLedger = hasActivity
+      ? recordTurn(baseState.ledger ?? emptyLedger(), buildEntry(baseState.totalContinuations, turnAcc!.files, turnAcc!.cmds, baseState.evidence?.status))
+      : (baseState.ledger ?? emptyLedger());
+    const state: AutopilotState = {
+      ...baseState,
+      ledger: finalizedLedger,
+      progress: buildProgressHeadline(finalizedLedger),
+    };
+    // Persist immediately: the degraded branch below re-fetches from stateByRun
+    // (race-check across an await), so the ledger must be in the map before then
+    // or those re-fetch paths lose it.
+    setState(runId, state);
 
     const didFire = canaryFired.has(sessionKey);
     canaryFired.delete(sessionKey);
@@ -1249,23 +1292,10 @@ export function register(api: OpenClawPluginApi): void {
       error: event.error,
       now: Date.now(),
     });
-    // GAP-8 / E5: finalize the turn's ledger entry from the accumulator and
-    // replace the "Turn N/M completed" counter with a structured progress summary.
-    // The ledger persists in state (→ checkpoint at the E1-unified root) so it
-    // survives compaction + crash; the summary is re-derived, never a stale counter.
-    const acc = turnAccumulator.get(runId);
-    turnAccumulator.delete(runId);
-    const ledger = recordTurn(
-      afterOrchestrator.ledger ?? emptyLedger(),
-      buildEntry(afterOrchestrator.totalContinuations, acc?.files ?? [], acc?.cmds ?? [], afterOrchestrator.evidence?.status),
-    );
-    const afterProgress: AutopilotState = {
-      ...afterOrchestrator,
-      ledger,
-      progress: summarizeLedger(ledger),
-    };
-    setState(runId, afterProgress);
-    logWithContext('info', 'agent_end', { sessionKey, runId, success: event.success, isBreaker, orchState: afterProgress.orchestrationState ?? 'n/a', ledgerEntries: ledger.entries.length });
+    // E5: ledger + progress headline were finalized at the top of agent_end and
+    // ride `state` through the reducer chain above (every reducer spreads state).
+    setState(runId, afterOrchestrator);
+    logWithContext('info', 'agent_end', { sessionKey, runId, success: event.success, isBreaker, orchState: afterOrchestrator.orchestrationState ?? 'n/a', ledgerEntries: afterOrchestrator.ledger?.entries.length ?? 0 });
   });
 
   // --- Session Extension ---
@@ -1301,6 +1331,7 @@ export function register(api: OpenClawPluginApi): void {
         if (entry) {
           // S8: release audit refCount for still-running runs before delete.
           if (entry[1].status === 'running') setAuditMode('active');
+          turnAccumulator.delete(entry[0]); // E5/review: terminal-path leak
           stateByRun.delete(entry[0]);
         }
         // PROD-2: clear the reverse-index and canary set too, else session-key
@@ -1443,6 +1474,7 @@ export function register(api: OpenClawPluginApi): void {
           }
           stateByRun.delete(oldRunId);
           sessionKeyToRunId.delete(sessionKey);
+          turnAccumulator.delete(oldRunId); // E5/review: terminal-path leak
           const runId = generateRunId();
           let newState = createInitialState(sessionKey, runId, config);
           // Preserve existing goal only if no new goal provided in payload
