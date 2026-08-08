@@ -11,6 +11,8 @@
 
 ---
 
+> ⚠️ **DEPRECATED（2026-08-08 核实）**：本份是 **v2.1 旧副本**，权威最新版在 **MA 仓** `MatrixAssistant/docs/core/autopilot/long-horizon-autonomy.md`（**v2.2**，五轮 review + N7 进展 + manager.ts 行号重校准，比本份新 ~295 行）。本份不再维护。改 autopilot 长程设计请改 MA 版，勿改本份。
+
 ## 渐进式加载说明
 
 沿用 [design.md](./design.md) 的三级披露：**L1** 章节摘要 → **L2** `<details>` 展开 → **L3** 代码 `file:line`。
