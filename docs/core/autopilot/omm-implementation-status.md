@@ -21,7 +21,7 @@
 | E12(fold) | #146 | needsCrossTurnResume 全 reducer 写（cross_turn_enqueued + cross_turn_degraded_silent）| minor |
 | — | #147 | RESUMABLE mirror 奇偶修复（E6 漏同步 no_progress）| fix |
 
-**发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）。CHANGELOG 已生成，**未发布**（分支 `chore/release-4.0.0`）。
+**发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）+ **permission-policy 0.1.4**（共享 logger 提取）。**2026-08-09 已发布 npm**（tag：`autopilot-v4.0.0` / `dynamic-workflows-v1.0.0` / `permission-policy-v0.1.4`，release notes 见 GitHub Releases）。发布实操与坑（镜像 registry / 2FA / sync-plugin-versions）见 `docs/runbooks/npm-release.md` + memory `npm-publish-flow`。
 
 ## OMM frontier 剩余（0 张可立即开）
 

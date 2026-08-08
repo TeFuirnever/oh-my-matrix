@@ -145,16 +145,16 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 ## 发布到 npm（维护者）
 
-改 `packages/<pkg>/package.json` 版本号后，在**自己的终端**发布（不要用 Claude 的 `!`）：
+用仓库自带发布脚本（pre-flight 校验 → build → 依赖序发布 → 产物验证）：
 
 ```bash
-pnpm --filter @oh-my-matrix/autopilot publish --access public
-pnpm --filter @oh-my-matrix/dynamic-workflows publish --access public
-pnpm --filter @oh-my-matrix/permission-policy publish --access public
+./scripts/publish.sh            # 三包全发；--dry-run 试跑、--only <pkg> 单发
 ```
 
-- **2FA 必须开着**：`@oh-my-matrix` org 强制发布者开 2FA，关掉会被 E403 锁死。npm 交互式要 OTP（从认证 App 读 6 位码敲进去）。
-- **在自己终端跑**：Claude `!` + `--otp=` 容易撞 OTP 30 秒时效和权限分类器；本地交互最顺。
+完整流程（bump → 发布 → tag/release）见 [`docs/runbooks/npm-release.md`](docs/runbooks/npm-release.md)。
+
+- **registry**：脚本强制 npmjs.org。开发机 `~/.npmrc` 若配了镜像 registry，裸 `npm publish` 会发错目标——不要绕过脚本。
+- **2FA 必须开着**：`@oh-my-matrix` org 强制发布者开 2FA。用 Publish 类型 access token（npmjs.com settings → tokens）免 OTP；web-login token 发布时仍要 OTP。
 - **不能重发同版本**：npm 版本不可变，改了内容必须 bump（哪怕只 patch）。`pnpm --filter <pkg> pack` 可预览 tarball。
 
 ## 项目状态

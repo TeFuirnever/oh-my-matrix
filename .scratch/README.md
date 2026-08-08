@@ -11,6 +11,8 @@
 > - **P3-28 暂缓（非 OMM 范围）**：根因在 openclaw「非空消息要求」，OMM 无可改，待 openclaw 能力决策——见「明确不做」。
 > - **T0 仍进行中**：M1 机制已修，但「loop 真能多轮转」待 §5.0 运行时验证。
 
+> **状态 reconcile（2026-08-09 · 发布完成）**：**autopilot 4.0.0 + dynamic-workflows 1.0.0 + permission-policy 0.1.4 已发布 npm**（tag + GitHub Release 齐全）。发布前的收尾：ponytail shrink（3 处 inline，-39 行）、共享 logger 提取到 permission-policy（-245 行）、publish.sh 强制 npmjs.org registry（镜像坑）、verify-publish.sh 更新 4.0.0 标记 + ref 计数 7。文档资产（.scratch/、docs/analysis、docs/audits、docs/design）已入库。OMM 侧全部收尾，剩余跨仓依赖不变（MA 消费 resume_run RPC + X1 vendor）。
+>
 > **状态 reconcile（2026-08-08 第三阶段 · HEAD `fabdad9`）**：本会话落地**全部**无阻塞 OMM 引擎 ticket，**OMM frontier 穷尽**。
 > - **已合入 master（PR #134–#146）**：E8、E10、E2、E3（同批）、E5、E9、E13、E6、E7、E4(step1-2)、E12(fold)，各配深度 `/code-review` + follow-up fix。E1、E11、E12(部分) 于前一阶段落地。
 > - **T0 重审**：T0 是运行时验证（非代码依赖），非硬阻塞——E6/E7/E4 顶着 T0 标签落地证明。真硬阻塞仅 M2（跨仓，E4 step3）+ MA 侧。
