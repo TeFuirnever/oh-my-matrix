@@ -280,10 +280,31 @@ describe('E3: classifyRecoverability — rate-limit / overload / network / auth'
     expect(classifyRecoverability('403 forbidden').category).toBe('auth');
   });
 
-  it('context_length_exceeded / max_tokens → recoverable (one-shot)', () => {
+  it('context_length_exceeded → recoverable (one-shot); max_tokens is NOT (review follow-up)', () => {
     expect(classifyRecoverability('context_length_exceeded').recoverable).toBe(true);
     expect(classifyRecoverability('context_length_exceeded').category).toBe('context_overflow');
-    expect(classifyRecoverability('hit max_tokens limit').category).toBe('context_overflow');
+    // max_tokens is the OUTPUT-length stop reason: retrying re-runs the same
+    // prompt against the same output cap (wasted tokens), and compaction does
+    // nothing for an output cap. So it falls through to unknown (non-recoverable),
+    // terminating instead of looping.
+    const mt = classifyRecoverability('hit max_tokens limit');
+    expect(mt.category).not.toBe('context_overflow');
+    expect(mt.recoverable).toBe(false);
+  });
+
+  it('a bare Retry-After no longer triggers rate_limit (review follow-up: no shadowing)', () => {
+    // A non-recoverable error carrying Retry-After must hit its own bucket, not
+    // be shadowed into recoverable rate_limit.
+    const r = classifyRecoverability('permission denied (retry-after: 30)');
+    expect(r.recoverable).toBe(false);
+    expect(r.category).toBe('permission');
+    // Bare Retry-After with no 429/rate-limit signal → unknown, not rate_limit.
+    expect(classifyRecoverability('retry-after: 30').category).not.toBe('rate_limit');
+  });
+
+  it('HTTP status embedded in a URL path does not false-positive (review follow-up)', () => {
+    expect(classifyRecoverability('GET https://api.x/429/logs failed').category).not.toBe('rate_limit');
+    expect(classifyRecoverability('connect ECONNREFUSED port 4290').category).toBe('network');
   });
 
   it('rate-limit wins over a "validation" substring in the same string', () => {
@@ -325,6 +346,14 @@ describe('E3: computeRetryDelay — tier, jitter, Retry-After', () => {
   it('jitter never exceeds the cap', () => {
     // attempt 10 default caps at 300000; even rng=1 stays at cap.
     expect(computeRetryDelay(10, 300000, { jitter: 0.2, rng: () => 1 })).toBe(300000);
+  });
+
+  it('jitter never drops below an honored Retry-After (review follow-up)', () => {
+    // delay raised to retryAfterMs=60000; jitter rng=0 would give 48000, but the
+    // server asked for 60s — floor at retryAfterMs.
+    expect(computeRetryDelay(1, 300000, { jitter: 0.2, rng: () => 0, retryAfterMs: 60_000 })).toBe(60_000);
+    // rng=1 still spreads upward.
+    expect(computeRetryDelay(1, 300000, { jitter: 0.2, rng: () => 1, retryAfterMs: 60_000 })).toBe(72_000);
   });
 });
 

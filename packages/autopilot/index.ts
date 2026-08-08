@@ -1511,6 +1511,13 @@ export function register(api: OpenClawPluginApi): void {
             hardStopWinddownArmed.delete(runId);
             warn(`[autopilot] hard cap ${cap.reason} terminated run: session=${state.sessionKey} run=${runId}`);
           }
+          // Review follow-up: a hard cap supersedes stall/retry THIS tick. Without
+          // `continue`, the stall + retry_due blocks below re-read the stale
+          // per-iteration `state` snapshot (pre-cap) and clobber the just-armed
+          // winddown (stall → retry_queued, so the 30s-TTL injection never reaches
+          // a turn) or resurrect a just-terminated run (stall → retry_queued over
+          // the blocked state), burning ~60s more of an already-spent budget.
+          continue;
         }
       }
 

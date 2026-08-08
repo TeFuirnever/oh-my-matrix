@@ -48,14 +48,16 @@ export function computeRetryDelay(
   }
 
   // Jitter: spread ±jitter fraction around the delay so N runs hitting the same
-  // 429 don't all retry on the same tick. Re-cap so we never exceed the cap; the
-  // minor downward bias only bites exactly at the ceiling (acceptable, ponytail).
+  // 429 don't all retry on the same tick. Floor at the honored Retry-After (review
+  // follow-up: jitter must never push the wait BELOW what the server asked) and
+  // re-cap so we never exceed maxRetryBackoffMs.
   const jitter = opts?.jitter;
   if (jitter && jitter > 0) {
     const rng = opts.rng ?? Math.random;
     const delta = delay * jitter;
+    const floor = opts?.retryAfterMs ?? 0;
     delay = delay - delta + 2 * delta * rng();
-    delay = Math.min(Math.max(delay, 0), maxRetryBackoffMs);
+    delay = Math.min(Math.max(delay, floor), maxRetryBackoffMs);
   }
   return delay;
 }
@@ -100,8 +102,13 @@ export function classifyRecoverability(error: string): RetryClassification {
     return { recoverable: false, category: 'auth' };
   }
 
-  // 2. Rate limit (429 / "rate limit" / Retry-After present) — recoverable, long backoff.
-  if (status === 429 || hasTok(lower, 'rate[ _-]?limit') || retryAfterSec != null) {
+  // 2. Rate limit (429 / "rate limit") — recoverable, long backoff. Retry-After
+  // is attached when present, but a bare Retry-After no longer TRIGGERS rate-limit
+  // (review follow-up): otherwise a non-recoverable error that happens to carry a
+  // Retry-After header — e.g. "permission denied (retry-after: 30)" — shadows the
+  // permission bucket and loops. Retry-After in practice arrives with a 429, which
+  // this status check already catches.
+  if (status === 429 || hasTok(lower, 'rate[ _-]?limit')) {
     return { recoverable: true, category: 'rate_limit', backoffTier: 'long', retryAfterSec };
   }
 
@@ -115,14 +122,17 @@ export function classifyRecoverability(error: string): RetryClassification {
     return { recoverable: true, category: 'network' };
   }
 
-  // 5. Context overflow — recoverable ONCE (a compaction/retry can clear it).
+  // 5. Context overflow (input) — recoverable ONCE (a compaction/retry can clear
+  // it). Review follow-up: matched on context_length_exceeded ONLY. max_tokens is
+  // the OUTPUT-length stop reason — retrying re-runs the same prompt against the
+  // same output cap and burns tokens for nothing, and compaction does nothing for
+  // an output cap. So max_tokens now falls through to 'unknown' (non-recoverable),
+  // which terminates instead of looping.
   // NOTE (E3 known limitation): the spec's "exactly once" cap is NOT enforced
-  // here — this classifier is stateless, so a run that keeps hitting context
-  // overflow retries up to maxRetries like any transient, rather than being
-  // capped at one. Enforcing "once" needs cross-attempt state (remember the
-  // prior error's category + count); deferred. The category is still distinct
-  // so a future once-cap can key on it without re-classifying.
-  if (hasTok(lower, 'context_length_exceeded') || hasTok(lower, 'max_tokens')) {
+  // here — the classifier is stateless, so a run that keeps hitting context
+  // overflow retries up to maxRetries like any transient. Enforcing "once" needs
+  // cross-attempt state (remember the prior error's category + count); deferred.
+  if (hasTok(lower, 'context_length_exceeded')) {
     return { recoverable: true, category: 'context_overflow' };
   }
 
@@ -194,9 +204,13 @@ function hasPrefixTok(lower: string, word: string): boolean {
   return new RegExp(`(?:^|[^a-z0-9])${word}`).test(lower);
 }
 
-/** Extract the first HTTP status we care about (401/403/429/529) from a string. */
+/** Extract the first HTTP status we care about (401/403/429/529) from a string.
+ *  Boundaries exclude '/' (review follow-up) so a status embedded in a URL path
+ *  or stack frame — 'GET /429/logs', 'at retry (429-frame)' — does not false-
+ *  positive into rate-limit. Digits/hyphens still bound correctly: '4290' and
+ *  'port 4290' do not match. */
 function extractHttpStatus(lower: string): number | undefined {
-  const m = lower.match(/\b(401|403|429|529)\b/);
+  const m = lower.match(/(?:^|[^/\w])(401|403|429|529)(?:[^/\w]|$)/);
   return m ? Number(m[1]) : undefined;
 }
 

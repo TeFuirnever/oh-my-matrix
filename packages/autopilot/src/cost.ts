@@ -27,10 +27,11 @@ export function computeCostUsd(inputTokens: number, outputTokens: number): numbe
 /**
  * E2: cost cap only (no clock). Used by the finalize-time fast-path, which must
  * stay pure. Returns the PauseReason when the cost cap is exceeded, else null.
- * No-op when maxCostUsd is unset OR the host hasn't reported usage (tokens 0).
+ * No-op when maxCostUsd is unset/<=0 (0 is treated as "disabled", not "stop
+ * instantly" — a common sentinel) OR the host hasn't reported usage (tokens 0).
  */
 export function detectCostCap(state: AutopilotState): PauseReason | null {
-  if (state.maxCostUsd != null) {
+  if (state.maxCostUsd != null && state.maxCostUsd > 0) {
     const cost = computeCostUsd(state.inputTokensUsed ?? 0, state.outputTokensUsed ?? 0);
     if (cost >= state.maxCostUsd) return 'max_cost_reached';
   }
@@ -40,11 +41,12 @@ export function detectCostCap(state: AutopilotState): PauseReason | null {
 /**
  * E2: detect whether a run has exceeded a hard cap (wall-clock and/or cost).
  * Pure function of state + now; duration is checked first, then cost. Returns
- * the first exceeded cap's reason, or null. The 60s patrol is the production
+ * the first exceeded cap's reason, or null. maxDurationMs<=0 is treated as
+ * "disabled" (same 0-sentinel rule as cost). The 60s patrol is the production
  * caller (it can also reach retry_queued, which the finalize path cannot).
  */
 export function detectCapExceeded(state: AutopilotState, now: number): { reason: PauseReason } | null {
-  if (state.maxDurationMs != null && state.startedAt != null && now - state.startedAt >= state.maxDurationMs) {
+  if (state.maxDurationMs != null && state.maxDurationMs > 0 && state.startedAt != null && now - state.startedAt >= state.maxDurationMs) {
     return { reason: 'max_duration_reached' };
   }
   const costCap = detectCostCap(state);

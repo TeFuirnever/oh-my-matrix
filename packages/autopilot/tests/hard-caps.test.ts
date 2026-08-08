@@ -3,7 +3,7 @@
  * Pure functions — no plugin registration.
  */
 import { describe, it, expect } from 'vitest';
-import { computeCostUsd, detectCapExceeded } from '../src/cost';
+import { computeCostUsd, detectCapExceeded, detectCostCap } from '../src/cost';
 import { RESUMABLE_BLOCKED_REASONS } from '../src/orchestrator';
 import {
   VALID_BLOCKED_REASONS,
@@ -65,6 +65,13 @@ describe('E2: detectCapExceeded', () => {
       maxCostUsd: 0.01, inputTokensUsed: 1_000_000, outputTokensUsed: 1_000_000,
     };
     expect(detectCapExceeded(s, 120_000)).toEqual({ reason: 'max_duration_reached' });
+  });
+
+  it('treats 0 as "disabled" (sentinel), not "stop instantly" (review follow-up)', () => {
+    // maxDurationMs:0 / maxCostUsd:0 must NOT trip — operators use 0 to disable.
+    const zeroed = { ...base, maxDurationMs: 0, maxCostUsd: 0, startedAt: 0, inputTokensUsed: 1_000_000, outputTokensUsed: 1_000_000 };
+    expect(detectCapExceeded(zeroed, 9_999_999)).toBeNull();
+    expect(detectCostCap(zeroed)).toBeNull();
   });
 });
 
