@@ -30,6 +30,7 @@ export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
   'validation_failed',
   'evidence_missing',
   'injection_rejected', // W1: deliberate widening (transient injection failure)
+  'no_progress', // E6 dir-2: stuck but recoverable via a user resume/nudge
 ]);
 
 /**
