@@ -10,6 +10,6 @@ Autopilot: explicit `resume_run` RPC replaces the implicit crash-recovery auto-k
 - `needsCrossTurnResume` stays as a **state fact** (the run is mid-cross-turn); only the implicit "re-broadcast → turn" link is cut.
 - The idempotency-key derivation (from `totalContinuations`) is preserved + anchored in a comment.
 
-**Migration / cross-repo dependency:** existing hosts that relied on the restore-time auto-continue now see restored mid-cross-turn runs sit until `resume_run` is called (the stall path remains a slow fallback after `stallTimeout`). **Full no-double-spend requires the MA driver to consume `resume_run`** — that MA-side change is out of OMM scope (cross-repo), tracked as a dependency.
+**Migration / cross-repo dependency:** existing hosts that relied on the restore-time auto-continue now see restored mid-cross-turn runs sit until `resume_run` is called. The stall path remains a fallback that can re-fire a turn after `stallTimeout` (retry_due advances the idempotency key, but a second turn can still run if the pre-restart turn also executed) — it is NOT a benign no-op. **Deterministic single-resume + full no-double-spend requires the MA driver to consume `resume_run`** — that MA-side change is out of OMM scope (cross-repo), tracked as a dependency.
 
 This release also bundles the pending E2/E3/E5 minors under this major (E9's major already initiated the major line).

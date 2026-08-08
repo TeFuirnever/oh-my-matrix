@@ -144,10 +144,14 @@ describe('crash-recovery wiring — setState → checkpoint → register() resto
 // E11 helper: checkpoint `state`, simulate a restart (wipe + re-register) with
 // an enqueue spy wired as the kick actuator. Returns the spy so each test
 // asserts only on the kick behavior that distinguishes it.
-async function restoreRunWithKickSpy(runId: string, state: ReturnType<typeof createInitialState>) {
+async function restoreRunWithKickSpy(
+  runId: string,
+  state: ReturnType<typeof createInitialState>,
+  enqueueImpl: ((injection: any) => Promise<any>) | undefined = async () => ({ enqueued: true }),
+) {
   saveCheckpoint(state, runId, tmpRoot);
   await _flushAllWritesForTest();
-  const enqueue = vi.fn(async () => ({ enqueued: true }));
+  const enqueue = vi.fn(enqueueImpl);
   const base = createMockApi({ maxConcurrentAutopilot: 10 });
   const api = { ...base.api, session: { ...base.api.session, workflow: { enqueueNextTurnInjection: enqueue } } };
   _resetForTest();
@@ -234,6 +238,73 @@ describe('E13 — crash-recovery no longer auto-kicks; explicit resume_run RPC',
     });
     const respond = vi.fn();
     await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-paused' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it('resume_run reports false when the injection facade rejects (review follow-up)', async () => {
+    // The kick is fire-and-forget elsewhere, but resume_run is an RPC and must not
+    // claim success when the host rejected the enqueue.
+    const { enqueue, gatewayMethods } = await restoreRunWithKickSpy('run-reject', {
+      ...createInitialState('sess-reject', 'run-reject'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    }, async () => ({ enqueued: false }));
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-reject' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('resume_run reports false when the enqueue throws (review follow-up)', async () => {
+    const { gatewayMethods } = await restoreRunWithKickSpy('run-throw', {
+      ...createInitialState('sess-throw', 'run-throw'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    }, async () => { throw new Error('queue full'); });
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-throw' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it('resume_run idempotency key uses lastActivityAt when set (primary path, review follow-up)', async () => {
+    // The key is `lastActivityAt ?? totalContinuations` — lastActivityAt PRIMARY.
+    // A restored mid-cross-turn run has lastActivityAt set (it was active before
+    // the resume); pin the production key, not just the fallback.
+    const { enqueue, gatewayMethods } = await restoreRunWithKickSpy('run-lat', {
+      ...createInitialState('sess-lat', 'run-lat'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+      lastActivityAt: 123456,
+      totalContinuations: 7,
+    });
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-lat' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(true);
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'autopilot-resume-run-lat-123456' }));
+  });
+
+  it('resume_run reports false when the host lacks the injection facade (review follow-up)', async () => {
+    // Hosts below the 5.28+ facade have no enqueueNextTurnInjection; resume_run
+    // must not claim success (the kick would silently no-op).
+    saveCheckpoint(
+      { ...createInitialState('sess-nofacade', 'run-nofacade'), orchestrationState: 'claimed' as const, status: 'running' as const, enabled: true, needsCrossTurnResume: true },
+      'run-nofacade', tmpRoot,
+    );
+    await _flushAllWritesForTest();
+    const base = createMockApi({ maxConcurrentAutopilot: 10 });
+    // Strip the injection facade entirely.
+    const api = { ...base.api, session: { state: { registerSessionExtension: () => {} } } } as any;
+    _resetForTest();
+    _enableCheckpointingForTest();
+    register(api);
+    const respond = vi.fn();
+    await base.gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-nofacade' }, respond });
     expect(respond.mock.calls[0][0]).toBe(false);
   });
 

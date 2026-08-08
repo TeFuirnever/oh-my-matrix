@@ -123,30 +123,34 @@ let enqueueInjectionFn: EnqueueInjectionFn | undefined;
  * genuinely dead agent (stall) or a gateway resume with no follow-up user
  * message, no turn ever comes, so the run would sit in `claimed` until the 24h
  * orphan sweep. This kicks a cross-turn injection so the host actually restarts
- * execution. idempotencyKey (keyed on lastActivityAt) dedupes double-injection
- * of the same recovery event while allowing successive retries to each fire.
+ * execution.
+ *
+ * E13/§7 invariant: the idempotency key is `autopilot-resume-${runId}-${lastActivityAt ?? totalContinuations}`.
+ * lastActivityAt is PRIMARY (a resumed run was active before the resume, so it's
+ * set in production); totalContinuations is the FALLBACK (early-turn fixtures).
+ * The key MUST stay tied to the resumed turn's identity — it lets openclaw's
+ * dedup collapse a double-kick of the SAME resumed turn. retry_due advances
+ * lastActivityAt each cycle, so successive stall-retry kicks get distinct keys.
+ * Changing the derivation would break that dedup.
  */
+function resumeInjectionPayload(runId: string, state: AutopilotState) {
+  return {
+    sessionKey: state.sessionKey,
+    text: buildRetryInstruction(state),
+    idempotencyKey: `autopilot-resume-${runId}-${state.lastActivityAt ?? state.totalContinuations}`,
+    placement: 'prepend_context' as const,
+    // REV-2 fix: match the stall timeout, not the raw default. A no-budget run
+    // stalls at ×2 (600s); the injection TTL must outlive it or the host boots
+    // a resumed turn after the injection already expired.
+    ttlMs: state.workflow?.stallTimeoutMs ?? defaultStallTimeoutMs(!!state.tokenBudget),
+  };
+}
+
 function kickResumedTurn(runId: string, state: AutopilotState): void {
   if (state.orchestrationState !== 'claimed') return;
   const enqueue = enqueueInjectionFn;
   if (typeof enqueue !== 'function') return;
-  // E13/§7 invariant: the idempotency key is derived from totalContinuations
-  // (via lastActivityAt fallback). This derivation MUST stay tied to the turn
-  // number — it is what lets openclaw's dedup collapse a double-kick of the SAME
-  // resumed turn. Changing the derivation (e.g. to a random nonce per kick) would
-  // break that dedup; if ever changed, re-anchor the rationale here.
-  void Promise.resolve(
-    enqueue({
-      sessionKey: state.sessionKey,
-      text: buildRetryInstruction(state),
-      idempotencyKey: `autopilot-resume-${runId}-${state.lastActivityAt ?? state.totalContinuations}`,
-      placement: 'prepend_context',
-      // REV-2 fix: match the stall timeout, not the raw default. A no-budget run
-      // stalls at ×2 (600s); the injection TTL must outlive it or the host boots
-      // a resumed turn after the injection already expired.
-      ttlMs: state.workflow?.stallTimeoutMs ?? defaultStallTimeoutMs(!!state.tokenBudget),
-    }),
-  ).catch((err) => warn(`[autopilot] resume kick enqueue failed for session=${state.sessionKey}: ${err}`));
+  void Promise.resolve(enqueue(resumeInjectionPayload(runId, state))).catch((err) => warn(`[autopilot] resume kick enqueue failed for session=${state.sessionKey}: ${err}`));
 }
 
 /**
@@ -621,9 +625,14 @@ export function register(api: OpenClawPluginApi): void {
         // so re-kicking with the same idempotency key spent a SECOND real turn
         // (double-spend). Continuation is now EXPLICIT — the driver/host calls
         // `autopilot.resume_run` once to resume. needsCrossTurnResume stays true
-        // as a state fact (the run is mid-cross-turn); the stall path remains a
-        // slow fallback (kicks after stallTimeout). Full no-double-spend needs the
-        // MA driver to consume resume_run (cross-repo, out of OMM scope).
+        // as a state fact (the run is mid-cross-turn).
+        //
+        // Residual: the stall path can still re-fire a turn after stallTimeout
+        // (retry_due advances lastActivityAt, so its key differs from the
+        // pre-restart kick — but a second turn CAN still run if the pre-restart
+        // turn also executed). It is a FALLBACK, not a benign no-op. Deterministic
+        // single-resume is the `resume_run` RPC; full no-double-spend requires the
+        // MA driver to consume it (cross-repo, out of OMM scope).
       }
     }
     if (migratedCount > 0) {
@@ -1576,14 +1585,29 @@ export function register(api: OpenClawPluginApi): void {
     // run is mid-cross-turn but NOT claimed (e.g. crashed mid-turn as 'running'),
     // where the kick would silently no-op.
     if (state.orchestrationState !== 'claimed') {
-      respond(false, undefined, { code: 'INVALID_REQUEST', message: `run is not in a resumable claimed state (orchestrationState="${state.orchestrationState ?? 'n/a'}")` });
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: `run is not in a resumable claimed state (orchestrationState="${state.orchestrationState ?? 'n-a'}")` });
       return;
     }
-    // The idempotency key is derived from totalContinuations (see kickResumedTurn)
-    // — that derivation is the invariant E13 preserves.
-    kickResumedTurn(runId, state);
-    log(`[autopilot] resume_run: session=${sessionKey} run=${runId} explicit cross-turn resume`);
-    respond(true, { ok: true, runId });
+    // E13/review: unlike kickResumedTurn (fire-and-forget), resume_run is an RPC
+    // and reports honestly. Verify the facade is present, AWAIT the enqueue, and
+    // respond false on a missing facade / host rejection / async error — otherwise
+    // the driver would believe the resume succeeded while the run stays dead.
+    const enqueue = enqueueInjectionFn;
+    if (typeof enqueue !== 'function') {
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: 'injection facade unavailable — cannot resume' });
+      return;
+    }
+    try {
+      const injectResult = await enqueue(resumeInjectionPayload(runId, state));
+      if (injectResult && typeof injectResult === 'object' && injectResult.enqueued === false) {
+        respond(false, undefined, { code: 'INVALID_REQUEST', message: 'resume injection rejected by host' });
+        return;
+      }
+      log(`[autopilot] resume_run: session=${sessionKey} run=${runId} explicit cross-turn resume`);
+      respond(true, { ok: true, runId });
+    } catch (err) {
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: `resume injection failed: ${err}` });
+    }
   });
 
   api.registerGatewayMethod('autopilot.stop', async ({ params: ctx, respond }: GatewayCtx) => {
