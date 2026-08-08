@@ -411,6 +411,21 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
+    // ADR-020 step 4 (degraded lifecycle): the two `degraded` flag flips in
+    // agent_end were bare spreads. Folding them here makes the reducer the sole
+    // writer of `degraded`. Pure flag lifecycle (no orchState transition, no
+    // lastActivityAt change) — deliberately NOT advancing lastActivityAt:
+    // degradation_marked fires when the canary FAILED (before_agent_finalize
+    // never ran = the run is stalled); stamping activity there would mask the
+    // stall from the stall detector. Mirrors the original spreads exactly.
+    case 'degradation_marked': {
+      return { ...state, degraded: true };
+    }
+
+    case 'degradation_cleared': {
+      return { ...state, degraded: false };
+    }
+
     default: {
       // Unknown event type — no-op
       return state;

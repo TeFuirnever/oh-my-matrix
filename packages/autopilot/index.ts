@@ -1021,7 +1021,7 @@ export function register(api: OpenClawPluginApi): void {
     canaryFired.delete(sessionKey);
 
     if (!didFire) {
-      const updated = { ...state, degraded: true };
+      const updated = orchestratorReducer(state, { type: 'degradation_marked', runId, now: Date.now() });
       // M-4: When at max continuations, pause directly instead of requesting cross-turn
       // (cross-turn would just hit max_total_reached again — wasted IPC round-trip)
       if (state.status === 'running' && state.totalContinuations >= state.maxTotalContinuations) {
@@ -1085,7 +1085,7 @@ export function register(api: OpenClawPluginApi): void {
     const isBreaker = !event.success && event.error?.toLowerCase().includes('circuit breaker');
     const afterPause = isBreaker ? orchestratorReducer(state, { type: 'pause_requested', runId, reason: 'loop_breaker_triggered', now: Date.now() }) : state;
     // GAP-24: Clear degraded when canary fired — system recovered from degradation
-    const afterDegradedClear = didFire ? { ...afterPause, degraded: false } : afterPause;
+    const afterDegradedClear = didFire ? orchestratorReducer(afterPause, { type: 'degradation_cleared', runId, now: Date.now() }) : afterPause;
     // Phase 1: Dispatch agent_turn_finished through orchestrator reducer
     const afterOrchestrator = orchestratorReducer(resetTurnAttempts(afterDegradedClear), {
       type: 'agent_turn_finished',
