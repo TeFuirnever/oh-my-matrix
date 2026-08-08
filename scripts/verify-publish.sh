@@ -71,9 +71,9 @@ grep -q "refute" "$TMPDIR/dw/package/skill/SKILL.md" && check "SKILL.md _refute_
 role_count=$(ls "$TMPDIR/dw/package/skill/references/role-prompts/"*.md 2>/dev/null | wc -l | tr -d ' ')
 [ "$role_count" = "14" ] && check "14 role-prompts (got ${role_count})" 0 || check "14 role-prompts (got ${role_count})" 1
 
-# 5 reference files
+# 7 reference files
 ref_count=$(ls "$TMPDIR/dw/package/skill/references/"*.md 2>/dev/null | wc -l | tr -d ' ')
-[ "$ref_count" = "5" ] && check "5 reference files (got ${ref_count})" 0 || check "5 reference files (got ${ref_count})" 1
+[ "$ref_count" = "7" ] && check "7 reference files (got ${ref_count})" 0 || check "7 reference files (got ${ref_count})" 1
 
 # plugin.json version aligned
 pl_v=$(node -p "require('$TMPDIR/dw/package/openclaw.plugin.json').version")
