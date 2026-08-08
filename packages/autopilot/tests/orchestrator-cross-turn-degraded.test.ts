@@ -70,3 +70,41 @@ describe('cross_turn_degraded event (ADR-020 step 1)', () => {
     expect(after.toolErrorCount).toBe(2);
   });
 });
+
+// E12: the two events that fold the remaining index.ts bare needsCrossTurnResume spreads.
+describe('cross_turn_enqueued event (E12 — normal cross-turn handshake)', () => {
+  const ev = (now: number) => ({ type: 'cross_turn_enqueued' as const, runId: 'run-1', now });
+  it('increments total, sets needsCrossTurnResume, resets turnAttempts, advances lastActivityAt — but does NOT set degraded', () => {
+    const before = makeState({ status: 'running', orchestrationState: 'released', totalContinuations: 5, turnAttempts: 3, lastActivityAt: 100, degraded: false });
+    const after = orchestratorReducer(before, ev(1000));
+    expect(after.totalContinuations).toBe(6);
+    expect(after.needsCrossTurnResume).toBe(true);
+    expect(after.turnAttempts).toBe(0);
+    expect(after.lastActivityAt).toBe(1000); // armed = activity
+    expect(after.degraded).toBe(false); // NOT degraded (normal cross-turn)
+  });
+  it('no-ops when status is not running', () => {
+    const before = makeState({ status: 'done', orchestrationState: 'done' });
+    expect(orchestratorReducer(before, ev(1000))).toEqual(before);
+  });
+});
+
+describe('cross_turn_degraded_silent event (E12 — degraded fallback, no lastActivityAt)', () => {
+  const ev = (now: number) => ({ type: 'cross_turn_degraded_silent' as const, runId: 'run-1', now });
+  it('sets degraded + needsCrossTurnResume + increments + resets turnAttempts WITHOUT advancing lastActivityAt', () => {
+    const before = makeState({ status: 'running', orchestrationState: 'released', totalContinuations: 5, turnAttempts: 3, lastActivityAt: 100, degraded: false });
+    const after = orchestratorReducer(before, ev(1000));
+    expect(after.totalContinuations).toBe(6);
+    expect(after.needsCrossTurnResume).toBe(true);
+    expect(after.degraded).toBe(true);
+    expect(after.turnAttempts).toBe(0);
+    // CRITICAL vs cross_turn_degraded: lastActivityAt NOT advanced — the canary
+    // failed (before_agent_finalize never fired = stalled); stamping activity would
+    // mask the stall from the detector (the E8 degradation_marked rationale).
+    expect(after.lastActivityAt).toBe(100);
+  });
+  it('no-ops when status is not running', () => {
+    const before = makeState({ status: 'done', orchestrationState: 'done' });
+    expect(orchestratorReducer(before, ev(1000))).toEqual(before);
+  });
+});

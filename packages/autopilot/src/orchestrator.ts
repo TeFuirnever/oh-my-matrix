@@ -434,6 +434,35 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
+    // E12: NORMAL cross-turn handshake (per-turn revise cap reached, NOT degraded).
+    // Folds the bare spread in the cross_turn case so the reducer is the sole writer
+    // of needsCrossTurnResume. lastActivityAt advances (the cross-turn was armed).
+    case 'cross_turn_enqueued': {
+      if (state.status !== 'running') return state;
+      return {
+        ...state,
+        totalContinuations: state.totalContinuations + 1,
+        needsCrossTurnResume: true,
+        turnAttempts: 0,
+        lastActivityAt: event.now,
+      };
+    }
+
+    // E12: degraded FALLBACK (enqueue rejected/threw). Same as cross_turn_degraded
+    // but NO lastActivityAt — the canary failed (before_agent_finalize never fired
+    // = stalled); stamping activity would mask the stall from the detector (the E8
+    // degradation_marked rationale). Merges degradation_marked + the bare spread.
+    case 'cross_turn_degraded_silent': {
+      if (state.status !== 'running') return state;
+      return {
+        ...state,
+        totalContinuations: state.totalContinuations + 1,
+        needsCrossTurnResume: true,
+        turnAttempts: 0,
+        degraded: true,
+      };
+    }
+
     case 'cross_turn_resume_consumed': {
       // ADR-020 step 2: clear needsCrossTurnResume when the resumed turn begins
       // finalizing (before_agent_finalize handshake). Without this, the host

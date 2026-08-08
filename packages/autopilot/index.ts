@@ -756,12 +756,15 @@ export function register(api: OpenClawPluginApi): void {
       case 'cross_turn': {
         const enqueue = api.session?.workflow?.enqueueNextTurnInjection;
         if (typeof enqueue === 'function') {
-          const updated = { ...incrementTotal(state), needsCrossTurnResume: true, turnAttempts: 0 };
+          // E12: nextTotal is for the idempotency key only; the actual state write
+          // goes through the reducer (cross_turn_enqueued) post-await so it lands
+          // on the FRESH state, not a stale pre-await snapshot.
+          const nextTotal = state.totalContinuations + 1;
           try {
             const result = await enqueue({
               sessionKey,
               text: decision.retryInstruction || 'Continue from where you left off.',
-              idempotencyKey: `autopilot-cross-${sessionKey}-${updated.totalContinuations}`,
+              idempotencyKey: `autopilot-cross-${sessionKey}-${nextTotal}`,
               placement: 'prepend_context',
               ttlMs: DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs,
             });
@@ -769,7 +772,12 @@ export function register(api: OpenClawPluginApi): void {
               warn(`[autopilot] enqueueNextTurnInjection rejected for session=${sessionKey}, falling back to revise`);
               return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
             }
-            setState(runId, updated);
+            // E12: fold the bare needsCrossTurnResume spread into cross_turn_enqueued
+            // on the re-fetched state (race-safe vs a concurrent stop/pause/stall).
+            // `?? state` only fires if the run vanished during the await (evicted/
+            // cleaned) — the reducer guard (status!=='running') then no-ops.
+            const current = stateByRun.get(runId) ?? state;
+            setState(runId, orchestratorReducer(current, { type: 'cross_turn_enqueued', runId, now: Date.now() }));
             return { action: 'finalize' };
           } catch (err) {
             warn(`[autopilot] enqueueNextTurnInjection failed for session=${sessionKey}: ${err}, falling back to revise`);
@@ -1349,14 +1357,17 @@ export function register(api: OpenClawPluginApi): void {
       // spreading the stale pre-await `updated` would clobber a concurrent
       // stop/pause/stall_timeout. Re-fetch; bail on a race; re-apply
       // degradation_marked so degraded:true holds on the fresh snapshot, then
-      // increment. The needsCrossTurnResume spread itself stays (E13 / P3-29).
+      // increment. E12 folded the needsCrossTurnResume spread into cross_turn_degraded_silent.
       const fallbackCurrent = stateByRun.get(runId);
       if (fallbackCurrent && fallbackCurrent.status !== 'running') {
         warn(`[autopilot] agent_end: degraded fallback for session=${sessionKey} but run raced to status=${fallbackCurrent.status} (orchState=${fallbackCurrent.orchestrationState ?? 'n-a'}); not recording cross-turn`);
         return;
       }
-      const fallbackBase = orchestratorReducer(fallbackCurrent ?? updated, { type: 'degradation_marked', runId, now: Date.now() });
-      setState(runId, { ...incrementTotal(resetTurnAttempts(fallbackBase)), needsCrossTurnResume: true });
+      // E12: merge degradation_marked + the bare needsCrossTurnResume spread into
+      // one reducer event (cross_turn_degraded_silent: degraded + totalContinuations++
+      // + needsCrossTurnResume + turnAttempts:0, NO lastActivityAt — preserves the
+      // E8 stall-masking rationale that degradation_marked held).
+      setState(runId, orchestratorReducer(fallbackCurrent ?? updated, { type: 'cross_turn_degraded_silent', runId, now: Date.now() }));
       warn(`[autopilot] agent_end: canary check failed for session=${sessionKey} — before_agent_finalize never fired, hook may be disabled`);
       return;
     }
