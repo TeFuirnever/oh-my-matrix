@@ -29,8 +29,9 @@ bump 版本 + commit → CI 绿 → npm publish(真实终端 2FA)→ 打 tag + �
 1. **bump 版本** `packages/<pkg>/package.json`,commit 用 conventional:`chore(<pkg>): bump to X.Y.Z`。用 changeset 时(bump 提交在 `pnpm changeset version` 之后)必须再跑 `node scripts/sync-plugin-versions.cjs` —— 否则 `openclaw.plugin.json` 和 `index.ts` 的 `export const version` 会漂移,publish 的 pre-flight 直接拦(2026-08-09 踩过:1.0.0 bump 后 plugin.json 停在 0.2.0)。
 2. **CHANGELOG** 记一条该版本变更。
 3. **CI 绿**(`pnpm verify` + CI 全过)再发。
-4. **npm publish** —— 真实终端,2FA OTP。见 memory `npm-publish-flow`。**用 `./scripts/publish.sh`**(pre-flight 版本校验 → build → 按依赖序发布 → `verify-publish.sh` 产物检查),它强制 `npm_config_registry=https://registry.npmjs.org/` —— 开发机 `~/.npmrc` 配了镜像 registry(如 npmmirror)时,裸 `npm publish` 会发错目标、`npm whoami` 也会假失败(2026-08-09 踩过)。
-5. **打 tag + 建 release**(一步完成,tag 建在 version-bump commit 上):
+4. **host smoke(autopilot 前置 gate)**—— 真实 openclaw 宿主装本次版本跑一轮(注册、loop 转 2-3 轮、pause/resume)。仓库测试绿 ≠ host 已生效(placebo bug 教训,host-deploy.md §5);2026-08-09 4.0.0 发布时漏做此步,先发后补 —— 发布 gate 顺序:host smoke **在** publish 之前。host 环境在消费方(MA 侧 `node_modules/.bin/openclaw`)。
+5. **npm publish** —— 真实终端,2FA OTP。见 memory `npm-publish-flow`。**用 `./scripts/publish.sh`**(pre-flight 版本校验 → build → 按依赖序发布 → `verify-publish.sh` 产物检查),它强制 `npm_config_registry=https://registry.npmjs.org/` —— 开发机 `~/.npmrc` 配了镜像 registry(如 npmmirror)时,裸 `npm publish` 会发错目标、`npm whoami` 也会假失败(2026-08-09 踩过)。
+6. **打 tag + 建 release**(一步完成,tag 建在 version-bump commit 上):
 
    ```bash
    gh release create <pkg>-v<ver> \
@@ -39,7 +40,7 @@ bump 版本 + commit → CI 绿 → npm publish(真实终端 2FA)→ 打 tag + �
      --notes "..."
    ```
 
-6. **release notes**:引 CHANGELOG 该版本条目 + npm 包页面链接。
+7. **release notes**:引 CHANGELOG 该版本条目 + npm 包页面链接。
 
 ### 锚点 = version-bump commit
 
