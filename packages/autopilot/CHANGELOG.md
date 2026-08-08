@@ -1,5 +1,175 @@
 # @oh-my-matrix/autopilot
 
+## 4.0.0
+
+### Major Changes
+
+- [#141](https://github.com/TeFuirnever/oh-my-matrix/pull/141) [`80abedf`](https://github.com/TeFuirnever/oh-my-matrix/commit/80abedff44bb10560110f67a446adcb9564606dc) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: explicit `resume_run` RPC replaces the implicit crash-recovery auto-kick (E13 / P3-29).
+
+  **Breaking (default flip):** crash-recovery no longer auto-kicks a restored mid-cross-turn run (`needsCrossTurnResume`). Pre-E13, register() fired a resumed turn on restore — but that implicit "flag → turn" link double-spent a turn after a gateway restart (openclaw's in-memory dedup clears on restart, so the same idempotency key was accepted again). Continuation is now **explicit**: the driver/host calls the new `autopilot.resume_run` RPC once to resume.
+
+  - New gateway method `autopilot.resume_run` ({ sessionKey }) — validates the run is mid-cross-turn (`needsCrossTurnResume`) and active, then drives the resumed turn via `kickResumedTurn`. Returns `{ ok, runId }`.
+  - `needsCrossTurnResume` stays as a **state fact** (the run is mid-cross-turn); only the implicit "re-broadcast → turn" link is cut.
+  - The idempotency-key derivation (from `totalContinuations`) is preserved + anchored in a comment.
+
+  **Migration / cross-repo dependency:** existing hosts that relied on the restore-time auto-continue now see restored mid-cross-turn runs sit until `resume_run` is called. The stall path remains a fallback that can re-fire a turn after `stallTimeout` (retry_due advances the idempotency key, but a second turn can still run if the pre-restart turn also executed) — it is NOT a benign no-op. **Deterministic single-resume + full no-double-spend requires the MA driver to consume `resume_run`** — that MA-side change is out of OMM scope (cross-repo), tracked as a dependency.
+
+  This release also bundles the pending E2/E3/E5 minors under this major (E9's major already initiated the major line).
+
+- [#140](https://github.com/TeFuirnever/oh-my-matrix/pull/140) [`f9b801c`](https://github.com/TeFuirnever/oh-my-matrix/commit/f9b801cd6b5f3e7841ee56e844350d9856dd5a45) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: remove the `workspace.root` WORKFLOW.md config field (E9 / P2-15, ADR-008).
+
+  **Breaking (schema):** `workspace.root` is removed from `WorkflowConfig.workspace`. The field was never consumed at runtime (autopilot delegates worktree management to the host per ADR-008), so there is no functional behavior change — but the type/contract change is breaking for TS consumers and WORKFLOW.md authors.
+
+  **Migration:** if your `WORKFLOW.md` sets `autopilot.workspace.root`, remove that line. The parser now emits a deprecation warning (`workspace.root is no longer supported … — remove this line from WORKFLOW.md`) and ignores the value, so existing files keep working (no crash) — just drop the line to clear the warning.
+
+  Note: `state.workspace.root` on `WorkspaceRecord` (the checkpoint root, P0-2/E1) is a **different field** and is unchanged — crash-recovery / checkpoint read-write is unaffected.
+
+  This release also bundles the pending minor features (E2 hard caps, E3 error classification, E5 progress ledger) under this major bump.
+
+- [`0f32fab`](https://github.com/TeFuirnever/oh-my-matrix/commit/0f32fabd55fb0a4a75f92432c501965d55e7d969) - Move the OpenClaw baseline to 2026.7.1-2 (**BREAKING** — drops 2026.5.28–2026.7.1-1):
+
+  - peer `openclaw`: `>=2026.5.28 <2027` → `>=2026.7.1-2 <2027`. Single supported
+    baseline; no back-compat range. Consumers on an older OpenClaw host stay on the
+    previous plugin release (`@oh-my-matrix/autopilot@3.1.0` /
+    `@oh-my-matrix/dynamic-workflows@0.2.0` on npm, plus the matching git tag) — that
+    is what the historical packages and tags are for.
+  - Note on the range form: `>=2026.7.1-2` (not `>=2026.7.1`) is required because
+    semver treats the `-N` correction as a prerelease and excludes it from a plain
+    range — `satisfies("2026.7.1-2", ">=2026.7.1")` is false under pnpm@10.24.0 +
+    semver@7.8.5. The `-2` floor still admits the stable base `2026.7.1` and later
+    (`2026.7.2`, …).
+  - Also dropped: `extended-stable` 2026.6.33 is no longer in range. Deliberate —
+    OMM tracks OpenClaw `latest`.
+  - devDep/test baseline pinned `openclaw@2026.7.1-2`.
+  - SDK drift: `PluginHookBeforeToolCallEvent` gained optional `toolKind` /
+    `toolInputKind` / `derivedPaths` in openclaw 2026.7.1
+    (`src/plugins/hook-types.ts`); refreshed stale "NO toolKind" claims across
+    `event-shape.contract.ts` (both packages), both `before_tool_call` `index.ts`
+    notes, the `subagent-guard.test.ts` header, and
+    `docs/fixes/runtime-guard-event-shape.md`. No behavioral change — the new fields
+    are unused (verified: `decidePermissionForEvent` does not forward `toolKind` into
+    `classifyCommand`).
+
+  Maintenance note: future OpenClaw corrections of a different base (e.g.
+  `2026.7.2-1`, `2026.8.0-1`) will NOT match this peer form — the floor must be
+  re-pinned each time OMM adopts a new correction. Inherent to OpenClaw's
+  CalVer+correction scheme under semver (no `-0` trick or range variant avoids it).
+  With a single-baseline policy this rebase is now the routine upgrade step.
+
+### Minor Changes
+
+- [#146](https://github.com/TeFuirnever/oh-my-matrix/pull/146) [`fabdad9`](https://github.com/TeFuirnever/oh-my-matrix/commit/fabdad9c8b477553bcc6fdd15a307d5683d52e1d) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: fold the 2 remaining `needsCrossTurnResume` bare spreads into reducer events (E12 — reducer sole-writer, ADR-020).
+
+  The last two non-reducer writers of `needsCrossTurnResume` in `index.ts` are now reducer events:
+
+  - `cross_turn_enqueued` — the NORMAL cross-turn handshake (per-turn revise cap reached, not degraded). `totalContinuations++`, `needsCrossTurnResume:true`, `turnAttempts:0`, `lastActivityAt` advanced (the cross-turn was armed = activity). Also fixes a latent race: the state write now lands on the fresh post-await state (`stateByRun.get`) instead of a stale pre-await snapshot.
+  - `cross_turn_degraded_silent` — the degraded FALLBACK (enqueue rejected/threw). Same as `cross_turn_degraded` but WITHOUT `lastActivityAt` — the canary failed (before_agent_finalize never fired = stalled); stamping activity would mask the stall from the detector (the E8 `degradation_marked` rationale). Merges `degradation_marked` + the bare spread into one event.
+
+  This gets `needsCrossTurnResume` to **reducer-only in `index.ts`**. The sole remaining non-reducer writer is the `resume()` setter in `autopilot-state.ts`, blocked on E4 step 3 (M2 cross-repo) — the full 6-aux reducer-sole-writer invariant test stays deferred until that lands.
+
+- [#136](https://github.com/TeFuirnever/oh-my-matrix/pull/136) [`8affbfc`](https://github.com/TeFuirnever/oh-my-matrix/commit/8affbfcb74b1da8d4b19bdb7209c915d136b9eca) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: add hard caps (wall-clock + cost) and redo error classification (E2 + E3, same-batch).
+
+  **E2 — wall-clock + cost hard caps (P0-5):**
+
+  - New optional config `maxDurationMs` / `maxCostUsd` (plugin config, carried onto run
+    state + persisted for crash recovery).
+  - Caps enforced in the 60s patrol (the only site that can intervene mid-turn —
+    `before_agent_finalize` doesn't fire on API errors). Producing runs get one
+    controlled-winddown turn to summarize, then terminate; runs not in a model turn
+    (e.g. `retry_queued`) stop immediately.
+  - New `hard_stop_requested` reducer event bypasses TENSION 3: unlike
+    `pause_requested` (which no-ops off the running family so a recoverable breaker
+    survives a pause), a spent budget terminates from any active state including
+    `retry_queued`.
+  - New non-resumable reasons `max_duration_reached` / `max_cost_reached`, synced
+    across all four sites (PauseReason / BlockedReason / pauseReasonToBlockedReason /
+    VALID_BLOCKED_REASONS).
+  - Cost calc extracted to `src/cost.ts` (`computeCostUsd`), shared by projection and
+    the cap enforcer.
+  - Known limitation (documented in code): the cost cap is a no-op when the host
+    doesn't report token usage (`totalTokensUsed` stays 0) — not a hard guarantee.
+
+  **E3 — error classification redo (P0-3):**
+
+  - `classifyRecoverability` rewritten as an explicit table: structured HTTP status
+    / errno codes first, anchored string match as fallback. Rate-limit (429) and
+    overload (529) are recoverable with a long backoff tier and honored Retry-After;
+    network errno (ECONNRESET/ETIMEDOUT/EPIPE/…) recoverable; auth (401/403) and
+    permission non-recoverable.
+  - Fixes bidirectional misclassification: a bare `timeout` substring no longer
+    auto-recovers (network errno ETIMEDOUT does), and a `tokenizer` error no longer
+    hits the budget branch (anchored `token_budget`/`budget` does).
+  - Retry backoff gains ±20% jitter (`WorkflowConfig.retryJitter`, default 0.2) to
+    de-synchronize concurrent runs retrying the same upstream outage.
+  - Tiered retry guidance: low retry counts nudge "fix and retry"; at/above attempt 3
+    the instruction forces a fundamentally different approach or stopping to report.
+  - Known limitation (documented in code): the spec's context-overflow "recoverable
+    exactly once" cap is not enforced (the classifier is stateless) — deferred.
+
+- [#145](https://github.com/TeFuirnever/oh-my-matrix/pull/145) [`3f8323d`](https://github.com/TeFuirnever/oh-my-matrix/commit/3f8323d49d5a1467061080fc2c01901ccd78ab1b) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: evidence-gate `skipped` distinction — not_configured vs not_executed (E4 step 1-2 / P0-4).
+
+  **Behavior change (eval-error path):** the evidence gate used to treat every `skipped` result as `done`. It now distinguishes WHY it skipped via an explicit `skipReason` field (not a failureReason string match):
+
+  - `not_configured` (no validation commands) → `done` (legitimate; behavior unchanged) + `completionUnverified: true`.
+  - `not_executed` (configured but didn't run — the `complete`-path evaluation-error fail-open) → **`blocked` + `evidence_missing`** + `completionUnverified: true`. This is the first production write of `evidence_missing` (previously unreachable). It is resumable.
+
+  A run that legitimately configures no validation (analysis tasks) still completes; a run that configured validation but the gate errored no longer silently "completes" — it blocks on `evidence_missing` so the operator can fix + resume.
+
+  New `completionUnverified` state/projection marker (persisted) flags any completion that did NOT pass the evidence gate. `skipReason` defaults to `not_configured` for legacy summaries (backward-compat → done).
+
+  **Out of scope (step 3, M2-coupled):** the `resume` guard that makes the resume button respect recoverability (`resume_requested` no-op → respond false) requires the MA-side `canResume` field (M2, cross-repo) and is NOT in this change — shipping it alone would make the resume button a dead button.
+
+- [#138](https://github.com/TeFuirnever/oh-my-matrix/pull/138) [`3e75cf4`](https://github.com/TeFuirnever/oh-my-matrix/commit/3e75cf4021b006ab7b437d843ddbbca0dbe41593) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: structured progress ledger, replacing the "Turn N/M completed" counter (E5 / P1-11 + P1-13).
+
+  - New `src/progress-ledger.ts`: per-turn `LedgerEntry` (filesTouched, commandsRun,
+    evidenceStatus, decisions, openItems) with capacity-controlled folding. Older
+    turns fold into a merged aggregate (replace, not stack); the last N stay as
+    detail. `summarizeLedger` emits a compact structured JSON (folded + recent +
+    open surfaces).
+  - Data-source precision: `filesTouched` comes ONLY from write-class tools
+    (`workspace_write`/`system_write`) via `after_tool_call`; `commandsRun` ONLY
+    from exec-class (`validation`/`destructive_git`/`unknown`). Read-only calls
+    record nothing — a pure-analysis run no longer looks "active" (the E6
+    no-progress signal depends on this).
+  - Subagent tool activity merges up to the parent run via the existing parent
+    session-key lookup — observation only, no permission path touched.
+  - The ledger rides `AutopilotState` (→ checkpoint at the E1-unified
+    `getCheckpointRoot`); no second persistence mechanism. It survives compaction
+    and crash recovery.
+  - Consumers (`agent_turn_prepare` injection + `buildRetryInstruction`) now emit
+    the ledger summary instead of the counter, preferring the ledger over a stale
+    post-compaction `progressSnapshot`. The post-compaction re-injection is handled
+    by the next turn's `agent_turn_prepare` (the ledger lives in state, untouched by
+    context compaction).
+  - Known limitation (documented in code): the `decisions`/`openItems` fields are
+    left empty for now (the model does not yet populate them); the "doing/not-started"
+    3-state is therefore aspirational — the ledger currently surfaces "done" (from
+    activity) only.
+
+- [#143](https://github.com/TeFuirnever/oh-my-matrix/pull/143) [`150478d`](https://github.com/TeFuirnever/oh-my-matrix/commit/150478dba2878a37bced515ca501d429189f36dd) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: stall detection 双向 fix — inflight tool guard + productivity/no-progress detection (E6 / P0-6 + P1-14).
+
+  **dir-1 — inflight tool guard (fixes false-stall on long tools, P0-6 误报 + P1-14):**
+
+  - New `inFlightToolStartedAt` state field, set when a tool dispatches (`before_tool_call`, allow-path) and during validation (`complete` path). While set, the 60s stall patrol uses a longer per-tool cap (30min, `INFLIGHT_TOOL_CAP_MS`) instead of `stallTimeoutMs`, so a legitimately long build/test no longer false-stalls at 300s. A genuinely hung tool still trips at the cap.
+  - Cleared on `after_tool_call`, `agent_end`, and `before_agent_finalize` so a dangling field (the model finalized mid-tool, or a crash) can't permanently relax stall detection.
+
+  **dir-2 — productivity/no-progress detection (fixes missed spin, P0-6 漏报):**
+
+  - New `no_progress` PauseReason/BlockedReason (resumable, like `stalled`). When a run takes N consecutive turns with zero files-touched/commands-run (configurable via `no_progress_turns`, default 3), the patrol pauses it — catching read-only loops and A→B→A→B churn that pure-silence detection misses.
+  - The signal is exec-class-filtered ledger activity (E5's ledger already records only write/exec tools, never read-only) — a pure-analysis run records nothing, so no_progress can fire. Fail-open: no ledger / 0 threshold → skip.
+
+  Known: `no_progress` is also added to `RESUMABLE_BLOCKED_REASONS` (recoverable via a user resume/nudge, like `stalled`).
+
+- [#144](https://github.com/TeFuirnever/oh-my-matrix/pull/144) [`a64caf6`](https://github.com/TeFuirnever/oh-my-matrix/commit/a64caf651233bd611216809ada10695d5cbe83fb) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Autopilot: mid-run evidence gate — run validation every N turns, not just on `complete` (E7 / P0-4 放大因素).
+
+  - The revise path now runs the configured validation commands every N turns (`midrun_validation_interval`, default 5; 0 disables), turning "find out it's all wrong at the very end" into early correction.
+  - Reuses the existing `runValidationCommands` + `evaluateEvidence` — no new execution path.
+  - A mid-run failure does **not block** (still `revise`); the failed commands' stderr is appended to the revise instruction so the model fixes before continuing.
+  - Throttled by **turn count** (`totalContinuations % N === 0`), not time — validation is slow, time-based throttling would compound on slow commands.
+  - Marks `inFlightToolStartedAt` during the mid-run run so the E6 stall patrol's inflight guard covers it (no false-stall, no TOCTOU with the evidence gate).
+
+  N≥5 recommended: smaller N collides with the E2 wall-clock cap (validation adds latency each cycle). Only fires when validation commands are configured AND the workspace is trusted (the existing trust boundary applies).
+
 ## 3.1.0
 
 ### Minor Changes
