@@ -209,12 +209,15 @@ export function _resetForTest(): void {
  * would drown the disk). This is the Review #5 "transition filter, not signature
  * hash" recommendation: 3-line field comparison, no debouncing complexity.
  */
-function shouldCheckpoint(prev: AutopilotState | undefined, next: AutopilotState): boolean {
+export function shouldCheckpoint(prev: AutopilotState | undefined, next: AutopilotState): boolean {
   if (!prev) return true; // first write for a run — persist immediately
   if (prev.orchestrationState !== next.orchestrationState) return true;
   if (prev.blockedReason !== next.blockedReason) return true;
   if (prev.evidence?.status !== next.evidence?.status) return true;
   if (prev.enabled !== next.enabled) return true;
+  // E8 / P3-20: turn-count changes must persist directly, not piggyback on a
+  // `progress` string change (fragile — a turn with no progress shift would be lost).
+  if (prev.totalContinuations !== next.totalContinuations) return true;
   // Reviewer #1 Finding 5a fix: goal/progress changes (via setGoal gateway RPC)
   // must reach disk, else crash-resume continues toward a stale goal.
   if (prev.goal !== next.goal) return true;
@@ -1088,7 +1091,21 @@ export function register(api: OpenClawPluginApi): void {
           }
         }
       }
-      setState(runId, { ...updated, needsCrossTurnResume: true });
+      // E8 / P1-9 + ticket §2: the degraded fallback must advance
+      // totalContinuations (or degraded mode has no termination), AND must do so
+      // with the same re-fetch-then-reducer discipline as the cross_turn_degraded
+      // success exit above — the rejected/threw paths crossed an await, so
+      // spreading the stale pre-await `updated` would clobber a concurrent
+      // stop/pause/stall_timeout. Re-fetch; bail on a race; re-apply
+      // degradation_marked so degraded:true holds on the fresh snapshot, then
+      // increment. The needsCrossTurnResume spread itself stays (E13 / P3-29).
+      const fallbackCurrent = stateByRun.get(runId);
+      if (fallbackCurrent && fallbackCurrent.status !== 'running') {
+        warn(`[autopilot] agent_end: degraded fallback for session=${sessionKey} but run raced to status=${fallbackCurrent.status} (orchState=${fallbackCurrent.orchestrationState ?? 'n-a'}); not recording cross-turn`);
+        return;
+      }
+      const fallbackBase = orchestratorReducer(fallbackCurrent ?? updated, { type: 'degradation_marked', runId, now: Date.now() });
+      setState(runId, { ...incrementTotal(resetTurnAttempts(fallbackBase)), needsCrossTurnResume: true });
       warn(`[autopilot] agent_end: canary check failed for session=${sessionKey} — before_agent_finalize never fired, hook may be disabled`);
       return;
     }

@@ -28,6 +28,7 @@ import * as path from 'path';
 import * as os from 'os';
 import type { AutopilotState } from './types';
 import type { WorkspaceRecord, RetryEntry, WorkflowConfig } from './types';
+import { DEFAULT_CONFIG } from './types';
 import { deriveStatus } from './orchestrator';
 
 const CHECKPOINT_SUBDIR = path.join('.autopilot', 'checkpoints');
@@ -112,6 +113,8 @@ export interface AutopilotCheckpoint {
   totalContinuations: number;
   maxAttemptsPerTurn: number;
   maxTotalContinuations: number;
+  toolErrorThreshold: number;
+  maxConcurrentAutopilot: number;
   needsCrossTurnResume: boolean;
   enabled: boolean;
   totalTokensUsed: number;
@@ -163,6 +166,8 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     totalContinuations: state.totalContinuations,
     maxAttemptsPerTurn: state.maxAttemptsPerTurn,
     maxTotalContinuations: state.maxTotalContinuations,
+    toolErrorThreshold: state.toolErrorThreshold,
+    maxConcurrentAutopilot: state.maxConcurrentAutopilot,
     needsCrossTurnResume: state.needsCrossTurnResume,
     enabled: state.enabled,
     totalTokensUsed: state.totalTokensUsed,
@@ -309,7 +314,7 @@ export function loadCheckpoint(
     totalContinuations: cp.totalContinuations,
     maxAttemptsPerTurn: cp.maxAttemptsPerTurn,
     maxTotalContinuations: cp.maxTotalContinuations,
-    maxConcurrentAutopilot: 5, // default; per-run override not persisted
+    maxConcurrentAutopilot: cp.maxConcurrentAutopilot ?? DEFAULT_CONFIG.maxConcurrentAutopilot,
     needsCrossTurnResume: cp.needsCrossTurnResume,
     enabled: cp.enabled,
     totalTokensUsed: cp.totalTokensUsed,
@@ -320,7 +325,7 @@ export function loadCheckpoint(
     lastActivityAt: cp.lastActivityAt,
     degraded: true, // mark resumed runs — operators can tell a restored run
     toolErrorCount: 0,
-    toolErrorThreshold: 5,
+    toolErrorThreshold: cp.toolErrorThreshold ?? DEFAULT_CONFIG.toolErrorThreshold,
     // Reviewer #1 Finding 2a/2b/2c fixes: restore the three load-bearing
     // objects the original "slim pointer" design dropped. Without workspace,
     // the permission containment boundary widens to process.cwd(); without
