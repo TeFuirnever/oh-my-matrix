@@ -96,6 +96,8 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         blockedReason: undefined,
         retry: undefined,
         evidence: undefined,
+        // E4: clear a stale prior-run completion marker alongside its siblings.
+        completionUnverified: undefined,
         workspace: undefined,
         status: 'running',
         enabled: true,
@@ -252,14 +254,42 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
     case 'evidence_finished': {
       if (state.orchestrationState !== 'released') return state;
 
-      if (event.evidence.status === 'passed' || event.evidence.status === 'skipped') {
-        // Passed or skipped → done
+      if (event.evidence.status === 'passed') {
+        // Passed → done, verified.
         return {
           ...state,
           orchestrationState: 'done',
           status: 'done',
           enabled: false,
           evidence: event.evidence,
+          completionUnverified: false,
+          lastActivityAt: event.now,
+        };
+      }
+
+      if (event.evidence.status === 'skipped') {
+        // E4/P0-4: distinguish WHY it skipped (explicit skipReason, not a string
+        // match on failureReason). 'not_executed' (configured but didn't run —
+        // evaluation error / dropped) is the real risk → blocked evidence_missing.
+        // 'not_configured' (or legacy undefined) is legitimate → done. Both mark
+        // completionUnverified (the run was not evidence-verified).
+        if (event.evidence.skipReason === 'not_executed') {
+          return {
+            ...state,
+            orchestrationState: 'blocked',
+            blockedReason: 'evidence_missing',
+            evidence: event.evidence,
+            completionUnverified: true,
+            lastActivityAt: event.now,
+          };
+        }
+        return {
+          ...state,
+          orchestrationState: 'done',
+          status: 'done',
+          enabled: false,
+          evidence: event.evidence,
+          completionUnverified: true,
           lastActivityAt: event.now,
         };
       }

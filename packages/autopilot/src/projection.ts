@@ -52,6 +52,8 @@ export interface AutopilotProjection {
   /** E6 dir-1: timestamp a tool/validation is in flight (observability); undefined
    * when idle. While set the stall patrol uses the longer per-tool cap. */
   inFlightToolStartedAt?: number;
+  /** E4: completion reached without a passed evidence gate (observability). */
+  completionUnverified?: boolean;
 }
 
 /**
@@ -119,5 +121,6 @@ export function projectState(
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,
     checkpointWriteFailures: getCheckpointWriteFailureCount(),
     inFlightToolStartedAt: state.inFlightToolStartedAt,
+    completionUnverified: state.completionUnverified,
   };
 }

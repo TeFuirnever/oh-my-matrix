@@ -813,7 +813,7 @@ export function register(api: OpenClawPluginApi): void {
           // level with the failureReason so a monitor can tell an evaluation
           // failure apart from a normal no-commands skip (both end as 'skipped').
           logWithContext('error', 'evidence gate evaluation error (failing open → skipped)', { sessionKey, runId, error: String(err) });
-          evidenceSummary = { status: 'skipped' as const, diffSummary: '', commands: [], completedAt: now, failureReason: 'evaluation error' };
+          evidenceSummary = { status: 'skipped' as const, diffSummary: '', commands: [], completedAt: now, failureReason: 'evaluation error', skipReason: 'not_executed' as const };
         }
         // Dispatch orchestrator events to advance orchState to 'done'.
         // Close the agent turn (running → released) so evidence events can fire.

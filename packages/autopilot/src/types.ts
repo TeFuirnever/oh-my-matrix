@@ -213,6 +213,14 @@ export interface EvidenceSummary {
   commands: EvidenceCommandResult[];
   completedAt?: number;
   failureReason?: string;
+  /**
+   * E4/P0-4: WHY a 'skipped' result was skipped. Explicit field (not a
+   * failureReason string match) so the evidence gate can distinguish:
+   * - 'not_configured' — no validation commands (legitimate → done).
+   * - 'not_executed' — configured but didn't run (evaluation error / dropped) →
+   *   blocked evidence_missing (the real risk). Undefined on legacy summaries.
+   */
+  skipReason?: 'not_configured' | 'not_executed';
 }
 
 export interface ValidationCommand {
@@ -348,6 +356,12 @@ export interface AutopilotState {
    * disabling stall detection.
    */
   inFlightToolStartedAt?: number;
+  /**
+   * E4/P0-4: true when the run reached 'done' WITHOUT a passed evidence gate
+   * (skipped not_configured), or was blocked on evidence_missing (skipped
+   * not_executed). Observability marker — the completion was not verified.
+   */
+  completionUnverified?: boolean;
   degraded: boolean;
   // M2 orchestration fields (all optional for backward compat)
   orchestrationState?: OrchestrationState;

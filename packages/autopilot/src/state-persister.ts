@@ -125,6 +125,8 @@ export interface AutopilotCheckpoint {
   maxCostUsd?: number;
   /** E5: progress ledger (bounded). */
   ledger?: Ledger;
+  /** E4: completion reached without a passed evidence gate (observability). */
+  completionUnverified?: boolean;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   evidenceStatus?: AutopilotState['evidence'] extends infer E ? (E extends { status: infer S } ? S : undefined) : undefined;
@@ -181,6 +183,7 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     maxDurationMs: state.maxDurationMs,
     maxCostUsd: state.maxCostUsd,
     ledger: state.ledger,
+    completionUnverified: state.completionUnverified,
     inputTokensUsed: state.inputTokensUsed,
     outputTokensUsed: state.outputTokensUsed,
     evidenceStatus: state.evidence?.status,
@@ -331,6 +334,7 @@ export function loadCheckpoint(
     maxDurationMs: cp.maxDurationMs,
     maxCostUsd: cp.maxCostUsd,
     ledger: cp.ledger,
+    completionUnverified: cp.completionUnverified,
     inputTokensUsed: cp.inputTokensUsed,
     outputTokensUsed: cp.outputTokensUsed,
     startedAt: cp.startedAt,

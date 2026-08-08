@@ -23,7 +23,7 @@ const MAX_DIFF_SUMMARY_LENGTH = 500;
 export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary {
   const { commands, results, diffSummary, now, failOnOptional = false } = input;
 
-  // No validation commands configured → skipped
+  // No validation commands configured → skipped (not_configured: legitimate → done)
   if (commands.length === 0) {
     return {
       status: 'skipped',
@@ -31,6 +31,7 @@ export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary 
       commands: [],
       completedAt: now,
       failureReason: 'no validation commands configured',
+      skipReason: 'not_configured',
     };
   }
 
