@@ -44,6 +44,13 @@ export function resolveModelTier(
   if (evidenceStatus === 'running') {
     return config?.validationTier ?? DEFAULT_ROUTING.validationTier;
   }
+  if (evidenceStatus === 'failed') {
+    // E10 / P2-18: a prior validation failed — the next turn repairs it. The
+    // repair turn needs the strongest tier (initialTurnTier, typically premium),
+    // not defaultTier. (Initial-turn premium was already correct; this closes
+    // the gap where the MOST capability-demanding phase was under-resourced.)
+    return config?.initialTurnTier ?? DEFAULT_ROUTING.initialTurnTier;
+  }
   if (totalContinuations <= 1) {
     return config?.initialTurnTier ?? DEFAULT_ROUTING.initialTurnTier;
   }

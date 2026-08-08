@@ -52,6 +52,27 @@ describe('isRunStuck', () => {
     expect(isRunStuck(state, NOW, STALL_MS)).toBe(true);
   });
 
+  it('E10/P2-17: retry_queued with future nextRetryAt is NOT stuck (backoff)', () => {
+    // A run waiting out its retry backoff is recovering, not stuck — re-activate
+    // must not discard it. (No retry field => still stuck, covered above.)
+    const state = runningState({
+      orchestrationState: 'retry_queued',
+      retry: { attempt: 1, nextRetryAt: NOW + 60_000, lastError: 'stalled', recoverable: true },
+      lastActivityAt: NOW,
+    });
+    expect(isRunStuck(state, NOW, STALL_MS)).toBe(false);
+  });
+
+  it('E10/P2-17: retry_queued with OVERDUE nextRetryAt IS stuck', () => {
+    // Backoff window elapsed but the run is still retry_queued — genuinely stuck.
+    const state = runningState({
+      orchestrationState: 'retry_queued',
+      retry: { attempt: 1, nextRetryAt: NOW - 1_000, lastError: 'stalled', recoverable: true },
+      lastActivityAt: NOW,
+    });
+    expect(isRunStuck(state, NOW, STALL_MS)).toBe(true);
+  });
+
   it('returns false for a genuinely-active run (recent activity)', () => {
     const state = runningState({ orchestrationState: 'running', lastActivityAt: NOW });
     expect(isRunStuck(state, NOW, STALL_MS)).toBe(false);

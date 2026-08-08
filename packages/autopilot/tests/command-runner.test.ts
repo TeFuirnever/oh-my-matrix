@@ -45,6 +45,16 @@ describe('runValidationCommands', () => {
     expect(results[0].status).toBe('timeout');
   }, 5000);
 
+  it('E10/P1-10: output exceeding maxBuffer yields output_overflow (not failed)', async () => {
+    // 11 MiB of stdout vs the 10 MiB maxBuffer → ERR_CHILD_PROCESS_STDIO_MAXBUFFER.
+    // node is in PATH on every platform the test runner supports, so no skipIf.
+    const results = await runValidationCommands([
+      cmd('overflow', 'node -e "process.stdout.write(Buffer.alloc(11*1024*1024,120))"'),
+    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('output_overflow');
+  }, 10_000);
+
   it.skipIf(process.platform === 'win32')('runs multiple commands sequentially and collects all results', async () => {
     const results = await runValidationCommands([
       cmd('ok', 'echo ok'),

@@ -56,10 +56,18 @@ export async function runValidationCommands(
       // `false` and other failing commands), so we do NOT add e.code===1 as a heuristic.
       // (X-2 Windows signal limitation — documented, not patchable without a side-channel.)
       const timedOut = e.killed === true || e.signal === 'SIGTERM' || e.signal === 'SIGKILL' || e.code === 'ETIMEDOUT';
+      // E10 / P1-10: distinguish a maxBuffer overflow from a real test failure.
+      // A legit verbose test suite blown past the (now 10 MiB) buffer used to
+      // surface as 'failed' — indistinguishable from a genuine test failure, so
+      // it white-retried to maxRetries then blocked. The gate STILL counts
+      // 'output_overflow' as a failure (validation inconclusive), but the
+      // per-command status lets operators tell overflow from a real failure
+      // (and the larger buffer stops most冤杀 in the first place).
+      const overflow = e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
       results.push({
         id: cmd.id,
         command: cmd.command,
-        status: timedOut ? 'timeout' : 'failed',
+        status: overflow ? 'output_overflow' : timedOut ? 'timeout' : 'failed',
         exitCode: typeof e.code === 'number' ? e.code : undefined,
         durationMs,
         summary: (e.stderr ?? e.message ?? String(err)).substring(0, 300),
@@ -97,7 +105,7 @@ async function execCommand(command: string, timeoutMs: number, cwd?: string): Pr
   const run = (b: string, a: string[]) =>
     new Promise<void>((resolve, reject) => {
       const useShell = shouldUseShell(b, a, cwd);
-      execFile(b, a, { timeout: timeoutMs, cwd, shell: useShell }, (error, _stdout, stderr) => {
+      execFile(b, a, { timeout: timeoutMs, cwd, shell: useShell, maxBuffer: 10 * 1024 * 1024 }, (error, _stdout, stderr) => {
         if (error) {
           reject(Object.assign(error, { stderr }));
         } else {

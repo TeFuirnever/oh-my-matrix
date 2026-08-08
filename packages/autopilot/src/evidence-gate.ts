@@ -55,7 +55,7 @@ export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary 
       continue;
     }
 
-    if (result.status === 'failed' || result.status === 'timeout') {
+    if (result.status === 'failed' || result.status === 'timeout' || result.status === 'output_overflow') {
       if (cmd.required) {
         failedRequiredIds.push(cmd.id);
       } else {
