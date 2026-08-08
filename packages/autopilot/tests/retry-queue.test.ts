@@ -8,6 +8,7 @@ import {
   computeRetryDelay,
   classifyRecoverability,
   shouldRetry,
+  buildRetryEntry,
   type RetryClassification,
 } from '../src/retry-queue';
 
@@ -51,10 +52,14 @@ describe('retry-queue', () => {
       });
     });
 
-    it('agent timeout is recoverable', () => {
+    it('E3: a bare "timeout" message is NOT auto-recoverable (substring was the bug)', () => {
+      // Pre-E3 `includes('timeout')` made any timeout-bearing string recoverable,
+      // mis-classifying paths/messages. Recovery now needs a network errno
+      // (ETIMEDOUT), not the bare word. A generic process timeout is unknown →
+      // conservative non-recoverable.
       expect(classifyRecoverability('agent process timeout')).toEqual<RetryClassification>({
-        recoverable: true,
-        category: 'timeout',
+        recoverable: false,
+        category: 'unknown',
       });
     });
 
@@ -220,5 +225,127 @@ describe('S3: classifyRecoverability — config match must not catch reconfigura
     const result = classifyRecoverability('config error');
     expect(result.recoverable).toBe(false);
     expect(result.category).toBe('config');
+  });
+});
+
+// E3: explicit classification table — structured/anchored matching.
+describe('E3: classifyRecoverability — rate-limit / overload / network / auth', () => {
+  it('HTTP 429 / "rate limit" → recoverable + long backoff tier', () => {
+    for (const s of ['429 Too Many Requests', 'rate limit exceeded', 'RATE_LIMIT hit']) {
+      const r = classifyRecoverability(s);
+      expect(r.recoverable).toBe(true);
+      expect(r.category).toBe('rate_limit');
+      expect(r.backoffTier).toBe('long');
+    }
+  });
+
+  it('respects an advertised Retry-After (parses seconds)', () => {
+    const r = classifyRecoverability('429 with Retry-After: 45');
+    expect(r.recoverable).toBe(true);
+    expect(r.category).toBe('rate_limit');
+    expect(r.retryAfterSec).toBe(45);
+  });
+
+  it('HTTP 529 / "overloaded" → recoverable + long backoff tier', () => {
+    expect(classifyRecoverability('Error 529 service overloaded')).toEqual<RetryClassification>({
+      recoverable: true, category: 'overloaded', backoffTier: 'long',
+    });
+    expect(classifyRecoverability('the API is overloaded')).toEqual<RetryClassification>({
+      recoverable: true, category: 'overloaded', backoffTier: 'long',
+    });
+  });
+
+  it('network errno codes (ECONNRESET/ETIMEDOUT/EPIPE/socket hang up) → recoverable', () => {
+    for (const s of ['ECONNRESET', 'request ETIMEDOUT', 'write EPIPE', 'socket hang up', 'ECONNREFUSED 127.0.0.1:8080']) {
+      const r = classifyRecoverability(s);
+      expect(r.recoverable).toBe(true);
+      expect(r.category).toBe('network');
+    }
+  });
+
+  it('E3 fix: a "tokenizer error" is NOT budget (bare "token" was the bug)', () => {
+    const r = classifyRecoverability('tokenizer error: unknown token');
+    expect(r.category).not.toBe('budget');
+    expect(r.recoverable).toBe(false); // unknown, conservative
+  });
+
+  it('token_budget_exceeded is STILL budget (anchored compound)', () => {
+    expect(classifyRecoverability('token_budget_exceeded').category).toBe('budget');
+  });
+
+  it('auth 401/403 → non-recoverable', () => {
+    expect(classifyRecoverability('401 unauthorized')).toEqual<RetryClassification>({
+      recoverable: false, category: 'auth',
+    });
+    expect(classifyRecoverability('403 forbidden').category).toBe('auth');
+  });
+
+  it('context_length_exceeded / max_tokens → recoverable (one-shot)', () => {
+    expect(classifyRecoverability('context_length_exceeded').recoverable).toBe(true);
+    expect(classifyRecoverability('context_length_exceeded').category).toBe('context_overflow');
+    expect(classifyRecoverability('hit max_tokens limit').category).toBe('context_overflow');
+  });
+
+  it('rate-limit wins over a "validation" substring in the same string', () => {
+    // Precedence: structured rate-limit must beat the domain bucket.
+    expect(classifyRecoverability('429 validation retry').category).toBe('rate_limit');
+  });
+
+  it('a port-like number does not false-positive a status (e.g. port 4290)', () => {
+    expect(classifyRecoverability('connect ECONNREFUSED port 4290').category).toBe('network');
+  });
+});
+
+describe('E3: computeRetryDelay — tier, jitter, Retry-After', () => {
+  it('default tier stays deterministic (no opts) — backward compat', () => {
+    expect(computeRetryDelay(1, 300000)).toBe(10000);
+    expect(computeRetryDelay(3, 300000)).toBe(40000);
+  });
+
+  it('long tier scales the base (rate-limit / overload wait longer)', () => {
+    // 10000 * 2^(1-1) * 4 = 40000
+    expect(computeRetryDelay(1, 300000, { tier: 'long' })).toBe(40000);
+  });
+
+  it('honors server Retry-After when larger than computed delay', () => {
+    // computed attempt-1 default = 10000; Retry-After 60s → 60000 (under cap).
+    expect(computeRetryDelay(1, 300000, { retryAfterMs: 60_000 })).toBe(60_000);
+    // Retry-After never exceeds the cap.
+    expect(computeRetryDelay(1, 300000, { retryAfterMs: 999_999 })).toBe(300000);
+  });
+
+  it('jitter spreads ±fraction deterministically with a fixed rng', () => {
+    // delay=10000, jitter=0.2 → delta=2000, range [8000,12000].
+    // rng()=0 → 8000; rng()=1 → 12000; rng()=0.5 → 10000.
+    expect(computeRetryDelay(1, 300000, { jitter: 0.2, rng: () => 0 })).toBe(8000);
+    expect(computeRetryDelay(1, 300000, { jitter: 0.2, rng: () => 1 })).toBe(12000);
+    expect(computeRetryDelay(1, 300000, { jitter: 0.2, rng: () => 0.5 })).toBe(10000);
+  });
+
+  it('jitter never exceeds the cap', () => {
+    // attempt 10 default caps at 300000; even rng=1 stays at cap.
+    expect(computeRetryDelay(10, 300000, { jitter: 0.2, rng: () => 1 })).toBe(300000);
+  });
+});
+
+describe('E3: buildRetryEntry — threads classification tier + jitter', () => {
+  it('rate-limit error → long-tier backoff in the entry', () => {
+    const entry = buildRetryEntry(1, '429 rate limit', 1000, 300000, { jitter: 0, rng: () => 0.5 });
+    expect(entry.recoverable).toBe(true);
+    // long tier attempt 1 = 40000
+    expect(entry.nextRetryAt).toBe(1000 + 40000);
+  });
+
+  it('honors Retry-After from the classification', () => {
+    const entry = buildRetryEntry(1, '429 Retry-After: 90', 1000, 300000, { jitter: 0, rng: () => 0.5 });
+    // 90s > 40s long-tier base → 90000
+    expect(entry.nextRetryAt).toBe(1000 + 90_000);
+  });
+
+  it('jitter=0 (default) is deterministic', () => {
+    const a = buildRetryEntry(2, 'transient', 0, 300000);
+    const b = buildRetryEntry(2, 'transient', 0, 300000);
+    expect(a.nextRetryAt).toBe(b.nextRetryAt);
+    expect(a.nextRetryAt).toBe(20000); // attempt 2 default = 20000
   });
 });

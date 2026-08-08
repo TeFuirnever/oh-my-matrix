@@ -15,7 +15,8 @@ import {
 import { preserveGoalBeforeCompaction, restoreGoalAfterCompaction, captureGoal } from './src/goal-manager';
 import { projectState } from './src/projection';
 import { createInitialState, DEFAULT_CONFIG } from './src/types';
-import type { AutopilotState, AutopilotConfig, GatewayCtx } from './src/types';
+import type { AutopilotState, AutopilotConfig, GatewayCtx, PauseReason } from './src/types';
+import { detectCapExceeded } from './src/cost';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments } from '@oh-my-matrix/permission-policy';
@@ -85,6 +86,11 @@ let canaryFired = new Set<string>();
 // S10: one-shot "host not reporting usage" warn per session — avoids log spam
 // while making the silent tokenBudget no-op observable to operators.
 let noUsageWarned = new Set<string>();
+// E2: runIds that already received a hard-cap winddown injection. Producing runs
+// (running/claimed) get ONE summarize turn before the cap terminates them; the
+// armed flag prevents re-injecting every 60s tick. Keyed by runId, cleared on
+// termination/eviction.
+let hardStopWinddownArmed = new Set<string>();
 let stallInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
@@ -138,6 +144,35 @@ function kickResumedTurn(runId: string, state: AutopilotState): void {
  * being declared stalled). Extracted to a named helper so the ×2 rationale is
  * documented in one place, not duplicated at two call sites.
  */
+/** E2: controlled-winddown instruction text — gives the model ONE turn to
+ *  summarize current state before the hard cap terminates the run. */
+function buildWinddownInstruction(reason: PauseReason): string {
+  const which = reason === 'max_duration_reached' ? 'wall-clock' : 'cost';
+  return `[Autopilot] Hard ${which} limit reached. Wrap up NOW: concisely summarize what you completed and the current state, then stop. Do not start new work.`;
+}
+
+/** E2: inject the winddown instruction so the next turn summarizes instead of
+ *  silently stopping. Best-effort in two senses: (1) if the host lacks the
+ *  injection facade the cap still terminates on the next tick, just without a
+ *  summary turn; (2) if the run cycles to retry_queued within the 60s grace
+ *  window, the next tick sees a non-producing state and hard-stops before the
+ *  injected text reaches a model turn. The AC "instruction before pause" holds
+ *  (we inject, then stop on the next tick); producing a summary is not guaranteed. */
+function injectWinddown(runId: string, state: AutopilotState, reason: PauseReason): void {
+  const enqueue = enqueueInjectionFn;
+  if (typeof enqueue !== 'function') return;
+  void Promise.resolve(
+    enqueue({
+      sessionKey: state.sessionKey,
+      text: buildWinddownInstruction(reason),
+      idempotencyKey: `autopilot-winddown-${runId}`,
+      placement: 'prepend_context',
+      // Short TTL: the winddown is for the imminent next turn only.
+      ttlMs: 30_000,
+    }),
+  ).catch((err) => warn(`[autopilot] winddown enqueue failed for session=${state.sessionKey}: ${err}`));
+}
+
 function defaultStallTimeoutMs(hasTokenBudget: boolean): number {
   return hasTokenBudget
     ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs
@@ -187,6 +222,7 @@ export function _resetForTest(): void {
   sessionKeyToRunId = new Map();
   canaryFired = new Set();
   noUsageWarned = new Set();
+  hardStopWinddownArmed = new Set();
   enqueueInjectionFn = undefined;
   // Test isolation: disable checkpoint persistence so the existing 50+ test suite
   // (which calls register() in the repo root and would otherwise both WRITE
@@ -351,6 +387,7 @@ function evictOldestRuns(): void {
       sessionKeyToRunId.delete(oldestState.sessionKey);
       canaryFired.delete(oldestState.sessionKey);
       noUsageWarned.delete(oldestState.sessionKey);
+      hardStopWinddownArmed.delete(oldestRunId);
       // GAP-25: also clean up sessionIdToKey to prevent orphaned sid→skey entries
       for (const [sid, skey] of sessionIdToKey) {
         if (skey === oldestState.sessionKey) {
@@ -386,6 +423,7 @@ function cleanupAll(): void {
   sessionKeyToRunId.clear();
   canaryFired.clear();
   noUsageWarned.clear();
+  hardStopWinddownArmed.clear();
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
@@ -471,6 +509,8 @@ export function register(api: OpenClawPluginApi): void {
     ...(Array.isArray(uc.excludedAgents) ? { excludedAgents: uc.excludedAgents as string[] } : {}),
     ...(Array.isArray(uc.highRiskTools) ? { highRiskTools: uc.highRiskTools as string[] } : {}),
     ...(numOrUndefined(uc.tokenBudget) != null ? { tokenBudget: numOrUndefined(uc.tokenBudget) } : {}),
+    ...(numOrUndefined(uc.maxDurationMs) != null ? { maxDurationMs: numOrUndefined(uc.maxDurationMs)! } : {}),
+    ...(numOrUndefined(uc.maxCostUsd) != null ? { maxCostUsd: numOrUndefined(uc.maxCostUsd)! } : {}),
     ...(numOrUndefined(uc.maxConcurrentAutopilot) != null ? { maxConcurrentAutopilot: numOrUndefined(uc.maxConcurrentAutopilot)! } : {}),
     ...(typeof uc.thinkingIntensity === 'string' && ['low', 'medium', 'high'].includes(uc.thinkingIntensity)
       ? { thinkingIntensity: uc.thinkingIntensity as 'low' | 'medium' | 'high' }
@@ -1448,6 +1488,32 @@ export function register(api: OpenClawPluginApi): void {
     const orphanRunIds: string[] = [];
 
     for (const [runId, state] of stateByRun.entries()) {
+      // E2: hard caps (wall-clock + cost). Enforced in the 60s patrol — the only
+      // site that can intervene mid-turn (before_agent_finalize does not fire on
+      // API errors, and P0-1 casts doubt on that hook firing at all under the MA
+      // runner). Producing runs (running/claimed) get ONE winddown turn to
+      // summarize; runs not in a model turn (retry_queued/released/unclaimed)
+      // stop immediately. Dispatches hard_stop_requested, which — unlike
+      // pause_requested — terminates from retry_queued (TENSION 3): a spent
+      // budget has no "survive the pause" contract.
+      if (state.enabled && state.status === 'running') {
+        const cap = detectCapExceeded(state, now);
+        if (cap) {
+          const producing = state.orchestrationState === 'running' || state.orchestrationState === 'claimed';
+          if (producing && !hardStopWinddownArmed.has(runId)) {
+            hardStopWinddownArmed.add(runId);
+            injectWinddown(runId, state, cap.reason);
+            warn(`[autopilot] hard cap ${cap.reason} hit: session=${state.sessionKey} run=${runId} — winddown injected, terminating on next tick`);
+          } else {
+            const stopped = orchestratorReducer(state, { type: 'hard_stop_requested', runId, reason: cap.reason, now });
+            setState(runId, stopped);
+            setAuditMode('active');
+            hardStopWinddownArmed.delete(runId);
+            warn(`[autopilot] hard cap ${cap.reason} terminated run: session=${state.sessionKey} run=${runId}`);
+          }
+        }
+      }
+
       // GAP-4: Stall detection for active runs.
       // M1 fix: read stallTimeoutMs PER-RUN from the run's workflow config, not
       // the global default. An operator setting `stall_timeout_ms` in WORKFLOW.md
@@ -1506,6 +1572,7 @@ export function register(api: OpenClawPluginApi): void {
         sessionKeyToRunId.delete(state.sessionKey);
         canaryFired.delete(state.sessionKey);
         noUsageWarned.delete(state.sessionKey);
+        hardStopWinddownArmed.delete(runId);
       }
     }
   }, stallCheckIntervalMs);

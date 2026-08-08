@@ -636,3 +636,65 @@ describe('orchestrator reducer — state transition table', () => {
     });
   });
 });
+
+// E2/TENSION 3: hard_stop_requested bypasses pause_requested's retry_queued exclusion.
+describe('E2 — hard_stop_requested (TENSION 3 bypass)', () => {
+  it('terminates a run from retry_queued (where pause_requested no-ops)', () => {
+    // A run waiting out a retry backoff must still die when a hard cap fires —
+    // pause_requested is deliberately a no-op here so a recoverable breaker
+    // survives a pause, but a spent budget has no such contract.
+    const state = makeState({
+      orchestrationState: 'retry_queued',
+      enabled: true,
+      status: 'running',
+      retry: { attempt: 1, nextRetryAt: NOW + 60_000, lastError: 'stalled', recoverable: true },
+      maxDurationMs: 60_000,
+      startedAt: NOW - 120_000, // over the cap
+    });
+    const next = orchestratorReducer(state, {
+      type: 'hard_stop_requested', runId: 'run-1', reason: 'max_duration_reached', now: NOW,
+    });
+    expect(next.orchestrationState).toBe('blocked');
+    expect(next.blockedReason).toBe('max_duration_reached');
+    expect(next.pauseReason).toBe('max_duration_reached');
+    expect(next.enabled).toBe(false);
+    // status derives to 'paused' (blocked, non-user_stopped) — NOT running.
+    expect(next.status).toBe('paused');
+  });
+
+  it('terminates from every active state (running/claimed/released/unclaimed)', () => {
+    for (const orch of ['running', 'claimed', 'released', 'unclaimed'] as const) {
+      const next = orchestratorReducer(makeState({ orchestrationState: orch }), {
+        type: 'hard_stop_requested', runId: 'run-1', reason: 'max_cost_reached', now: NOW,
+      });
+      expect(next.orchestrationState).toBe('blocked');
+      expect(next.blockedReason).toBe('max_cost_reached');
+    }
+  });
+
+  it('no-ops on a done run (never resurrects a terminal run)', () => {
+    const done = makeState({ orchestrationState: 'done', status: 'done', enabled: false });
+    const next = orchestratorReducer(done, {
+      type: 'hard_stop_requested', runId: 'run-1', reason: 'max_duration_reached', now: NOW,
+    });
+    expect(next).toBe(done);
+  });
+
+  it('no-ops on a user_stopped block (does not overwrite user intent)', () => {
+    const stopped = makeState({ orchestrationState: 'blocked', blockedReason: 'user_stopped', enabled: false });
+    const next = orchestratorReducer(stopped, {
+      type: 'hard_stop_requested', runId: 'run-1', reason: 'max_duration_reached', now: NOW,
+    });
+    expect(next).toBe(stopped);
+  });
+
+  it('clears cross-turn handshake + degradation on hard stop', () => {
+    const next = orchestratorReducer(makeState({
+      orchestrationState: 'running',
+      needsCrossTurnResume: true,
+      degraded: true,
+    }), { type: 'hard_stop_requested', runId: 'run-1', reason: 'max_cost_reached', now: NOW });
+    expect(next.needsCrossTurnResume).toBe(false);
+    expect(next.degraded).toBe(false);
+  });
+});

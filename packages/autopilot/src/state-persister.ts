@@ -119,6 +119,9 @@ export interface AutopilotCheckpoint {
   enabled: boolean;
   totalTokensUsed: number;
   tokenBudget?: number;
+  /** E2: per-run hard caps restored on crash recovery. */
+  maxDurationMs?: number;
+  maxCostUsd?: number;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
   evidenceStatus?: AutopilotState['evidence'] extends infer E ? (E extends { status: infer S } ? S : undefined) : undefined;
@@ -172,6 +175,8 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     enabled: state.enabled,
     totalTokensUsed: state.totalTokensUsed,
     tokenBudget: state.tokenBudget,
+    maxDurationMs: state.maxDurationMs,
+    maxCostUsd: state.maxCostUsd,
     inputTokensUsed: state.inputTokensUsed,
     outputTokensUsed: state.outputTokensUsed,
     evidenceStatus: state.evidence?.status,
@@ -319,6 +324,8 @@ export function loadCheckpoint(
     enabled: cp.enabled,
     totalTokensUsed: cp.totalTokensUsed,
     tokenBudget: cp.tokenBudget,
+    maxDurationMs: cp.maxDurationMs,
+    maxCostUsd: cp.maxCostUsd,
     inputTokensUsed: cp.inputTokensUsed,
     outputTokensUsed: cp.outputTokensUsed,
     startedAt: cp.startedAt,

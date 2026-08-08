@@ -2,6 +2,7 @@ import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingInt
 import { resolveThinkingIntensity } from './effort-injection';
 import { resolveModelTier, resolveModelId } from './model-routing';
 import { getCheckpointWriteFailureCount } from './state-persister';
+import { computeCostUsd } from './cost';
 
 export interface AutopilotProjection {
   status: AutopilotState['status'];
@@ -51,16 +52,11 @@ export interface AutopilotProjection {
 }
 
 /**
- * Claude API pricing constants used for cost estimation.
- * Model: Claude Sonnet (as of 2026-Q2). Update if model/pricing changes.
- * Source: https://www.anthropic.com/pricing
+ * Claude API pricing constants — re-exported from src/cost.ts (the single
+ * source of truth, shared with the cost-cap enforcement in index.ts).
+ * Model: Claude Sonnet (as of 2026-Q2). Update via cost.ts.
  */
-export const AUTOPILOT_INPUT_COST_PER_M_USD = 3.0;
-export const AUTOPILOT_OUTPUT_COST_PER_M_USD = 15.0;
-
-// Claude Sonnet pricing (per 1M tokens, USD)
-const INPUT_COST_PER_M = AUTOPILOT_INPUT_COST_PER_M_USD;
-const OUTPUT_COST_PER_M = AUTOPILOT_OUTPUT_COST_PER_M_USD;
+export { AUTOPILOT_INPUT_COST_PER_M_USD, AUTOPILOT_OUTPUT_COST_PER_M_USD } from './cost';
 
 export function projectState(
   state: AutopilotState | undefined,
@@ -72,8 +68,9 @@ export function projectState(
   const now = Date.now();
   const inputTokens = state.inputTokensUsed ?? 0;
   const outputTokens = state.outputTokensUsed ?? 0;
-  const estimatedCostUsd =
-    (inputTokens * INPUT_COST_PER_M + outputTokens * OUTPUT_COST_PER_M) / 1_000_000;
+  // E2: cost computed via the shared pure function (src/cost.ts) so the
+  // projection and the cost-cap enforcer share one pricing source.
+  const estimatedCostUsd = computeCostUsd(inputTokens, outputTokens);
   const modelRouting = state.workflow?.modelRouting ?? config?.modelRouting;
   const modelTier = state.status === 'running'
     ? resolveModelTier(state.totalContinuations, state.evidence?.status, false, modelRouting)

@@ -17,6 +17,7 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   maxRetries: 3,
   stallTimeoutMs: 300_000,
   maxRetryBackoffMs: 300_000,
+  retryJitter: 0.2,
   workspace: {
     root: '.matrix/autopilot-worktrees',
     cleanup: 'manual',
@@ -125,7 +126,7 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
   // Track unknown fields
   const knownKeys = new Set([
     'version', 'max_concurrent', 'max_retries',
-    'stall_timeout_ms', 'max_retry_backoff_ms', 'workspace', 'validation',
+    'stall_timeout_ms', 'max_retry_backoff_ms', 'retry_jitter', 'workspace', 'validation',
     'destructive_git', 'model_routing',
   ]);
   for (const key of Object.keys(raw)) {
@@ -157,6 +158,12 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
 
   if ('max_retry_backoff_ms' in raw && typeof raw.max_retry_backoff_ms === 'number') {
     result.maxRetryBackoffMs = raw.max_retry_backoff_ms;
+  }
+
+  if ('retry_jitter' in raw && typeof raw.retry_jitter === 'number') {
+    // Clamp to [0, 1]: a jitter fraction outside that range is nonsensical and
+    // could invert or zero the delay. Fail-safe to the default rather than drop.
+    result.retryJitter = Math.min(Math.max(raw.retry_jitter, 0), 1);
   }
 
   if ('workspace' in raw && typeof raw.workspace === 'object' && raw.workspace !== null) {
