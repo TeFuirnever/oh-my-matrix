@@ -1,6 +1,7 @@
 import type { AutopilotState, ContinuationDecision } from './types';
 import { isTaskComplete, hasNoActionableTask } from './completion-detector';
 import { isThresholdExceeded } from './tool-error-tracker';
+import { detectCostCap } from './cost';
 
 interface FinalizeEvent {
   lastAssistantMessage?: string;
@@ -85,6 +86,17 @@ export function decideContinuation(
     return { action: 'pause', pauseReason: 'token_budget_exceeded' };
   }
 
+  // E2: cost cap fast-path (pure — detectCostCap takes no clock). The 60s patrol
+  // is the primary enforcer (it also terminates from retry_queued, which this
+  // finalize-time path cannot reach); this catches a cap crossed between patrol
+  // ticks at the turn boundary. No-op when the host omits usage (tokens 0).
+  // Wall-clock is patrol-only: enforcing it here would need a clock, breaking
+  // the pure-function contract decideContinuation holds for its unit tests.
+  const costCap = detectCostCap(state);
+  if (costCap) {
+    return { action: 'pause', pauseReason: costCap };
+  }
+
   if (state.totalContinuations >= state.maxTotalContinuations) {
     return { action: 'pause', pauseReason: 'max_total_reached' };
   }
@@ -102,6 +114,13 @@ export function decideContinuation(
 const MAX_INSTRUCTION_LENGTH = 2000;
 const MAX_COMMAND_SUMMARY_LENGTH = 300;
 const MAX_FAILED_COMMANDS = 2;
+/**
+ * E3: retry-attempt count at which the retry guidance escalates from "fix and
+ * retry" to "try a fundamentally different approach or stop and report". Below
+ * this, the model is nudged to repair; at/above it, repeating the same approach
+ * is the over-night death-loop E3 targets, so the instruction forces a pivot.
+ */
+const RETRY_ESCALATION_THRESHOLD = 3;
 
 export function buildRetryInstruction(state: AutopilotState): string {
   const goal = state.goal?.substring(0, 500) || '继续执行当前任务';
@@ -124,7 +143,7 @@ export function buildRetryInstruction(state: AutopilotState): string {
   if (failureBlock) {
     parts.push(failureBlock);
   }
-  parts.push('[Autopilot] Continue from where you left off.');
+  parts.push(buildClosingGuidance(state));
 
   // Truncation must preserve the closing line. The closing line is always last;
   // if goal+progress+failureBlock already consume most of the budget, the naive
@@ -180,6 +199,19 @@ function buildFailureBlock(evidence: AutopilotState['evidence']): string | null 
     lines.push(`  (reason: ${truncate(evidence.failureReason, 120)})`);
   }
   return lines.join('\n');
+}
+
+/**
+ * E3: tiered closing guidance. Low retry counts get "fix and continue"; once the
+ * run has retried at/above RETRY_ESCALATION_THRESHOLD, the instruction forces a
+ * pivot — repeating the same failing approach is the over-night death loop.
+ */
+function buildClosingGuidance(state: AutopilotState): string {
+  const attempt = state.retry?.attempt ?? 0;
+  if (attempt >= RETRY_ESCALATION_THRESHOLD) {
+    return `[Autopilot] This approach has failed ${attempt} time(s). Try a fundamentally different approach, or stop and report what you tried and where you are stuck.`;
+  }
+  return '[Autopilot] Fix the issue and continue from where you left off.';
 }
 
 function truncate(s: string, max: number): string {

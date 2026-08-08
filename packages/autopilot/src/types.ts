@@ -10,7 +10,10 @@ export type PauseReason =
   | 'injection_rejected'
   | 'user_stopped'
   | 'token_budget_exceeded'
-  | 'validation_failed';
+  | 'validation_failed'
+  // E2: hard caps (wall-clock + cost). Non-resumable, aligned with token_budget_exceeded.
+  | 'max_duration_reached'
+  | 'max_cost_reached';
 
 // ─── M2 Orchestration Types ──────────────────────────────────
 
@@ -44,7 +47,10 @@ export type BlockedReason =
   | 'injection_rejected'
   // W1b: generic terminal error that doesn't match a specific BlockedReason.
   // Non-resumable — prevents lossy toBlockedReason fallback to validation_failed.
-  | 'unrecoverable_error';
+  | 'unrecoverable_error'
+  // E2: hard-cap terminations (wall-clock + cost). Non-resumable.
+  | 'max_duration_reached'
+  | 'max_cost_reached';
 
 /** Canonical set of all valid BlockedReason values — used by isValidBlockedReason type guard */
 export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<BlockedReason>([
@@ -64,6 +70,8 @@ export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<Blocked
   'context_overflow_unrecoverable',
   'injection_rejected',
   'unrecoverable_error',
+  'max_duration_reached',
+  'max_cost_reached',
 ]);
 
 /** H-2: Type guard — validates that an arbitrary string is a BlockedReason.
@@ -99,6 +107,8 @@ export function pauseReasonToBlockedReason(reason: PauseReason): BlockedReason {
     case 'loop_breaker_triggered': return 'loop_breaker_triggered';
     case 'context_overflow_unrecoverable': return 'context_overflow_unrecoverable';
     case 'injection_rejected': return 'injection_rejected';
+    case 'max_duration_reached': return 'max_duration_reached';
+    case 'max_cost_reached': return 'max_cost_reached';
   }
 }
 
@@ -209,6 +219,12 @@ export interface WorkflowConfig {
   maxRetries: number;
   stallTimeoutMs: number;
   maxRetryBackoffMs: number;
+  /**
+   * E3/P2-18: ±fraction jitter applied to retry backoff (e.g. 0.2 = ±20%).
+   * De-synchronizes concurrent runs retrying the same upstream outage.
+   * Default 0.2 (see DEFAULT_WORKFLOW_CONFIG); 0 disables (deterministic).
+   */
+  retryJitter?: number;
   workspace: {
     root: string;
     cleanup: 'manual' | 'delete_on_done';
@@ -246,6 +262,11 @@ export type OrchestratorEvent =
   // — if the reducer already moved off the running family (e.g. via
   // agent_turn_finished → retry_queued/blocked), pause_requested no-ops.
   | { type: 'pause_requested'; runId: string; reason: PauseReason; now: number }
+  // E2/TENSION 3: hard cap (wall-clock/cost) termination. Unlike pause_requested
+  // (which no-ops off the running family, incl. retry_queued — a recoverable
+  // breaker must survive a pause), a hard cap MUST terminate even a retrying
+  // run. Only truly terminal states (done, user-stopped) are exempt.
+  | { type: 'hard_stop_requested'; runId: string; reason: PauseReason; now: number }
   // ADR-020: degraded cross-turn fallback (was a bare spread at index.ts:1058).
   // Folds totalContinuations++/needsCrossTurnResume/turnAttempts/degraded into the
   // reducer so it is the sole writer of those coupled aux fields.
@@ -290,6 +311,9 @@ export interface AutopilotState {
   enabled: boolean;
   totalTokensUsed: number;
   tokenBudget?: number;
+  /** E2: per-run hard caps carried from config (persisted for crash recovery). */
+  maxDurationMs?: number;
+  maxCostUsd?: number;
   degraded: boolean;
   // M2 orchestration fields (all optional for backward compat)
   orchestrationState?: OrchestrationState;
@@ -327,6 +351,17 @@ export interface AutopilotConfig {
   highRiskTools?: string[];
   tokenBudget?: number;
   maxConcurrentAutopilot?: number;
+  /**
+   * E2/P0-5: hard wall-clock cap in ms. Enforced primarily by the 60s patrol
+   * (before_agent_finalize doesn't fire on API errors). When exceeded the run
+   * is hard-stopped (max_duration_reached). Undefined = no wall-clock cap.
+   */
+  maxDurationMs?: number;
+  /**
+   * E2/P0-5: hard cost cap in USD, computed from reported token usage. No-op
+   * when the host omits usage (totalTokensUsed stays 0). Undefined = no cap.
+   */
+  maxCostUsd?: number;
   thinkingIntensity?: ThinkingIntensity;
   modelRouting?: ModelRoutingConfig;
   /**
@@ -368,6 +403,8 @@ export function createInitialState(
     enabled: false,
     totalTokensUsed: 0,
     tokenBudget: config.tokenBudget,
+    maxDurationMs: config.maxDurationMs,
+    maxCostUsd: config.maxCostUsd,
     // Enhancement C (ADR-019): carry trustWorkspace onto state so
     // minTurnsBeforeComplete can condition the early-completion threshold.
     trustWorkspace: config.trustWorkspace ?? false,

@@ -182,7 +182,7 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       }
 
       // Recoverable → retry_queued
-      const retryEntry = buildRetryEntry(currentAttempt, event.error ?? 'unknown', event.now, maxRetryBackoffMs);
+      const retryEntry = buildRetryEntry(currentAttempt, event.error ?? 'unknown', event.now, maxRetryBackoffMs, { jitter: state.workflow?.retryJitter ?? 0 });
       return {
         ...state,
         orchestrationState: 'retry_queued',
@@ -210,7 +210,7 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         };
       }
 
-      const retryEntry = buildRetryEntry(currentAttempt, 'stalled', event.now, maxRetryBackoffMs);
+      const retryEntry = buildRetryEntry(currentAttempt, 'stalled', event.now, maxRetryBackoffMs, { jitter: state.workflow?.retryJitter ?? 0 });
       return {
         ...state,
         orchestrationState: 'retry_queued',
@@ -269,7 +269,7 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       const currentAttempt = (state.retry?.attempt ?? 0) + 1;
 
       if (shouldRetry({ attempt: currentAttempt, maxRetries, recoverable: true })) {
-        const retryEntry = buildRetryEntry(currentAttempt, 'validation_failed', event.now, maxRetryBackoffMs);
+        const retryEntry = buildRetryEntry(currentAttempt, 'validation_failed', event.now, maxRetryBackoffMs, { jitter: state.workflow?.retryJitter ?? 0 });
         return {
           ...state,
           orchestrationState: 'retry_queued',
@@ -338,6 +338,29 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         enabled: false,
         pauseReason: event.reason,
         needsCrossTurnResume: false,
+        lastActivityAt: event.now,
+      };
+    }
+
+    // ─── hard_stop_requested → blocked (E2/TENSION 3) ───────────────────
+    // A hard cap (wall-clock / cost) terminates the run from ANY active state,
+    // including 'retry_queued'. pause_requested deliberately no-ops off the
+    // running family so a recoverable breaker survives a pause; a hard cap has
+    // no such contract — if the budget is spent, the run stops regardless of
+    // what it was doing. Only truly terminal states are exempt: re-blocking a
+    // 'done' run would resurrect it, and a user_stopped block is the user's
+    // intent (not ours to overwrite).
+    case 'hard_stop_requested': {
+      if (state.orchestrationState === 'done') return state;
+      if (state.orchestrationState === 'blocked' && state.blockedReason === 'user_stopped') return state;
+      return {
+        ...state,
+        orchestrationState: 'blocked' as const,
+        blockedReason: pauseReasonToBlockedReason(event.reason),
+        enabled: false,
+        pauseReason: event.reason,
+        needsCrossTurnResume: false,
+        degraded: false,
         lastActivityAt: event.now,
       };
     }

@@ -180,8 +180,10 @@ describe('E2E: resilience', () => {
       expect(proj.status).toBe('running');
       expect(proj.orchestrationState).toBe('retry_queued');
       expect(proj.retryCount).toBe(1);
-      // computeRetryDelay(1, 300000) = 10000 * 2^0 = 10_000.
-      expect(proj.nextRetryAt).toBe(stallFiredAt + 10_000);
+      // computeRetryDelay(1, 300000) base = 10_000, then E3 default jitter ±20%
+      // (DEFAULT_WORKFLOW_CONFIG.retryJitter = 0.2) → [8000, 12000].
+      expect(proj.nextRetryAt).toBeGreaterThanOrEqual(stallFiredAt + 8_000);
+      expect(proj.nextRetryAt).toBeLessThanOrEqual(stallFiredAt + 12_000);
     });
 
     it('retry_due (after the 10s backoff) returns the run to claimed via the real interval', async () => {

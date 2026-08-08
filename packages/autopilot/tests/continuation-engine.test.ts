@@ -211,7 +211,7 @@ describe('continuation-engine', () => {
       const result = buildRetryInstruction(state);
       expect(result).toContain('AssertionError: expected 3 to equal 4');
       expect(result).toContain('Last validation failed');
-      expect(result).toContain('Continue from where you left off.');
+      expect(result).toContain('continue from where you left off');
     });
 
     it('includes failureReason as decoration when no command details', () => {
@@ -221,7 +221,7 @@ describe('continuation-engine', () => {
       });
       const result = buildRetryInstruction(state);
       expect(result).toContain('required command(s) failed: node-test');
-      expect(result).toContain('Continue from where you left off.');
+      expect(result).toContain('continue from where you left off');
     });
 
     it('caps at 2 failed commands', () => {
@@ -259,7 +259,7 @@ describe('continuation-engine', () => {
         }),
       });
       const result = buildRetryInstruction(state);
-      expect(result).toContain('Continue from where you left off.');
+      expect(result).toContain('continue from where you left off');
       expect(result.length).toBeLessThanOrEqual(2000);
     });
 
@@ -284,7 +284,20 @@ describe('continuation-engine', () => {
       const result = buildRetryInstruction(state);
       expect(result).not.toContain('Last validation failed');
       expect(result).toContain('Current goal: fix the bug');
-      expect(result).toContain('Continue from where you left off.');
+      expect(result).toContain('continue from where you left off');
+    });
+
+    it('E3: escalates guidance at/above RETRY_ESCALATION_THRESHOLD (attempt 3)', () => {
+      // After 3 retries the closing line pivots from "fix and retry" to "try a
+      // different approach or stop and report" — repeating the same approach is
+      // the over-night death loop E3 targets.
+      const state = runningState({
+        goal: 'fix the bug',
+        retry: { attempt: 3, nextRetryAt: Date.now() + 10000, lastError: '429 rate limit', recoverable: true },
+      });
+      const result = buildRetryInstruction(state);
+      expect(result).toContain('fundamentally different approach');
+      expect(result).not.toContain('continue from where you left off');
     });
 
     it('regression: produces no failure block when evidence passed', () => {
@@ -294,7 +307,7 @@ describe('continuation-engine', () => {
       });
       const result = buildRetryInstruction(state);
       expect(result).not.toContain('Last validation failed');
-      expect(result).toContain('Continue from where you left off.');
+      expect(result).toContain('continue from where you left off');
     });
 
     it('regression: produces no failure block when evidence skipped', () => {
