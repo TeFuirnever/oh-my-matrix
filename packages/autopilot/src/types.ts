@@ -302,6 +302,12 @@ export type OrchestratorEvent =
   // Folds totalContinuations++/needsCrossTurnResume/turnAttempts/degraded into the
   // reducer so it is the sole writer of those coupled aux fields.
   | { type: 'cross_turn_degraded'; runId: string; now: number }
+  // E12: NORMAL cross-turn handshake (per-turn revise cap reached, NOT degraded).
+  // Folds the bare spread in the cross_turn case. Advances lastActivityAt (armed = activity).
+  | { type: 'cross_turn_enqueued'; runId: string; now: number }
+  // E12: degraded FALLBACK (enqueue rejected/threw) — same as cross_turn_degraded
+  // but NO lastActivityAt (canary failed = stalled; stamping activity masks it, per E8).
+  | { type: 'cross_turn_degraded_silent'; runId: string; now: number }
   // ADR-020 step 2: clears needsCrossTurnResume when the resumed turn begins
   // finalizing (before_agent_finalize handshake, NOT agent_turn_started).
   | { type: 'cross_turn_resume_consumed'; runId: string; now: number }
