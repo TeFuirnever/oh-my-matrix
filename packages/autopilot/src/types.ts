@@ -229,7 +229,9 @@ export interface WorkflowConfig {
    */
   retryJitter?: number;
   workspace: {
-    root: string;
+    // E9/ADR-008: `root` removed — autopilot delegates worktree management to the
+    // host; root was never consumed at runtime. (state.workspace.root on
+    // WorkspaceRecord is a DIFFERENT field — the checkpoint root — and stays.)
     cleanup: 'manual' | 'delete_on_done';
     branchPrefix: string;
     baseRef?: string;

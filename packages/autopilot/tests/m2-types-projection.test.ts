@@ -93,7 +93,7 @@ describe('M2 types', () => {
         version: 1, source: 'workflow_md',
         maxConcurrent: 5, maxRetries: 3, stallTimeoutMs: 300000,
         maxRetryBackoffMs: 300000,
-        workspace: { root: '.matrix/autopilot-worktrees', cleanup: 'manual', branchPrefix: 'autopilot', allowDirtyBase: false },
+        workspace: { cleanup: 'manual', branchPrefix: 'autopilot', allowDirtyBase: false },
         validation: { commands: [], failOnOptional: false },
         destructiveGit: { allow: false }, warnings: [],
       };
@@ -214,7 +214,7 @@ describe('M2 Projection extensions', () => {
         version: 1, source: 'workflow_md',
         maxConcurrent: 5, maxRetries: 3, stallTimeoutMs: 300000,
         maxRetryBackoffMs: 300000,
-        workspace: { root: '.matrix/worktrees', cleanup: 'manual', branchPrefix: 'autopilot', allowDirtyBase: false },
+        workspace: { cleanup: 'manual', branchPrefix: 'autopilot', allowDirtyBase: false },
         validation: { commands: [], failOnOptional: false },
         destructiveGit: { allow: false }, warnings: [],
       },

@@ -109,8 +109,9 @@ describe('E2E workflow-config round-trip — loadWorkflowConfig (real fs parse +
     expect(config.maxRetries).toBe(5);
     expect(config.stallTimeoutMs).toBe(120_000);
     expect(config.maxRetryBackoffMs).toBe(60_000);
-    // workspace merged over defaults
-    expect(config.workspace.root).toBe('custom-worktrees');
+    // workspace merged over defaults. E9: root is removed (ADR-008) — the
+    // WORKFLOW.md carries it but it is ignored, not stored.
+    expect((config.workspace as Record<string, unknown>).root).toBeUndefined();
     expect(config.workspace.cleanup).toBe('delete_on_done');
     expect(config.workspace.branchPrefix).toBe('custom-prefix');
     expect(config.workspace.allowDirtyBase).toBe(true);
@@ -126,7 +127,8 @@ describe('E2E workflow-config round-trip — loadWorkflowConfig (real fs parse +
     });
     // destructive_git flows through
     expect(config.destructiveGit.allow).toBe(true);
-    expect(warnings).toEqual([]);
+    // E9: the WORKFLOW.md carries workspace.root → exactly one deprecation warning.
+    expect(warnings).toEqual([expect.stringContaining('workspace.root')]);
   });
 
   it('partial block → unspecified fields inherit DEFAULT_WORKFLOW_CONFIG', () => {
@@ -142,7 +144,8 @@ describe('E2E workflow-config round-trip — loadWorkflowConfig (real fs parse +
     // Unspecified values come from DEFAULT_WORKFLOW_CONFIG (the merge in workflow-config.ts:371-379).
     expect(config.maxConcurrent).toBe(DEFAULT_WORKFLOW_CONFIG.maxConcurrent);
     expect(config.maxRetries).toBe(DEFAULT_WORKFLOW_CONFIG.maxRetries);
-    expect(config.workspace.root).toBe(DEFAULT_WORKFLOW_CONFIG.workspace.root);
+    // E9: workspace.root removed from defaults too.
+    expect((config.workspace as Record<string, unknown>).root).toBeUndefined();
     expect(config.workspace.cleanup).toBe(DEFAULT_WORKFLOW_CONFIG.workspace.cleanup);
     expect(config.validation.commands).toEqual([]);
   });

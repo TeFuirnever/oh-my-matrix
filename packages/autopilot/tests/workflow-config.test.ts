@@ -98,7 +98,10 @@ Continue the task.`);
       expect(result.config.maxConcurrent).toBe(3);
       expect(result.config.maxRetries).toBe(5);
       expect(result.config.stallTimeoutMs).toBe(60000);
-      expect(result.config.workspace.root).toBe('.custom-worktrees');
+      // E9: workspace.root is removed (ADR-008) — present in this WORKFLOW.md, so a
+      // deprecation warning fires and it is NOT stored.
+      expect(result.warnings.some(w => w.includes('workspace.root'))).toBe(true);
+      expect((result.config.workspace as Record<string, unknown>).root).toBeUndefined();
       expect(result.config.workspace.cleanup).toBe('delete_on_done');
       expect(result.config.workspace.branchPrefix).toBe('auto');
       expect(result.config.validation.commands).toHaveLength(1);
@@ -190,53 +193,27 @@ Continue.`);
       expect(result.config.validation.failOnOptional).toBe(true);
     });
 
-    it('resolves relative workspace root against base repo path', () => {
+    it('E9: workspace.root is removed — warns + ignores, does not crash', () => {
+      // ADR-008: autopilot delegates worktree management to the host; root was
+      // never consumed at runtime. A WORKFLOW.md still carrying it gets a
+      // deprecation warning (migration feedback, not a silent drop) and the value
+      // is NOT stored. (state.workspace.root on WorkspaceRecord is a DIFFERENT
+      // field — the checkpoint root — and is unaffected.)
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(`---
 autopilot:
   version: 1
   workspace:
     root: .matrix/worktrees
+    branch_prefix: autopilot
 ---
 
 Continue.`);
 
       const result = loadWorkflowConfig('/home/user/myrepo');
-      // The workspace root should be stored as-is (relative), resolved at usage time
-      expect(result.config.workspace.root).toBe('.matrix/worktrees');
-    });
-
-    it('rejects workspace root with ".." traversal, falls back to default + warns', () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(`---
-autopilot:
-  version: 1
-  workspace:
-    root: ../../etc/passwd
----
-
-Continue.`);
-
-      const result = loadWorkflowConfig('/home/user/myrepo');
-      // Traversal rejected → default root, warning emitted (defense-in-depth on an
-      // attacker-controllable field even though it is not consumed at runtime today).
-      expect(result.config.workspace.root).toBe(DEFAULT_WORKFLOW_CONFIG.workspace.root);
-      expect(result.config.warnings.some((w) => w.includes('traversal'))).toBe(true);
-    });
-
-    it('keeps an absolute workspace root as-is (explicit target, not traversal)', () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(`---
-autopilot:
-  version: 1
-  workspace:
-    root: /var/tmp/worktrees
----
-
-Continue.`);
-
-      const result = loadWorkflowConfig('/home/user/myrepo');
-      expect(result.config.workspace.root).toBe('/var/tmp/worktrees');
+      expect(result.warnings.some(w => w.includes('workspace.root'))).toBe(true);
+      expect((result.config.workspace as Record<string, unknown>).root).toBeUndefined();
+      expect(result.config.workspace.branchPrefix).toBe('autopilot'); // other fields still parse
     });
 
     it('handles empty autopilot section with defaults', () => {
