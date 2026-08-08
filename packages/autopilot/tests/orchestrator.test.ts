@@ -312,7 +312,50 @@ describe('orchestrator reducer — state transition table', () => {
     });
   });
 
-  // ─── released + evidence_finished failed → retry or blocked ─────────
+  // ─── E4: evidence_finished skipped — split by skipReason ────────────
+  describe('E4 — evidence_finished skipped: not_configured vs not_executed', () => {
+    it('passed → done, completionUnverified false', () => {
+      const next = orchestratorReducer(makeState({ orchestrationState: 'released' }), {
+        type: 'evidence_finished', runId: 'run-1', evidence: makeEvidence({ status: 'passed' }), now: NOW,
+      });
+      expect(next.orchestrationState).toBe('done');
+      expect(next.completionUnverified).toBe(false);
+    });
+
+    it('skipped + not_configured → done (legitimate), completionUnverified true', () => {
+      const next = orchestratorReducer(makeState({ orchestrationState: 'released' }), {
+        type: 'evidence_finished', runId: 'run-1',
+        evidence: { status: 'skipped', commands: [], completedAt: NOW, skipReason: 'not_configured' },
+        now: NOW,
+      });
+      expect(next.orchestrationState).toBe('done');
+      expect(next.status).toBe('done');
+      expect(next.completionUnverified).toBe(true);
+    });
+
+    it('skipped + not_executed → blocked evidence_missing (the real risk)', () => {
+      const next = orchestratorReducer(makeState({ orchestrationState: 'released' }), {
+        type: 'evidence_finished', runId: 'run-1',
+        evidence: { status: 'skipped', commands: [], completedAt: NOW, failureReason: 'evaluation error', skipReason: 'not_executed' },
+        now: NOW,
+      });
+      expect(next.orchestrationState).toBe('blocked');
+      expect(next.blockedReason).toBe('evidence_missing');
+      expect(next.completionUnverified).toBe(true);
+      // evidence_missing is resumable — the run can be retried after the operator fixes the validation.
+      expect(next.status).toBe('paused');
+    });
+
+    it('skipped with legacy undefined skipReason → done (backward-compat)', () => {
+      const next = orchestratorReducer(makeState({ orchestrationState: 'released' }), {
+        type: 'evidence_finished', runId: 'run-1',
+        evidence: { status: 'skipped', commands: [], completedAt: NOW }, // no skipReason
+        now: NOW,
+      });
+      expect(next.orchestrationState).toBe('done');
+      expect(next.completionUnverified).toBe(true);
+    });
+  });
   describe('released + evidence_finished failed', () => {
     it('retry_queued when recoverable and retries remaining', () => {
       const state = makeState({

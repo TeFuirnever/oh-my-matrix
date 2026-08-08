@@ -109,6 +109,9 @@ describe('evidence-gate', () => {
       });
       expect(result.status).toBe('skipped');
       expect(result.failureReason).toContain('no validation commands');
+      // E4: explicit skipReason so the gate can tell not_configured (legit → done)
+      // from not_executed (configured but didn't run → blocked evidence_missing).
+      expect(result.skipReason).toBe('not_configured');
     });
 
     it('returns passed when all commands are skipped (non-required)', () => {
