@@ -87,8 +87,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build (regenerate dist from source)
         run: pnpm -r build
-      - name: Test
-        run: pnpm -r test
+      - name: Test (with coverage thresholds per package)
+        run: pnpm -r test -- --coverage
       - name: Summary
         if: always()
         run: |

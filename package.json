@@ -39,7 +39,7 @@
     "lint:md": "markdownlint-cli2",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm lint && pnpm lint:md && pnpm typecheck",
-    "verify": "pnpm check && pnpm -r test && pnpm docs:build",
+    "verify": "pnpm check && pnpm -r test -- --coverage && pnpm docs:build",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-plugin-versions.cjs",
     "prepare": "simple-git-hooks"
@@ -50,6 +50,7 @@
     "@commitlint/cli": "^21.1.0",
     "@commitlint/config-conventional": "^21.1.0",
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^3.2.6",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "markdownlint-cli2": "^0.22.1",

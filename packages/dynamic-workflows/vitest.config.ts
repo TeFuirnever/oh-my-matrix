@@ -5,6 +5,18 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['./tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts', 'index.ts'],
+      exclude: ['src/event-shape.contract.ts', '**/*.d.ts'],
+      reporter: ['text', 'json-summary'],
+      thresholds: {
+        statements: 85,
+        branches: 70,
+        functions: 85,
+        lines: 85,
+      },
+    },
   },
   resolve: {
     alias: {
