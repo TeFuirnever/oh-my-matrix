@@ -83,7 +83,7 @@ pl_v=$(node -p "require('$TMPDIR/dw/package/openclaw.plugin.json').version")
 grep -q "before_tool_call" "$TMPDIR/dw/package/dist/index.js" && check "guard registers before_tool_call" 0 || check "guard registers before_tool_call" 1
 fi
 
-# ── autopilot: C1 fix + H1 fix + major-bump markers ─────────────────────────
+# ── autopilot 4.0.0: E13 resume_run RPC + E2/E12/E5 markers ────────────────
 
 if run_pkg autopilot; then
 echo "--- @oh-my-matrix/autopilot ---"
@@ -92,14 +92,17 @@ ap_v=$(node -p "require('./packages/autopilot/package.json').version")
 mkdir -p "$TMPDIR/ap"
 tar -xzf "$TMPDIR"/oh-my-matrix-autopilot-*.tgz -C "$TMPDIR/ap"
 
-# C1 fix: stuckRecovery gate
-grep -q "stuckRecovery" "$TMPDIR/ap/package/dist/index.js" && check "C1 fix: stuckRecovery gate present" 0 || check "C1 fix: stuckRecovery gate MISSING" 1
+# E13 (4.0.0 breaking): explicit resume_run RPC
+grep -q "resume_run" "$TMPDIR/ap/package/dist/index.js" && check "E13: resume_run RPC present" 0 || check "E13: resume_run RPC MISSING" 1
 
-# H1 fix: before_model_resolve hook registration
-grep -q "before_model_resolve" "$TMPDIR/ap/package/dist/index.js" && check "H1 fix: before_model_resolve registered" 0 || check "H1 fix: before_model_resolve MISSING" 1
+# E12: cross_turn_enqueued reducer event
+grep -q "cross_turn_enqueued" "$TMPDIR/ap/package/dist/index.js" && check "E12: cross_turn_enqueued present" 0 || check "E12: cross_turn_enqueued MISSING" 1
 
-# Major-bump breaking change: trustWorkspace
-grep -q "trustWorkspace" "$TMPDIR/ap/package/dist/index.js" && check "trustWorkspace (major-bump marker)" 0 || check "trustWorkspace MISSING" 1
+# E5: progress ledger
+grep -q "ledger" "$TMPDIR/ap/package/dist/index.js" && check "E5: progress ledger present" 0 || check "E5: progress ledger MISSING" 1
+
+# E2: wallclock hard cap
+grep -q "maxDurationMs" "$TMPDIR/ap/package/dist/index.js" && check "E2: maxDurationMs cap present" 0 || check "E2: maxDurationMs cap MISSING" 1
 
 # Version in dist matches package
 grep -q "$ap_v" "$TMPDIR/ap/package/dist/index.js" && check "version ${ap_v} in dist" 0 || check "version ${ap_v} not found in dist" 1
