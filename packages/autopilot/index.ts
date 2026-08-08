@@ -494,8 +494,14 @@ export function register(api: OpenClawPluginApi): void {
         stateByRun.set(runId, restored);
         sessionKeyToRunId.set(restored.sessionKey, runId);
         if (restored.needsCrossTurnResume) {
-          // A restored run that was mid-cross-turn needs a kick to restart the
-          // agent loop; defer to kickResumedTurn once enqueueInjectionFn is set.
+          // E11: enqueueInjectionFn is set above (before this restore loop), so
+          // kick now rather than waiting for the next stall/retry tick. A
+          // restored mid-cross-turn run is 'claimed' and cannot start a turn on
+          // its own — without this kick it sits dead until the 24h orphan sweep.
+          // kickResumedTurn self-guards on orchState==='claimed'. NOTE (E13):
+          // this is a cross-turn send path; E13 (P3-29) must account for it when
+          // hardening gateway-restart double-spend.
+          kickResumedTurn(runId, restored);
         }
       }
     }
