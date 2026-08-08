@@ -63,6 +63,14 @@ describe('resolveModelTier', () => {
     expect(resolveModelTier(5, 'passed', false, cfg)).toBe('standard');
     expect(resolveModelTier(0, 'failed', false, cfg)).toBe('premium');
   });
+
+  it('E10/P2-18: evidence failed -> repair turn uses initialTurnTier (premium)', () => {
+    // The repair turn after a validation failure needs the strongest tier, not
+    // defaultTier — regardless of turn count. Without this, turn 5+ failed
+    // resolved to 'standard' (the most capability-demanding phase under-resourced).
+    expect(resolveModelTier(5, 'failed', false, cfg)).toBe('premium');
+    expect(resolveModelTier(20, 'failed', false, cfg)).toBe('premium');
+  });
 });
 
 describe('resolveModelId', () => {

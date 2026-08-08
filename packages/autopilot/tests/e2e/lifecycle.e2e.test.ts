@@ -319,14 +319,13 @@ describe('E2E: activate → loop → complete lifecycle', () => {
   });
 
   describe('stuck-run recovery on re-activate (isRunStuck)', () => {
-    it('re-activates a stuck running session (no activity beyond stall threshold)', async () => {
-      // frozen to current behavior: a running session whose lastActivityAt is older
-      // than the stall threshold is treated as stuck and discarded on re-activate,
-      // instead of the normal "cannot activate from running" rejection.
-      //
-      // Fake timers must be active BEFORE register()+activate so Date.now() during
-      // activate_requested/workspace_ready returns the fake clock (t=0); only then
-      // does advancing the clock push (now - lastActivityAt) past the threshold.
+    it('does NOT re-activate a run still in retry backoff (E10/P2-17: not stuck)', async () => {
+      // E10/P2-17: a run that just stalled into retry_queued has a retry scheduled
+      // in the future (backoff pending) — it is recovering, NOT stuck, so
+      // re-activate must reject rather than discard the in-flight retry. Before
+      // P2-17 any retry_queued run was judged stuck and discarded on re-activate.
+      // (The stall flow can no longer produce a stuck run: retry_due refreshes
+      // lastActivityAt, so stuck-detection now applies to restored stale runs.)
       vi.useFakeTimers();
       try {
         _resetForTest();
@@ -335,32 +334,27 @@ describe('E2E: activate → loop → complete lifecycle', () => {
 
         await activateAndStart(stuckMock, 'sess-stuck', 'sid-stuck');
 
-        // Move orchState claimed → running via the agent_turn_prepare hook
-        // (it dispatches agent_turn_started, claimed→running).
         const turnPrepare = stuckMock.hooks.get('agent_turn_prepare')!;
         turnPrepare({ prompt: 'go' }, { sessionKey: 'sess-stuck' });
 
-        // Advance past the per-run stall timeout (300_000ms from DEFAULT_WORKFLOW_CONFIG,
-        // M1 fix: no longer ×2 global) plus one stall-check interval (60_000ms) so the
-        // interval fires. stall-detector uses strict '>' so we go one tick over.
+        // Advance past the per-run stall timeout + one stall-check interval so
+        // the interval fires (stall-detector uses strict '>').
         vi.advanceTimersByTime(300_000 + 60_000 + 1);
 
         const projStuck = await projectionFor(stuckMock, 'sess-stuck');
-        // frozen to current behavior: stall sets orchState='retry_queued', status stays 'running'.
         expect(projStuck.status).toBe('running');
         expect(projStuck.orchestrationState).toBe('retry_queued');
 
-        // Re-activate the stuck session — must succeed (recovery path), not reject.
+        // Re-activate rejected: the run is in retry backoff (nextRetryAt future),
+        // not stuck. The in-flight retry must not be discarded.
         const activate = stuckMock.gatewayMethods.get('autopilot.activate')!;
         const respond = vi.fn();
         await activate({ params: { sessionKey: 'sess-stuck' }, respond });
-        expect(respond.mock.calls[0][0]).toBe(true);
+        expect(respond.mock.calls[0][0]).toBe(false);
 
-        const projNew = await projectionFor(stuckMock, 'sess-stuck');
-        expect(projNew.status).toBe('running');
-        // New run: counters reset, orchState back at claimed (fresh activate).
-        expect(projNew.totalContinuations).toBe(0);
-        expect(projNew.orchestrationState).toBe('claimed');
+        // The run is unchanged (not discarded/reset).
+        const projUnchanged = await projectionFor(stuckMock, 'sess-stuck');
+        expect(projUnchanged.orchestrationState).toBe('retry_queued');
       } finally {
         vi.useRealTimers();
       }

@@ -48,8 +48,9 @@ export const RESUMABLE_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set([
  *   blocked + other non-resumable     → 'paused'   (parked, not resumable)
  *   unclaimed/claimed/running/released/retry_queued → 'running'
  *
- * NOTE: this is currently reference-only — no production writer uses it yet.
- * Phase 2 will route all writers through the reducer, which will call this.
+ * ADR-016 (status sole-writer): the reducer is the sole writer of `status`;
+ * every return path derives it via this function. The "reference-only / Phase 2"
+ * note that lived here is stale — Phase 2/3 (ADR-016 + ADR-020) landed.
  */
 export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 'blockedReason'>): AutopilotState['status'] {
   const orch = state.orchestrationState;
@@ -113,21 +114,13 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
-    // ─── unclaimed + workspace_failed → blocked ───────────────
-    // M2 NOTE: this event + permission_denied below are defined in the reducer
-    // but never dispatched from index.ts. Tool blocks are handled by the host's
-    // before_tool_call veto, not via orchestrator events. Kept as reducer-level
-    // API surface for future use (e.g. if workspace creation moves into the
-    // orchestrator). Tests cover the reducer contract; the dispatch gap is intentional.
-    case 'workspace_failed': {
-      if (state.orchestrationState !== 'unclaimed') return state;
-      return {
-        ...state,
-        orchestrationState: 'blocked',
-        blockedReason: 'workspace_create_failed',
-        lastActivityAt: event.now,
-      };
-    }
+    // E10/P2-18: workspace_failed + permission_denied events were deleted — they
+    // were defined here but never dispatched (tool blocks go via the host's
+    // before_tool_call veto; workspace creation failure isn't routed through the
+    // reducer), a defined-but-dead third state. The BlockedReason
+    // 'permission_denied' is unchanged (still produced by agent_turn_finished's
+    // error mapping); only the never-dispatched EVENT was removed. If workspace
+    // creation moves into the orchestrator, re-add workspace_failed then (YAGNI).
 
     // ─── claimed + agent_turn_started → running ───────────────
     case 'agent_turn_started': {
@@ -292,17 +285,6 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         orchestrationState: 'blocked',
         blockedReason: 'max_retries_reached',
         evidence: event.evidence,
-        lastActivityAt: event.now,
-      };
-    }
-
-    // ─── running + permission_denied → blocked ────────────────────────
-    case 'permission_denied': {
-      if (state.orchestrationState !== 'running') return state;
-      return {
-        ...state,
-        orchestrationState: 'blocked',
-        blockedReason: 'permission_denied',
         lastActivityAt: event.now,
       };
     }

@@ -173,7 +173,7 @@ export interface RetryEntry {
 export interface EvidenceCommandResult {
   id: string;
   command: string;
-  status: 'passed' | 'failed' | 'timeout' | 'skipped';
+  status: 'passed' | 'failed' | 'timeout' | 'skipped' | 'output_overflow';
   exitCode?: number;
   durationMs: number;
   /**
@@ -230,7 +230,6 @@ export interface WorkflowConfig {
 export type OrchestratorEvent =
   | { type: 'activate_requested'; sessionKey: string; goal?: string; now: number }
   | { type: 'workspace_ready'; runId: string; workspace: WorkspaceRecord; now: number }
-  | { type: 'workspace_failed'; runId: string; error: string; now: number }
   | { type: 'agent_turn_started'; runId: string; now: number }
   | { type: 'agent_activity'; runId: string; activity: 'llm_output' | 'tool_call' | 'tool_result'; now: number; tokens?: { input?: number; output?: number; total?: number } }
   | { type: 'agent_turn_finished'; runId: string; success: boolean; error?: string; now: number }
@@ -238,7 +237,6 @@ export type OrchestratorEvent =
   | { type: 'stall_timeout'; runId: string; now: number }
   | { type: 'evidence_started'; runId: string; now: number }
   | { type: 'evidence_finished'; runId: string; evidence: EvidenceSummary; now: number }
-  | { type: 'permission_denied'; runId: string; toolName: string; now: number }
   | { type: 'stop_requested'; runId: string; now: number }
   | { type: 'resume_requested'; runId: string; now: number }
   // W1 Phase 1.5: pause_requested routes the 4 pause() call sites through the

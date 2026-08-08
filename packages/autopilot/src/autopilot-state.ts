@@ -159,7 +159,13 @@ export function isRunStuck(
   stallTimeoutMs: number = 600_000,
 ): boolean {
   if (state.status !== 'running') return false;
-  if (state.orchestrationState === 'retry_queued') return true;
+  if (state.orchestrationState === 'retry_queued') {
+    // E10 / P2-17: a retry_queued run backing off (retry.nextRetryAt in the
+    // future) is NOT stuck — it is waiting out its backoff. Only a retry_queued
+    // run with no pending retry, or one past due, is genuinely stuck.
+    if (state.retry && state.retry.nextRetryAt != null && state.retry.nextRetryAt > now) return false;
+    return true;
+  }
   const lastActivity = state.lastActivityAt ?? state.startedAt ?? 0;
   if (lastActivity > 0 && now - lastActivity > stallTimeoutMs) return true;
   return false;

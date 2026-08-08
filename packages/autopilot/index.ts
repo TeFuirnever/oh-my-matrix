@@ -1298,6 +1298,11 @@ export function register(api: OpenClawPluginApi): void {
           // releasing again would over-release the shared audit refcount (S8).
           if (stuckRecovery) {
             setAuditMode('active');
+            // E10 / P2-17: a genuinely-stuck run's checkpoint would otherwise
+            // leak until the 24h terminal-TTL sweep. Delete it now that we're
+            // discarding the run. (idle/done runs already had theirs deleted at
+            // complete/stop, so this is scoped to the still-running stuck case.)
+            deleteCheckpoint(oldRunId, getCheckpointRoot());
           }
           stateByRun.delete(oldRunId);
           sessionKeyToRunId.delete(sessionKey);

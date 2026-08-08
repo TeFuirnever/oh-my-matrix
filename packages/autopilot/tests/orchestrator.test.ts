@@ -98,18 +98,6 @@ describe('orchestrator reducer — state transition table', () => {
     });
   });
 
-  // ─── unclaimed + workspace_failed → blocked ─────────────────────────
-  describe('unclaimed + workspace_failed → blocked', () => {
-    it('blocks with workspace_create_failed reason', () => {
-      const state = makeState({ orchestrationState: 'unclaimed', startedAt: NOW - 1000 });
-      const next = orchestratorReducer(state, {
-        type: 'workspace_failed', runId: 'run-1', error: 'git worktree add failed', now: NOW,
-      });
-      expect(next.orchestrationState).toBe('blocked');
-      expect(next.blockedReason).toBe('workspace_create_failed');
-    });
-  });
-
   // ─── claimed + agent_turn_started → running ─────────────────────────
   describe('claimed + agent_turn_started → running', () => {
     it('transitions to running and updates lastActivityAt', () => {
@@ -618,26 +606,6 @@ describe('orchestrator reducer — state transition table', () => {
         type: 'agent_activity', runId: 'run-1', activity: 'tool_call', now: NOW,
       });
       expect(state.lastActivityAt).toBe(originalActivity);
-    });
-  });
-
-  // ─── M1: permission_denied event → blocked ──────────────────────────
-  describe('permission_denied (M1)', () => {
-    it('from running → blocked with permission_denied', () => {
-      const state = makeState({ orchestrationState: 'running' });
-      const next = orchestratorReducer(state, {
-        type: 'permission_denied', runId: 'run-1', toolName: 'bash', now: NOW,
-      });
-      expect(next.orchestrationState).toBe('blocked');
-      expect(next.blockedReason).toBe('permission_denied');
-    });
-
-    it('from unclaimed → no-op (guard)', () => {
-      const state = makeState({ orchestrationState: 'unclaimed' });
-      const next = orchestratorReducer(state, {
-        type: 'permission_denied', runId: 'run-1', toolName: 'bash', now: NOW,
-      });
-      expect(next.orchestrationState).toBe('unclaimed');
     });
   });
 
