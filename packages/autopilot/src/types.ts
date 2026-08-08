@@ -240,6 +240,12 @@ export interface WorkflowConfig {
    * the no-progress pause. Default 3 (see DEFAULT_WORKFLOW_CONFIG). 0 disables.
    */
   noProgressTurns?: number;
+  /**
+   * E7/P0-4: run validation every N turns (not just on `complete`) so failures
+   * surface early instead of at the end. Default 5; 0 disables mid-run validation.
+   * N≥5 recommended (validation is slow — small N collides with wall-clock caps).
+   */
+  midrunValidationInterval?: number;
   workspace: {
     // E9/ADR-008: `root` removed — autopilot delegates worktree management to the
     // host; root was never consumed at runtime. (state.workspace.root on

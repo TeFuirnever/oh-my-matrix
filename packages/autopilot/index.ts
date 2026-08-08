@@ -1,4 +1,4 @@
-import { decideContinuation, buildRetryInstruction } from './src/continuation-engine';
+import { decideContinuation, buildRetryInstruction, formatFailedCommands } from './src/continuation-engine';
 import { trackToolError } from './src/tool-error-tracker';
 import { checkStall } from './src/stall-detector';
 import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-injection';
@@ -249,6 +249,37 @@ function extractLedgerActivity(toolName: string, params: unknown): TurnActivity 
     files: LEDGER_WRITE_CLASSES.has(cls) ? collectStringsBy(p, /path|file/i) : [],
     cmds: LEDGER_EXEC_CLASSES.has(cls) ? collectStringsBy(p, /command|cmd|script/i) : [],
   };
+}
+
+/**
+ * E7/P0-4: mid-run evidence gate. Every N turns (not just on `complete`) run the
+ * configured validation commands so failures surface early. On failure, returns a
+ * stderr injection to append to the revise instruction (early correction — does
+ * NOT block). Returns null when validation isn't due / passes / is disabled /
+ * errors (fail-open). Marks inFlightToolStartedAt so the E6 stall patrol doesn't
+ * false-stall during the run (cleared at agent_end — the marker lives validation-
+ * start → turn-boundary; no tools fire in that window, so no stale inheritance).
+ */
+async function runMidRunValidation(runId: string, state: AutopilotState, turn: number): Promise<string | null> {
+  const commands = state.workflow?.validation.commands ?? [];
+  const interval = state.workflow?.midrunValidationInterval ?? 5;
+  if (commands.length === 0 || interval <= 0) return null;
+  if (turn <= 0 || turn % interval !== 0) return null;
+  setState(runId, { ...state, inFlightToolStartedAt: Date.now() });
+  try {
+    const results = await runValidationCommands(commands, state.workspace?.path);
+    const summary = evaluateEvidence({ commands, results, diffSummary: '', now: Date.now() });
+    // Reuses the shared formatFailedCommands (same truncation constants as the
+    // finalize-path failure block — no divergent twin). Mid-run always returns a
+    // block (status is 'failed' here); the ?? covers a detail-less summary.
+    if (summary.status === 'failed') {
+      return formatFailedCommands(summary, '[Autopilot] Mid-run validation failed — fix before continuing:')
+        ?? '[Autopilot] Mid-run check failed.';
+    }
+  } catch (err) {
+    warn(`[autopilot] mid-run validation error (failing open): ${err}`);
+  }
+  return null;
 }
 
 /**
@@ -707,10 +738,16 @@ export function register(api: OpenClawPluginApi): void {
       case 'revise': {
         const updated = incrementTotal(incrementTurn(state));
         setState(runId, updated);
+        // E7/P0-4: mid-run validation every N turns — surface failures early
+        // (append stderr to the revise instruction; does NOT block).
+        const midRunFailure = await runMidRunValidation(runId, updated, updated.totalContinuations);
+        const instruction = midRunFailure
+          ? `${decision.retryInstruction!}\n${midRunFailure}`
+          : decision.retryInstruction!;
         return {
           action: 'revise',
           retry: {
-            instruction: decision.retryInstruction!,
+            instruction,
             idempotencyKey: `autopilot-${runId}-${updated.totalContinuations}`,
             maxAttempts: state.maxAttemptsPerTurn - updated.turnAttempts,
           },

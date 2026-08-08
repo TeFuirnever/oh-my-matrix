@@ -1,4 +1,4 @@
-import type { AutopilotState, ContinuationDecision } from './types';
+import type { AutopilotState, ContinuationDecision, EvidenceSummary } from './types';
 import { isTaskComplete, hasNoActionableTask } from './completion-detector';
 import { isThresholdExceeded } from './tool-error-tracker';
 import { detectCostCap } from './cost';
@@ -185,26 +185,30 @@ export function buildRetryInstruction(state: AutopilotState): string {
  */
 function buildFailureBlock(evidence: AutopilotState['evidence']): string | null {
   if (!evidence || evidence.status !== 'failed') return null;
+  return formatFailedCommands(evidence, '[Autopilot] Last validation failed:');
+}
 
+/**
+ * Shared formatter for a failed EvidenceSummary's command stderr (E7: extracted so
+ * the finalize-path failure block + the mid-run failure injection share ONE set of
+ * truncation constants — no Divergent Change twin). Returns null when there is no
+ * command detail AND no failureReason.
+ */
+export function formatFailedCommands(evidence: EvidenceSummary, header: string): string | null {
   const failedCommands = (evidence.commands ?? [])
     .filter((c) => c.status === 'failed' || c.status === 'timeout')
     .slice(0, MAX_FAILED_COMMANDS);
 
-  // No command-level detail (e.g. evidence failed but commands array is empty
-  // or all skipped) — fall back to failureReason alone if present.
   if (failedCommands.length === 0) {
     if (!evidence.failureReason) return null;
-    return `[Autopilot] Last validation failed: ${truncate(evidence.failureReason, MAX_COMMAND_SUMMARY_LENGTH)}`;
+    return `${header} ${truncate(evidence.failureReason, MAX_COMMAND_SUMMARY_LENGTH)}`;
   }
 
-  const lines = ['[Autopilot] Last validation failed:'];
+  const lines = [header];
   for (const cmd of failedCommands) {
-    // command id + the stderr-bearing summary are the payload.
     const summary = truncate(cmd.summary || '', MAX_COMMAND_SUMMARY_LENGTH);
     lines.push(`  - ${cmd.id}: ${summary}`);
   }
-  // failureReason is decorative ("required command(s) failed: <id>") — include
-  // only when it adds info beyond the command lines, truncated to a small cap.
   if (evidence.failureReason) {
     lines.push(`  (reason: ${truncate(evidence.failureReason, 120)})`);
   }

@@ -23,6 +23,8 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   retryJitter: DEFAULT_RETRY_JITTER,
   // E6/P0-6 dir-2: consecutive no-output turns before the no-progress pause.
   noProgressTurns: 3,
+  // E7/P0-4: run validation every N turns (not just complete). 0 disables.
+  midrunValidationInterval: 5,
   workspace: {
     // E9/ADR-008: `root` removed (never consumed at runtime; worktree mgmt delegated to host).
     cleanup: 'manual',
@@ -131,7 +133,7 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
   // Track unknown fields
   const knownKeys = new Set([
     'version', 'max_concurrent', 'max_retries',
-    'stall_timeout_ms', 'max_retry_backoff_ms', 'retry_jitter', 'no_progress_turns', 'workspace', 'validation',
+    'stall_timeout_ms', 'max_retry_backoff_ms', 'retry_jitter', 'no_progress_turns', 'midrun_validation_interval', 'workspace', 'validation',
     'destructive_git', 'model_routing',
   ]);
   for (const key of Object.keys(raw)) {
@@ -174,6 +176,11 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
   if ('no_progress_turns' in raw && typeof raw.no_progress_turns === 'number') {
     // 0 disables the no-progress pause; otherwise require at least 1 turn.
     result.noProgressTurns = Math.max(0, Math.floor(raw.no_progress_turns));
+  }
+
+  if ('midrun_validation_interval' in raw && typeof raw.midrun_validation_interval === 'number') {
+    // 0 disables mid-run validation; otherwise require at least 1.
+    result.midrunValidationInterval = Math.max(0, Math.floor(raw.midrun_validation_interval));
   }
 
   if ('workspace' in raw && typeof raw.workspace === 'object' && raw.workspace !== null) {
