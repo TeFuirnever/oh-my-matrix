@@ -27,5 +27,8 @@ export type {
 // ─── Audit persistence ──────────────────────────────────────────────────
 export { appendAuditEntry, loadRecentAuditEntries, getAuditFilePath, getAuditWriteFailureCount } from './src/audit-persister';
 
+// ─── Structured logger (shared by autopilot + dynamic-workflows) ────────
+export { log, warn, error, logWithContext } from './src/logger';
+
 // ─── Shared types ───────────────────────────────────────────────────────
 export type { CommandClass, PermissionAuditEntry } from './src/types';

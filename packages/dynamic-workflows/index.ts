@@ -12,7 +12,7 @@
  */
 import type { OpenClawPluginApi } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { decidePermissionForEvent, classifyCommand, appendAuditEntry, extractCommandSegments } from '@oh-my-matrix/permission-policy';
-import { logWithContext } from './src/logger';
+import { logWithContext } from '@oh-my-matrix/permission-policy';
 
 // ─── Projection contract (read-only, host/UI observable) ─────────────────
 export { buildDynamicWorkflowProjection, normalizeOpenProseRun, normalizePermissionAuditEntries } from './src/projection';

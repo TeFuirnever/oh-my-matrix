@@ -1,22 +1,20 @@
 /**
- * M-1: Autopilot Logger — gated console output with optional JSON format.
+ * Shared structured logger for the @oh-my-matrix packages — gated console
+ * output with optional JSON format.
  *
- * All autopilot logging should go through this module instead of raw
- * console.log/warn/error. Two env vars control behavior:
+ * Extracted from the two per-package loggers (autopilot, dynamic-workflows)
+ * that were byte-equivalent in their safety-relevant parts. Env-gated,
+ * with both legacy per-package env var names accepted so existing installs
+ * keep working:
  *
- *   AUTOPILOT_LOG_LEVEL  — verbosity: debug | info (default) | warn | error | silent
- *   AUTOPILOT_LOG_FORMAT — output format: text (default) | json
+ *   AUTOPILOT_LOG_LEVEL / DYNAMIC_WORKFLOWS_LOG_LEVEL / LOG_LEVEL — level
+ *   AUTOPILOT_LOG_FORMAT / DYNAMIC_WORKFLOWS_LOG_FORMAT — text (default) | json
  *
  * JSON mode emits one JSON object per line: { ts, level, msg, ...ctx }
- * Text mode emits plain string args (backward-compatible with existing behavior).
+ * Text mode emits plain string args.
  *
- * DRIFT REFERENCE: this logger is intentionally byte-equivalent in its
- * safety-relevant parts (emitJson try/catch + fallback shape, splitArgs) to
- * packages/dynamic-workflows/src/logger.ts. If you change the try/catch or
- * fallback here, change the sibling too. The two per-package logger tests
- * (tests/p0-structured-logger.test.ts here, dynamic-workflows/tests/logger.test.ts)
- * are the drift guard until a third consumer justifies extracting createLogger()
- * (boundary doc §5.2). The logger must NEVER throw into a hook.
+ * The logger must NEVER throw into a hook: emitJson's try/catch + fallback
+ * shape and splitArgs are the safety-relevant parts — do not "simplify" them.
  */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
@@ -30,7 +28,9 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 
 function getCurrentLevel(): LogLevel {
   const env = typeof process !== 'undefined'
-    ? (process.env.AUTOPILOT_LOG_LEVEL ?? process.env.LOG_LEVEL)
+    ? (process.env.AUTOPILOT_LOG_LEVEL
+        ?? process.env.DYNAMIC_WORKFLOWS_LOG_LEVEL
+        ?? process.env.LOG_LEVEL)
     : undefined;
   if (env && env in LEVEL_PRIORITY) return env as LogLevel;
   return 'info';
@@ -38,7 +38,8 @@ function getCurrentLevel(): LogLevel {
 
 function isJsonFormat(): boolean {
   return typeof process !== 'undefined' &&
-    process.env.AUTOPILOT_LOG_FORMAT === 'json';
+    (process.env.AUTOPILOT_LOG_FORMAT === 'json'
+      || process.env.DYNAMIC_WORKFLOWS_LOG_FORMAT === 'json');
 }
 
 function shouldLog(level: LogLevel): boolean {
@@ -51,7 +52,7 @@ function emitJson(level: Exclude<LogLevel, 'silent'>, msg: string, ctx?: Record<
   try {
     line = JSON.stringify(record);
   } catch {
-    // Circular ref or BigInt in ctx — the logger must never throw into a hook.
+    // Circular ref or BigInt in ctx — the logger must never throw into the guard hook.
     line = JSON.stringify({ ts: record.ts, level, msg, ctxError: 'unserializable' });
   }
   if (level === 'error') console.error(line);
@@ -87,32 +88,31 @@ function splitArgs(args: unknown[]): { msg: string; ctx: Record<string, unknown>
   return { msg: parts.join(' '), ctx };
 }
 
-/** Log an informational message (gated by AUTOPILOT_LOG_LEVEL >= info) */
 export function log(...args: unknown[]): void {
   if (!shouldLog('info')) return;
-  if (isJsonFormat()) { const { msg, ctx } = splitArgs(args); emitJson('info', msg, ctx); }
-  else emitText('info', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('info', msg, ctx);
+  } else emitText('info', args);
 }
 
-/** Log a warning message (gated by AUTOPILOT_LOG_LEVEL >= warn) */
 export function warn(...args: unknown[]): void {
   if (!shouldLog('warn')) return;
-  if (isJsonFormat()) { const { msg, ctx } = splitArgs(args); emitJson('warn', msg, ctx); }
-  else emitText('warn', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('warn', msg, ctx);
+  } else emitText('warn', args);
 }
 
-/** Log an error message (gated by AUTOPILOT_LOG_LEVEL >= error) */
 export function error(...args: unknown[]): void {
   if (!shouldLog('error')) return;
-  if (isJsonFormat()) { const { msg, ctx } = splitArgs(args); emitJson('error', msg, ctx); }
-  else emitText('error', args);
+  if (isJsonFormat()) {
+    const { msg, ctx } = splitArgs(args);
+    emitJson('error', msg, ctx);
+  } else emitText('error', args);
 }
 
-/**
- * Log a structured message with additional context fields.
- * In JSON mode: emits { ts, level, msg, ...ctx }.
- * In text mode: emits "[level] msg {ctx}" via the appropriate console method.
- */
+/** Structured log: JSON `{ts,level,msg,...ctx}` in json mode, `[level] msg k=v` in text mode. */
 export function logWithContext(
   level: Exclude<LogLevel, 'silent'>,
   msg: string,

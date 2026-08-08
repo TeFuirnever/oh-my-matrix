@@ -3,7 +3,7 @@ import { trackToolError } from './src/tool-error-tracker';
 import { checkStall } from './src/stall-detector';
 import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-injection';
 import { resolveModelTier, resolveModelId, isSubagentSession, parseModelRouting, extractParentSessionKey } from './src/model-routing';
-import { log, warn, error, logWithContext } from './src/logger';
+import { log, warn, error, logWithContext } from '@oh-my-matrix/permission-policy';
 import {
   resume,
   incrementTurn,

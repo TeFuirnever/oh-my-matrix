@@ -22,7 +22,7 @@ describe('logger — JSON format mode', () => {
   });
 
   it('outputs valid JSON when AUTOPILOT_LOG_FORMAT=json', async () => {
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     log('[autopilot] test message session=s1');
     expect(consoleSpy).toHaveBeenCalled();
     const arg = consoleSpy.mock.calls[0][0] as string;
@@ -30,7 +30,7 @@ describe('logger — JSON format mode', () => {
   });
 
   it('JSON output contains ts, level, msg fields', async () => {
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     log('hello world');
     const arg = consoleSpy.mock.calls[0][0] as string;
     const parsed = JSON.parse(arg);
@@ -42,7 +42,7 @@ describe('logger — JSON format mode', () => {
 
   it('warn level produces level="warn" in JSON', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { warn } = await import('../src/logger');
+    const { warn } = await import('@oh-my-matrix/permission-policy');
     warn('something wrong');
     const arg = warnSpy.mock.calls[0][0] as string;
     const parsed = JSON.parse(arg);
@@ -52,7 +52,7 @@ describe('logger — JSON format mode', () => {
 
   it('error level produces level="error" in JSON', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { error } = await import('../src/logger');
+    const { error } = await import('@oh-my-matrix/permission-policy');
     error('boom');
     const arg = errorSpy.mock.calls[0][0] as string;
     const parsed = JSON.parse(arg);
@@ -61,7 +61,7 @@ describe('logger — JSON format mode', () => {
   });
 
   it('preserves object arg structure into ctx fields (not [object Object])', async () => {
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     log('tool blocked', { sessionKey: 'sk-9', runId: 'run-9' });
     const arg = consoleSpy.mock.calls[0][0] as string;
     const parsed = JSON.parse(arg);
@@ -72,7 +72,7 @@ describe('logger — JSON format mode', () => {
   });
 
   it('does not throw on a circular context object (logger must never crash a hook)', async () => {
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     const circular: Record<string, unknown> = { a: 1 };
     circular.self = circular;
     expect(() => log('circular', circular)).not.toThrow();
@@ -96,7 +96,7 @@ describe('logger — logWithContext', () => {
   });
 
   it('logWithContext merges ctx fields into JSON output', async () => {
-    const { logWithContext } = await import('../src/logger');
+    const { logWithContext } = await import('@oh-my-matrix/permission-policy');
     logWithContext('info', 'test event', { sessionKey: 'sk-123', runId: 'run-abc', tokens: 42 });
     const arg = consoleSpy.mock.calls[0][0] as string;
     const parsed = JSON.parse(arg);
@@ -109,7 +109,7 @@ describe('logger — logWithContext', () => {
 
   it('logWithContext works in text mode without throwing', async () => {
     delete process.env.AUTOPILOT_LOG_FORMAT;
-    const { logWithContext } = await import('../src/logger');
+    const { logWithContext } = await import('@oh-my-matrix/permission-policy');
     expect(() => logWithContext('warn', 'text mode warn', { key: 'val' })).not.toThrow();
   });
 });
@@ -122,7 +122,7 @@ describe('logger — text mode backward compat', () => {
 
   it('text mode: log calls console.log with string args', async () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     log('[autopilot] some message');
     expect(spy).toHaveBeenCalledWith('[autopilot] some message');
     spy.mockRestore();
@@ -130,7 +130,7 @@ describe('logger — text mode backward compat', () => {
 
   it('text mode: output is NOT valid JSON', async () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const { log } = await import('../src/logger');
+    const { log } = await import('@oh-my-matrix/permission-policy');
     log('plain text message');
     const arg = spy.mock.calls[0][0] as string;
     // Plain text should not be parseable as JSON (no wrapping in {})

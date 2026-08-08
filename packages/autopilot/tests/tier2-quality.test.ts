@@ -27,20 +27,20 @@ describe('M-1: console statements gated by log level', () => {
 
   it('logger module exists and exports log, warn, error', async () => {
     // Dynamic import — will fail if module doesn't exist yet (TDD red phase)
-    const logger = await import('../src/logger');
+    const logger = await import('@oh-my-matrix/permission-policy');
     expect(typeof logger.log).toBe('function');
     expect(typeof logger.warn).toBe('function');
     expect(typeof logger.error).toBe('function');
   });
 
-  it('logger respects AUTOPILOT_LOG_LEVEL environment variable', async () => {
+  it('logger respects level environment variable (shared @oh-my-matrix/permission-policy logger)', async () => {
     const fs = await import('fs');
     const path = await import('path');
     const loggerSrc = fs.readFileSync(
-      path.resolve(__dirname, '../src/logger.ts'),
+      path.resolve(__dirname, '../../permission-policy/src/logger.ts'),
       'utf-8'
     );
-    expect(loggerSrc).toMatch(/AUTOPILOT_LOG_LEVEL|LOG_LEVEL/);
+    expect(loggerSrc).toMatch(/AUTOPILOT_LOG_LEVEL|DYNAMIC_WORKFLOWS_LOG_LEVEL|LOG_LEVEL/);
   });
 });
 
