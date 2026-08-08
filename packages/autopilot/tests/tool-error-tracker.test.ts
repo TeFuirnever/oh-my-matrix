@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  trackToolError,
-  isThresholdExceeded,
-} from '../src/tool-error-tracker';
+import { trackToolError } from '../src/tool-error-tracker';
 import { createInitialState, type AutopilotState } from '../src/types';
 
 function runningState(overrides: Partial<AutopilotState> = {}): AutopilotState {
@@ -63,29 +60,7 @@ describe('tool-error-tracker', () => {
         expect(state.toolErrorCount).toBe(1); // Always resets for new tool
       }
       // After 20 errors total, threshold is still 1 — never reaches 3
-      expect(isThresholdExceeded(state, 3)).toBe(false);
-    });
-  });
-
-  describe('isThresholdExceeded', () => {
-    it('returns false when count is below threshold', () => {
-      const state = runningState({ toolErrorCount: 2 });
-      expect(isThresholdExceeded(state, 3)).toBe(false);
-    });
-
-    it('returns true when count equals threshold', () => {
-      const state = runningState({ toolErrorCount: 3 });
-      expect(isThresholdExceeded(state, 3)).toBe(true);
-    });
-
-    it('returns true when count exceeds threshold', () => {
-      const state = runningState({ toolErrorCount: 5 });
-      expect(isThresholdExceeded(state, 3)).toBe(true);
-    });
-
-    it('returns false when no tool error exists', () => {
-      const state = runningState({ toolErrorCount: 0, lastToolError: undefined });
-      expect(isThresholdExceeded(state, 3)).toBe(false);
+      expect(state.toolErrorCount >= 3).toBe(false);
     });
   });
 });

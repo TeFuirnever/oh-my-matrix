@@ -1,6 +1,5 @@
 import type { AutopilotState, ContinuationDecision, EvidenceSummary } from './types';
 import { isTaskComplete, hasNoActionableTask } from './completion-detector';
-import { isThresholdExceeded } from './tool-error-tracker';
 import { detectCostCap } from './cost';
 import { summarizeLedger } from './progress-ledger';
 
@@ -79,7 +78,7 @@ export function decideContinuation(
     return { action: 'complete' };
   }
 
-  if (isThresholdExceeded(state, state.toolErrorThreshold)) {
+  if (state.toolErrorCount >= state.toolErrorThreshold) {
     return { action: 'pause', pauseReason: 'tool_error_repeated' };
   }
 

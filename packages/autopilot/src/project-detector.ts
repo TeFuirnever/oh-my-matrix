@@ -9,10 +9,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { ValidationCommand } from './types';
 
-function exists(filePath: string): boolean {
-  try { return fs.existsSync(filePath); } catch { return false; }
-}
-
 function readJsonSafe(filePath: string): Record<string, unknown> {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Record<string, unknown>; }
   catch { return {}; }
@@ -32,7 +28,7 @@ export function detectValidationCommands(workspaceDir: string): ValidationComman
 
   // ── Node.js ──────────────────────────────────────────────────────────────
   const pkgPath = path.join(workspaceDir, 'package.json');
-  if (exists(pkgPath)) {
+  if (fs.existsSync(pkgPath)) {
     const pkg = readJsonSafe(pkgPath);
     const scripts = (pkg.scripts ?? {}) as Record<string, unknown>;
     const hasTestScript = typeof scripts.test === 'string';
@@ -41,8 +37,8 @@ export function detectValidationCommands(workspaceDir: string): ValidationComman
     // The bare name (npm/pnpm/yarn) is emitted uniformly; command-runner's
     // conditional shell (X-15) resolves .cmd wrappers on Windows automatically.
     let pm = 'npm';
-    if (exists(path.join(workspaceDir, 'pnpm-lock.yaml'))) pm = 'pnpm';
-    else if (exists(path.join(workspaceDir, 'yarn.lock'))) pm = 'yarn';
+    if (fs.existsSync(path.join(workspaceDir, 'pnpm-lock.yaml'))) pm = 'pnpm';
+    else if (fs.existsSync(path.join(workspaceDir, 'yarn.lock'))) pm = 'yarn';
 
     if (hasTestScript) {
       commands.push({
@@ -55,7 +51,7 @@ export function detectValidationCommands(workspaceDir: string): ValidationComman
   }
 
   // ── Go ────────────────────────────────────────────────────────────────────
-  if (exists(path.join(workspaceDir, 'go.mod'))) {
+  if (fs.existsSync(path.join(workspaceDir, 'go.mod'))) {
     commands.push({
       id: 'go-test',
       command: 'go test ./...',
@@ -65,7 +61,7 @@ export function detectValidationCommands(workspaceDir: string): ValidationComman
   }
 
   // ── Rust ─────────────────────────────────────────────────────────────────
-  if (exists(path.join(workspaceDir, 'Cargo.toml'))) {
+  if (fs.existsSync(path.join(workspaceDir, 'Cargo.toml'))) {
     commands.push({
       id: 'cargo-test',
       command: 'cargo test',
@@ -75,8 +71,8 @@ export function detectValidationCommands(workspaceDir: string): ValidationComman
   }
 
   // ── Python ───────────────────────────────────────────────────────────────
-  const hasPyproject = exists(path.join(workspaceDir, 'pyproject.toml'));
-  const hasRequirements = exists(path.join(workspaceDir, 'requirements.txt'));
+  const hasPyproject = fs.existsSync(path.join(workspaceDir, 'pyproject.toml'));
+  const hasRequirements = fs.existsSync(path.join(workspaceDir, 'requirements.txt'));
   if (hasPyproject || hasRequirements) {
     commands.push({
       id: 'pytest',

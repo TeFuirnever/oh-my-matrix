@@ -319,7 +319,7 @@ function collectArtifacts(
   if (finalSynthesis) {
     artifacts.push(...finalSynthesis.artifacts);
   }
-  return uniqueStrings(artifacts);
+  return [...new Set(artifacts)];
 }
 
 function deriveSummaryStatus(
@@ -376,8 +376,4 @@ function copyBranchState(branch: DynamicWorkflowBranchState): DynamicWorkflowBra
 
 function copyBlockedCalls(blockedCalls: NormalizedBlockedCall[]): NormalizedBlockedCall[] {
   return blockedCalls.map((call) => ({ ...call }));
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
