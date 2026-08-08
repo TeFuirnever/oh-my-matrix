@@ -49,6 +49,9 @@ export interface AutopilotProjection {
    * panel was removed, so there is no UI consumer; surfaced for logs/future use).
    * Global counter, identical across sessions. */
   checkpointWriteFailures: number;
+  /** E6 dir-1: timestamp a tool/validation is in flight (observability); undefined
+   * when idle. While set the stall patrol uses the longer per-tool cap. */
+  inFlightToolStartedAt?: number;
 }
 
 /**
@@ -115,5 +118,6 @@ export function projectState(
     modelTier,
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,
     checkpointWriteFailures: getCheckpointWriteFailureCount(),
+    inFlightToolStartedAt: state.inFlightToolStartedAt,
   };
 }

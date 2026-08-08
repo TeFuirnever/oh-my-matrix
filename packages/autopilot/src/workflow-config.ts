@@ -21,6 +21,8 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   // E3: single source of truth — DEFAULT_RETRY_JITTER (retry-queue.ts). Review
   // follow-up: previously a hardcoded 0.2 here shadowed the exported constant.
   retryJitter: DEFAULT_RETRY_JITTER,
+  // E6/P0-6 dir-2: consecutive no-output turns before the no-progress pause.
+  noProgressTurns: 3,
   workspace: {
     // E9/ADR-008: `root` removed (never consumed at runtime; worktree mgmt delegated to host).
     cleanup: 'manual',
@@ -129,7 +131,7 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
   // Track unknown fields
   const knownKeys = new Set([
     'version', 'max_concurrent', 'max_retries',
-    'stall_timeout_ms', 'max_retry_backoff_ms', 'retry_jitter', 'workspace', 'validation',
+    'stall_timeout_ms', 'max_retry_backoff_ms', 'retry_jitter', 'no_progress_turns', 'workspace', 'validation',
     'destructive_git', 'model_routing',
   ]);
   for (const key of Object.keys(raw)) {
@@ -167,6 +169,11 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
     // Clamp to [0, 1]: a jitter fraction outside that range is nonsensical and
     // could invert or zero the delay. Fail-safe to the default rather than drop.
     result.retryJitter = Math.min(Math.max(raw.retry_jitter, 0), 1);
+  }
+
+  if ('no_progress_turns' in raw && typeof raw.no_progress_turns === 'number') {
+    // 0 disables the no-progress pause; otherwise require at least 1 turn.
+    result.noProgressTurns = Math.max(0, Math.floor(raw.no_progress_turns));
   }
 
   if ('workspace' in raw && typeof raw.workspace === 'object' && raw.workspace !== null) {

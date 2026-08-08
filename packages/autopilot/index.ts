@@ -251,6 +251,18 @@ function extractLedgerActivity(toolName: string, params: unknown): TurnActivity 
   };
 }
 
+/**
+ * E6/P0-6 dir-1: while a tool/validation is in flight, the stall patrol uses
+ * this cap instead of stallTimeoutMs, so a legitimately long tool (build, slow
+ * test) doesn't false-stall at 300s. A genuinely hung tool still trips here.
+ */
+const INFLIGHT_TOOL_CAP_MS = 30 * 60 * 1000; // 30 minutes
+/**
+ * E6/P0-6 dir-2: consecutive turns with zero files/commands output before the
+ * no-progress pause fires. Overridable via WORKFLOW.md `no_progress_turns`.
+ */
+const DEFAULT_NO_PROGRESS_TURNS = 3;
+
 function defaultStallTimeoutMs(hasTokenBudget: boolean): number {
   return hasTokenBudget
     ? DEFAULT_WORKFLOW_CONFIG.stallTimeoutMs
@@ -664,10 +676,16 @@ export function register(api: OpenClawPluginApi): void {
     // spread). The flag is the host-driver handshake; without clearing it, the
     // host re-sends chat.send on every sessions.changed broadcast (infinite
     // loop). The reducer is the sole writer of needsCrossTurnResume.
-    const state = rawState.needsCrossTurnResume
-      ? orchestratorReducer(rawState, { type: 'cross_turn_resume_consumed', runId, now: Date.now() })
-      : rawState;
-    if (rawState.needsCrossTurnResume) setState(runId, state);
+    // E6 dir-1: also clear any in-flight tool marker at finalize (after_tool_call
+    // may not have fired if the model finalized mid-tool). The complete path
+    // re-sets it for validation; agent_end is the final clear.
+    const state = {
+      ...(rawState.needsCrossTurnResume
+        ? orchestratorReducer(rawState, { type: 'cross_turn_resume_consumed', runId, now: Date.now() })
+        : rawState),
+      ...(rawState.inFlightToolStartedAt != null ? { inFlightToolStartedAt: undefined } : {}),
+    };
+    if (rawState.needsCrossTurnResume || rawState.inFlightToolStartedAt != null) setState(runId, state);
 
     const decision = decideContinuation(state, {
       lastAssistantMessage: event.lastAssistantMessage,
@@ -733,9 +751,15 @@ export function register(api: OpenClawPluginApi): void {
         const now = Date.now();
         // M5: Evidence Gate — evaluate before marking done.
         // M5.3: Execute configured validation commands via child_process.exec before evaluating.
+        const evidenceCommands = state.workflow?.validation.commands ?? [];
+        // E6 dir-1 (P1-14): mark validation in-flight so the stall patrol doesn't
+        // false-stall or TOCTOU-overwrite the evidence gate during a slow run.
+        // Cleared at agent_end (the turn boundary after this finalize).
+        if (evidenceCommands.length > 0) {
+          setState(runId, { ...state, inFlightToolStartedAt: now });
+        }
         let evidenceSummary;
         try {
-          const evidenceCommands = state.workflow?.validation.commands ?? [];
           const evidenceResults = evidenceCommands.length > 0
             ? await runValidationCommands(evidenceCommands, state.workspace?.path)
             : [];
@@ -833,7 +857,7 @@ export function register(api: OpenClawPluginApi): void {
     });
 
     if (!event.error) {
-      setState(runId, afterActivity);
+      setState(runId, { ...afterActivity, inFlightToolStartedAt: undefined });
       return;
     }
     const withError = trackToolError(afterActivity, {
@@ -841,7 +865,7 @@ export function register(api: OpenClawPluginApi): void {
       args: JSON.stringify(event.params ?? {}).substring(0, 200),
       error: (event.error ?? '').substring(0, 200),
     });
-    setState(runId, withError);
+    setState(runId, { ...withError, inFlightToolStartedAt: undefined });
     warn(`[autopilot] after_tool_call error: session=${sessionKey} tool=${event.toolName} errCount=${withError.toolErrorCount}/${state.toolErrorThreshold}`);
   });
 
@@ -1067,6 +1091,9 @@ export function register(api: OpenClawPluginApi): void {
     setState(runId, {
       ...withActivity,
       permissionAudit: nextAudit,
+      // E6 dir-1: mark in-flight on dispatch (allow only — a blocked tool never
+      // runs). Cleared on after_tool_call / agent_end / before_agent_finalize.
+      ...(decision.outcome === 'allow' ? { inFlightToolStartedAt: Date.now() } : {}),
     });
     // Persist audit entry to disk (fail-silent)
     appendAuditEntry(auditEntry, state.workspace?.path ?? process.cwd());
@@ -1208,6 +1235,10 @@ export function register(api: OpenClawPluginApi): void {
       ...baseState,
       ledger: finalizedLedger,
       progress: buildProgressHeadline(finalizedLedger),
+      // E6 dir-1: clear any in-flight marker at the turn boundary (after_tool_call
+      // may not have fired — e.g. the model finalized mid-tool — and a dangling
+      // flag would permanently relax stall detection to the 30min cap).
+      inFlightToolStartedAt: undefined,
     };
     // Persist immediately: the degraded branch below re-fetches from stateByRun
     // (race-check across an await), so the ledger must be in the map before then
@@ -1724,10 +1755,16 @@ export function register(api: OpenClawPluginApi): void {
       const stallTimeoutMs = state.workflow?.stallTimeoutMs
         ?? defaultStallTimeoutMs(!!config.tokenBudget);
       if (state.enabled && state.status === 'running' && (state.orchestrationState === 'running' || state.orchestrationState === 'claimed')) {
+        // E6/P0-6 dir-1: while a tool or validation is in flight, use the longer
+        // per-tool cap so a legitimately long tool doesn't false-stall at
+        // stallTimeoutMs (300s). A genuinely hung tool still trips at the cap.
+        const effectiveStallMs = state.inFlightToolStartedAt != null
+          ? Math.max(stallTimeoutMs, INFLIGHT_TOOL_CAP_MS)
+          : stallTimeoutMs;
         const stallResult = checkStall({
           lastActivityAt: state.lastActivityAt ?? state.startedAt ?? now,
           now,
-          stallTimeoutMs,
+          stallTimeoutMs: effectiveStallMs,
           orchestrationState: state.orchestrationState,
         });
 
@@ -1739,6 +1776,29 @@ export function register(api: OpenClawPluginApi): void {
           });
           setState(runId, updated);
           warn(`[autopilot] stall detected: session=${state.sessionKey} run=${runId} lastActivity=${stallResult.stallDurationMs ?? 0}ms stall, orchState=${updated.orchestrationState}`);
+        }
+      }
+
+      // E6/P0-6 dir-2: productivity detection. A run that keeps taking turns but
+      // produces no files/commands (read-only loops, A→B→A→B churn) is "active
+      // but stuck". Count turns since the last ledger entry with output; if that
+      // meets the threshold, pause(no_progress). Input is exec-class-filtered
+      // ledger activity (E5 already filters — read-only records nothing). Fail-
+      // open: no threshold / no turns yet → skip. Guarded on status==='running'
+      // (the active family: running/claimed/released/retry_queued all derive to
+      // it) — no-progress is turn-based, not sub-state-specific.
+      if (state.enabled && state.status === 'running') {
+        const threshold = state.workflow?.noProgressTurns ?? DEFAULT_NO_PROGRESS_TURNS;
+        if (threshold > 0 && state.totalContinuations > 0 && state.ledger) {
+          const lastProgressTurn = state.ledger.entries.length > 0
+            ? state.ledger.entries[state.ledger.entries.length - 1].turn
+            : 0;
+          if (state.totalContinuations - lastProgressTurn >= threshold) {
+            const paused = orchestratorReducer(state, { type: 'pause_requested', runId, reason: 'no_progress', now });
+            setState(runId, paused);
+            setAuditMode('active');
+            warn(`[autopilot] no_progress: session=${state.sessionKey} run=${runId} ${state.totalContinuations - lastProgressTurn} turn(s) without file/command output`);
+          }
         }
       }
 

@@ -13,7 +13,10 @@ export type PauseReason =
   | 'validation_failed'
   // E2: hard caps (wall-clock + cost). Non-resumable, aligned with token_budget_exceeded.
   | 'max_duration_reached'
-  | 'max_cost_reached';
+  | 'max_cost_reached'
+  // E6/P0-6 dir-2: activity but no output for N consecutive turns. Resumable
+  // (like 'stalled' — recoverable via a user nudge), not terminal.
+  | 'no_progress';
 
 // ─── M2 Orchestration Types ──────────────────────────────────
 
@@ -50,7 +53,9 @@ export type BlockedReason =
   | 'unrecoverable_error'
   // E2: hard-cap terminations (wall-clock + cost). Non-resumable.
   | 'max_duration_reached'
-  | 'max_cost_reached';
+  | 'max_cost_reached'
+  // E6/P0-6 dir-2: no files/commands output for N consecutive turns.
+  | 'no_progress';
 
 /** Canonical set of all valid BlockedReason values — used by isValidBlockedReason type guard */
 export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<BlockedReason>([
@@ -72,6 +77,7 @@ export const VALID_BLOCKED_REASONS: ReadonlySet<BlockedReason> = new Set<Blocked
   'unrecoverable_error',
   'max_duration_reached',
   'max_cost_reached',
+  'no_progress',
 ]);
 
 /** H-2: Type guard — validates that an arbitrary string is a BlockedReason.
@@ -109,6 +115,7 @@ export function pauseReasonToBlockedReason(reason: PauseReason): BlockedReason {
     case 'injection_rejected': return 'injection_rejected';
     case 'max_duration_reached': return 'max_duration_reached';
     case 'max_cost_reached': return 'max_cost_reached';
+    case 'no_progress': return 'no_progress';
   }
 }
 
@@ -228,6 +235,11 @@ export interface WorkflowConfig {
    * Default 0.2 (see DEFAULT_WORKFLOW_CONFIG); 0 disables (deterministic).
    */
   retryJitter?: number;
+  /**
+   * E6/P0-6 dir-2: consecutive turns with zero files/commands output that trips
+   * the no-progress pause. Default 3 (see DEFAULT_WORKFLOW_CONFIG). 0 disables.
+   */
+  noProgressTurns?: number;
   workspace: {
     // E9/ADR-008: `root` removed — autopilot delegates worktree management to the
     // host; root was never consumed at runtime. (state.workspace.root on
@@ -322,6 +334,14 @@ export interface AutopilotState {
   /** E5: structured progress ledger (bounded; persisted via checkpoint at the
    *  E1-unified root). Replaces the "Turn N/M" counter string. */
   ledger?: Ledger;
+  /**
+   * E6/P0-6 dir-1: timestamp a tool/validation was dispatched (in-flight). While
+   * set, the stall patrol uses the longer per-tool cap (not stallTimeoutMs) so a
+   * legitimately long tool doesn't false-stall. Cleared on after_tool_call /
+   * agent_end / before_agent_finalize to avoid a dangling field permanently
+   * disabling stall detection.
+   */
+  inFlightToolStartedAt?: number;
   degraded: boolean;
   // M2 orchestration fields (all optional for backward compat)
   orchestrationState?: OrchestrationState;
