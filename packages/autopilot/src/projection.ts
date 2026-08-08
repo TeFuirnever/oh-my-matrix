@@ -1,6 +1,7 @@
 import type { AutopilotState, ToolErrorEntry, EvidenceCommandResult, ThinkingIntensity, ModelTier, AutopilotConfig } from './types';
 import { resolveThinkingIntensity } from './effort-injection';
 import { resolveModelTier, resolveModelId } from './model-routing';
+import { getCheckpointWriteFailureCount } from './state-persister';
 
 export interface AutopilotProjection {
   status: AutopilotState['status'];
@@ -43,6 +44,10 @@ export interface AutopilotProjection {
   modelTier?: ModelTier;
   /** Recommended model ID for current tier (observability) */
   recommendedModelId?: string;
+  /** E8 / P2-18: checkpoint write-failure count (observability only — the run
+   * panel was removed, so there is no UI consumer; surfaced for logs/future use).
+   * Global counter, identical across sessions. */
+  checkpointWriteFailures: number;
 }
 
 /**
@@ -112,5 +117,6 @@ export function projectState(
       : undefined,
     modelTier,
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,
+    checkpointWriteFailures: getCheckpointWriteFailureCount(),
   };
 }

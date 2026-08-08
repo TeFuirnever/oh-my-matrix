@@ -407,6 +407,20 @@ describe('fail-silent contract', () => {
   });
 });
 
+describe('E8 — checkpoint persists toolErrorThreshold + maxConcurrentAutopilot (no hardcoded-5 drift)', () => {
+  it('restores the configured thresholds, not the old hardcoded 5', async () => {
+    const state = makeState({
+      runId: 'run-thresh', sessionKey: 'sess-thresh',
+      toolErrorThreshold: 7, maxConcurrentAutopilot: 9,
+    });
+    saveCheckpoint(state, 'run-thresh', tmpRoot);
+    await flushWrites();
+    const loaded = loadCheckpoint('run-thresh', tmpRoot);
+    expect(loaded?.toolErrorThreshold).toBe(7);
+    expect(loaded?.maxConcurrentAutopilot).toBe(9);
+  });
+});
+
 describe('E1 — migrateLegacyCheckpoints', () => {
   let legacyDir: string;
   let destDir: string;

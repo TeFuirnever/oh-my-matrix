@@ -977,6 +977,8 @@ describe('plugin-entry register()', () => {
       await statusHandler({ params: { sessionKey: 'sess-canary4' }, respond: respondStatus });
       expect(respondStatus.mock.calls[0][1]?.projection.needsCrossTurnResume).toBe(true);
       expect(respondStatus.mock.calls[0][1]?.projection.degraded).toBe(true);
+      // E8/P1-9: rejected-fallback path must advance totalContinuations (0 -> 1).
+      expect(respondStatus.mock.calls[0][1]?.projection.totalContinuations).toBe(1);
     });
 
     it('sets cross-turn resume when degraded fallback enqueue rejects', async () => {
@@ -996,6 +998,8 @@ describe('plugin-entry register()', () => {
       await statusHandler({ params: { sessionKey: 'sess-canary5' }, respond: respondStatus });
       expect(respondStatus.mock.calls[0][1]?.projection.needsCrossTurnResume).toBe(true);
       expect(respondStatus.mock.calls[0][1]?.projection.degraded).toBe(true);
+      // E8/P1-9: throws-fallback path must advance totalContinuations (0 -> 1).
+      expect(respondStatus.mock.calls[0][1]?.projection.totalContinuations).toBe(1);
     });
   });
 
@@ -1032,6 +1036,9 @@ describe('plugin-entry register()', () => {
       // degraded must be true AND needsCrossTurnResume must be true for recovery
       expect(projection.degraded).toBe(true);
       expect(projection.needsCrossTurnResume).toBe(true);
+      // E8/P1-9: the fallback must advance totalContinuations or degraded mode has
+      // no termination (0 -> 1). A regression that drops the increment leaves this 0.
+      expect(projection.totalContinuations).toBe(1);
 
       // Restore
       mock.api.session.workflow.enqueueNextTurnInjection = originalFn;
