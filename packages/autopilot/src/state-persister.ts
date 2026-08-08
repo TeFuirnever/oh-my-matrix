@@ -558,8 +558,10 @@ const RESUMABLE_BLOCKED_LOCAL: ReadonlySet<string> = new Set([
   'validation_failed',
   'evidence_missing',
   'injection_rejected',
+  'no_progress', // E6 — keep in sync with orchestrator.ts RESUMABLE_BLOCKED_REASONS
 ]);
-function isResumableBlockedReason(reason: string): boolean {
+/** Exported for the parity test (keeps the mirror honest vs orchestrator.ts). */
+export function isResumableBlockedReason(reason: string): boolean {
   return RESUMABLE_BLOCKED_LOCAL.has(reason);
 }
 
