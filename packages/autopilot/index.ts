@@ -130,6 +130,11 @@ function kickResumedTurn(runId: string, state: AutopilotState): void {
   if (state.orchestrationState !== 'claimed') return;
   const enqueue = enqueueInjectionFn;
   if (typeof enqueue !== 'function') return;
+  // E13/§7 invariant: the idempotency key is derived from totalContinuations
+  // (via lastActivityAt fallback). This derivation MUST stay tied to the turn
+  // number — it is what lets openclaw's dedup collapse a double-kick of the SAME
+  // resumed turn. Changing the derivation (e.g. to a random nonce per kick) would
+  // break that dedup; if ever changed, re-anchor the rationale here.
   void Promise.resolve(
     enqueue({
       sessionKey: state.sessionKey,
@@ -610,16 +615,15 @@ export function register(api: OpenClawPluginApi): void {
       if (restored) {
         stateByRun.set(runId, restored);
         sessionKeyToRunId.set(restored.sessionKey, runId);
-        if (restored.needsCrossTurnResume) {
-          // E11: enqueueInjectionFn is set above (before this restore loop), so
-          // kick now rather than waiting for the next stall/retry tick. A
-          // restored mid-cross-turn run is 'claimed' and cannot start a turn on
-          // its own — without this kick it sits dead until the 24h orphan sweep.
-          // kickResumedTurn self-guards on orchState==='claimed'. NOTE (E13):
-          // this is a cross-turn send path; E13 (P3-29) must account for it when
-          // hardening gateway-restart double-spend.
-          kickResumedTurn(runId, restored);
-        }
+        // E13/P3-29: a restored mid-cross-turn run (needsCrossTurnResume) is NO
+        // LONGER auto-kicked here. Pre-E13 this restore-time kick was the implicit
+        // "flag → turn" link: gateway restart cleared openclaw's in-memory dedup,
+        // so re-kicking with the same idempotency key spent a SECOND real turn
+        // (double-spend). Continuation is now EXPLICIT — the driver/host calls
+        // `autopilot.resume_run` once to resume. needsCrossTurnResume stays true
+        // as a state fact (the run is mid-cross-turn); the stall path remains a
+        // slow fallback (kicks after stallTimeout). Full no-double-spend needs the
+        // MA driver to consume resume_run (cross-repo, out of OMM scope).
       }
     }
     if (migratedCount > 0) {
@@ -1541,6 +1545,45 @@ export function register(api: OpenClawPluginApi): void {
       // Re-acquire audit monitor mode on resume.
       setAuditMode('monitor');
       respond(true, { ok: true });
+  });
+
+  // E13/P3-29: the EXPLICIT continuation driver for a mid-cross-turn run. This
+  // replaces the pre-E13 implicit "needsCrossTurnResume flag re-broadcast → turn"
+  // link (the restore loop no longer auto-kicks). The driver/host calls this RPC
+  // once to deterministically resume, so a gateway restart can't double-spend a
+  // turn via a stale flag re-broadcast with an already-cleared dedup map. The
+  // flag stays as a state fact; this RPC is the single continuation trigger.
+  // (Full no-double-spend requires the MA driver to consume this RPC — cross-repo.)
+  api.registerGatewayMethod('autopilot.resume_run', async ({ params: ctx, respond }: GatewayCtx) => {
+    const sessionKey = ctx.sessionKey as string | undefined;
+    if (!sessionKey) { respond(false, undefined, { code: 'INVALID_REQUEST', message: 'missing sessionKey' }); return; }
+
+    const entry = findRunBySession(sessionKey);
+    if (!entry) { respond(false, undefined, { code: 'INVALID_REQUEST', message: 'no active run for session' }); return; }
+
+    const [runId, state] = entry;
+    if (!state.needsCrossTurnResume) {
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: 'run is not mid-cross-turn (needsCrossTurnResume is false)' });
+      return;
+    }
+    if (state.status !== 'running') {
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: `cannot resume_run from status "${state.status}"` });
+      return;
+    }
+    // kickResumedTurn self-guards on orchState==='claimed' (the only state a
+    // cross-turn resume can kick from — cross_turn_degraded/retry_due land in
+    // 'claimed'). Requiring it here avoids a misleading respond(true) when the
+    // run is mid-cross-turn but NOT claimed (e.g. crashed mid-turn as 'running'),
+    // where the kick would silently no-op.
+    if (state.orchestrationState !== 'claimed') {
+      respond(false, undefined, { code: 'INVALID_REQUEST', message: `run is not in a resumable claimed state (orchestrationState="${state.orchestrationState ?? 'n/a'}")` });
+      return;
+    }
+    // The idempotency key is derived from totalContinuations (see kickResumedTurn)
+    // — that derivation is the invariant E13 preserves.
+    kickResumedTurn(runId, state);
+    log(`[autopilot] resume_run: session=${sessionKey} run=${runId} explicit cross-turn resume`);
+    respond(true, { ok: true, runId });
   });
 
   api.registerGatewayMethod('autopilot.stop', async ({ params: ctx, respond }: GatewayCtx) => {

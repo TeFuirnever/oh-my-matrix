@@ -153,46 +153,96 @@ async function restoreRunWithKickSpy(runId: string, state: ReturnType<typeof cre
   _resetForTest();
   _enableCheckpointingForTest();
   register(api);
-  return enqueue;
+  return { enqueue, gatewayMethods: base.gatewayMethods };
 }
 
-describe('E11 — crash-recovery kicks a restored mid-cross-turn run', () => {
-  it('a restored needsCrossTurnResume CLAIMED run is kicked on register()', async () => {
-    // §2.7 real-run shape: orchState 'claimed' + needsCrossTurnResume, never
-    // kicked → dead until the 24h sweep. enqueueInjectionFn is set before the
-    // restore loop, so the kick fires at restore, not on the stall tick.
-    const enqueue = await restoreRunWithKickSpy('run-crash', {
+describe('E13 — crash-recovery no longer auto-kicks; explicit resume_run RPC', () => {
+  it('a restored needsCrossTurnResume CLAIMED run is NOT auto-kicked on register()', async () => {
+    // E13/P3-29: the pre-E13 restore-time kick was the implicit "flag → turn"
+    // link that double-spent a turn after a gateway restart (dedup cleared).
+    // Restored mid-cross-turn runs now wait for the explicit resume_run RPC.
+    const { enqueue } = await restoreRunWithKickSpy('run-crash', {
       ...createInitialState('sess-crash', 'run-crash'),
       orchestrationState: 'claimed' as const,
+      status: 'running' as const,
       enabled: true,
       needsCrossTurnResume: true,
-    });
-    expect(enqueue).toHaveBeenCalledTimes(1);
-    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ sessionKey: 'sess-crash' }));
-  });
-
-  it('a restored run WITHOUT needsCrossTurnResume is not kicked', async () => {
-    // Over-kick guard: only mid-cross-turn (needsCrossTurnResume) restored runs
-    // get the kick; a plain claimed run is left for the stall/retry tick.
-    const enqueue = await restoreRunWithKickSpy('run-plain', {
-      ...createInitialState('sess-plain', 'run-plain'),
-      orchestrationState: 'claimed' as const,
-      enabled: true,
-      needsCrossTurnResume: false,
     });
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('a restored needsCrossTurnResume run in a NON-claimed state is NOT kicked', async () => {
-    // Pins kickResumedTurn's orchState==='claimed' guard (index.ts ~line 114):
-    // a run that was mid-turn ('running') at crash has needsCrossTurnResume but
-    // is not 'claimed', so it must NOT be force-kicked — stall detection owns
-    // it. Drop the guard and this test goes red.
-    const enqueue = await restoreRunWithKickSpy('run-running', {
-      ...createInitialState('sess-running', 'run-running'),
-      orchestrationState: 'running' as const,
+  it('the explicit autopilot.resume_run RPC drives the resumed turn', async () => {
+    // E13: continuation is now a single explicit RPC, not a flag re-broadcast.
+    const { enqueue, gatewayMethods } = await restoreRunWithKickSpy('run-resume', {
+      ...createInitialState('sess-resume', 'run-resume'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
       enabled: true,
       needsCrossTurnResume: true,
+    });
+    expect(enqueue).not.toHaveBeenCalled(); // still not auto-kicked
+    // The driver calls resume_run once → the turn is kicked (idempotency key
+    // derived from totalContinuations — the E13-preserved invariant).
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-resume' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(true);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ sessionKey: 'sess-resume' }));
+    // E13/§7 invariant with teeth: the idempotency key is derived from
+    // totalContinuations (lastActivityAt is unset on this fixture → 0). Pinning
+    // the value guards the comment in kickResumedTurn against silent refactors.
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'autopilot-resume-run-resume-0' }));
+  });
+
+  it('resume_run rejects a run that is not mid-cross-turn', async () => {
+    const { gatewayMethods } = await restoreRunWithKickSpy('run-noctx', {
+      ...createInitialState('sess-noctx', 'run-noctx'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: false,
+    });
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-noctx' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it('resume_run rejects a mid-cross-turn run that is NOT in a claimed state', async () => {
+    // needsCrossTurnResume + status running, but orchState 'running' (crashed
+    // mid-turn) — kickResumedTurn would silently no-op, so resume_run must refuse
+    // rather than report a misleading success.
+    const { enqueue, gatewayMethods } = await restoreRunWithKickSpy('run-midrun', {
+      ...createInitialState('sess-midrun', 'run-midrun'),
+      orchestrationState: 'running' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    });
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-midrun' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('resume_run rejects a mid-cross-turn run that is not running (e.g. paused)', async () => {
+    const { gatewayMethods } = await restoreRunWithKickSpy('run-paused', {
+      ...createInitialState('sess-paused', 'run-paused'),
+      orchestrationState: 'blocked' as const,
+      status: 'paused' as const,
+      enabled: false,
+      needsCrossTurnResume: true,
+    });
+    const respond = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-paused' }, respond });
+    expect(respond.mock.calls[0][0]).toBe(false);
+  });
+
+  it('a restored run WITHOUT needsCrossTurnResume is not kicked', async () => {
+    const { enqueue } = await restoreRunWithKickSpy('run-plain', {
+      ...createInitialState('sess-plain', 'run-plain'),
+      orchestrationState: 'claimed' as const,
+      enabled: true,
+      needsCrossTurnResume: false,
     });
     expect(enqueue).not.toHaveBeenCalled();
   });
