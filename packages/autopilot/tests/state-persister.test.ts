@@ -363,7 +363,6 @@ describe('Reviewer #1 Finding 2a/2b/2c — workspace/retry/workflow reconstructi
 
   it('restores the workflow config so validation commands are not skipped', async () => {
     const state = makeState({
-      // @ts-expect-error — partial workflow for test
       workflow: {
         version: 1,
         source: 'workflow_md',
@@ -371,7 +370,7 @@ describe('Reviewer #1 Finding 2a/2b/2c — workspace/retry/workflow reconstructi
         maxRetries: 3,
         stallTimeoutMs: 300000,
         maxRetryBackoffMs: 60000,
-        workspace: { root: tmpRoot, cleanup: 'manual', branchPrefix: 'ap', allowDirtyBase: false },
+        workspace: { cleanup: 'manual', branchPrefix: 'ap', allowDirtyBase: false },
         validation: { commands: [{ id: 't', command: 'npm test', timeoutMs: 30000, required: true }], failOnOptional: true },
         destructiveGit: { allow: false },
         warnings: [],

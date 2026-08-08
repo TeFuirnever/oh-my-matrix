@@ -22,7 +22,7 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   // follow-up: previously a hardcoded 0.2 here shadowed the exported constant.
   retryJitter: DEFAULT_RETRY_JITTER,
   workspace: {
-    root: '.matrix/autopilot-worktrees',
+    // E9/ADR-008: `root` removed (never consumed at runtime; worktree mgmt delegated to host).
     cleanup: 'manual',
     branchPrefix: 'autopilot',
     allowDirtyBase: false,
@@ -171,22 +171,15 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
 
   if ('workspace' in raw && typeof raw.workspace === 'object' && raw.workspace !== null) {
     const ws = raw.workspace as Record<string, unknown>;
-    // Trust-boundary check: WORKFLOW.md is attacker-controllable workspace content.
-    // workspace.root is not consumed at runtime today (autopilot delegates worktree
-    // management to the host per ADR-008), but reject `..` traversal segments as
-    // defense-in-depth so a root cannot escape its base if a host ever resolves it
-    // via path.join. Absolute paths are left to the host's own containment check —
-    // they are explicit targets, not traversal.
-    let root = DEFAULT_WORKFLOW_CONFIG.workspace.root;
-    if (typeof ws.root === 'string') {
-      if (ws.root.split(/[\\/]/).includes('..')) {
-        warnings.push(`workspace.root "${ws.root}" contains ".." traversal — using default (${DEFAULT_WORKFLOW_CONFIG.workspace.root})`);
-      } else {
-        root = ws.root;
-      }
+    // E9/ADR-008: workspace.root is removed (autopilot delegates worktree management
+    // to the host; root was never consumed at runtime). Warn on its presence so
+    // existing WORKFLOW.md files get migration feedback rather than a silent drop.
+    // NOTE: state.workspace.root (WorkspaceRecord) is a DIFFERENT field — the
+    // checkpoint root (P0-2/E1) — and is untouched here.
+    if ('root' in ws) {
+      warnings.push('workspace.root is no longer supported (removed per ADR-008; autopilot delegates worktree management to the host) — remove this line from WORKFLOW.md');
     }
     result.workspace = {
-      root,
       cleanup: ws.cleanup === 'delete_on_done' ? 'delete_on_done' : 'manual',
       branchPrefix: typeof ws.branch_prefix === 'string' ? ws.branch_prefix : 'autopilot',
       baseRef: typeof ws.base_ref === 'string' ? ws.base_ref : undefined,

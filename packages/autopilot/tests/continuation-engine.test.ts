@@ -353,7 +353,7 @@ describe('continuation-engine', () => {
         maxRetries: 3,
         stallTimeoutMs: 300000,
         maxRetryBackoffMs: 60000,
-        workspace: { root: '/tmp', cleanup: 'manual', branchPrefix: 'ap', allowDirtyBase: false },
+        workspace: { cleanup: 'manual', branchPrefix: 'ap', allowDirtyBase: false },
         validation: { commands: commands as never, failOnOptional: false },
         destructiveGit: { allow: false },
         warnings: [],
