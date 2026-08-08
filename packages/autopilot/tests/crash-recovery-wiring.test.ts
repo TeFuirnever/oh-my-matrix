@@ -17,7 +17,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { register, _resetForTest, _getInternalStateForTest } from '../index';
-import { _flushAllWritesForTest, _enableCheckpointingForTest, _disableCheckpointingForTest } from '../src/state-persister';
+import { saveCheckpoint, _flushAllWritesForTest, _enableCheckpointingForTest, _disableCheckpointingForTest, _setCheckpointRootForTest } from '../src/state-persister';
+import { createInitialState } from '../src/types';
 
 let tmpRoot: string;
 let originalCwd: string;
@@ -39,19 +40,24 @@ function createMockApi(pluginConfig?: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  // Use a tmpdir as BOTH the cwd (so process.cwd()-based checkpoint resolution
-  // lands here) and the workspace root. This is the key isolation trick —
-  // production reads process.cwd(), tests chdir into tmp.
+  // Use a tmpdir as the checkpoint root. Production resolves a fixed user-level
+  // root via getCheckpointRoot() (E1/P0-2); tests redirect it here via
+  // _setCheckpointRootForTest. chdir into tmp keeps process.cwd() aligned as the
+  // legacy-migration candidate register() scans.
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-wire-'));
   originalCwd = process.cwd();
   process.chdir(tmpRoot);
   _resetForTest();
   _enableCheckpointingForTest();
+  // E1: route the index.ts checkpoint root (now fixed/user-level) at this tmpdir
+  // so real-disk reads/writes land here, not in ~/.matrix.
+  _setCheckpointRootForTest(tmpRoot);
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
   _disableCheckpointingForTest();
+  _setCheckpointRootForTest(undefined);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -132,6 +138,96 @@ describe('crash-recovery wiring — setState → checkpoint → register() resto
     const stateArg = statusRespond.mock.calls[0]?.[1];
     // projection may not include goal directly, but the run is restored — verify via progress field presence.
     expect(stateArg).toBeDefined();
+  });
+});
+
+// E11 helper: checkpoint `state`, simulate a restart (wipe + re-register) with
+// an enqueue spy wired as the kick actuator. Returns the spy so each test
+// asserts only on the kick behavior that distinguishes it.
+async function restoreRunWithKickSpy(runId: string, state: ReturnType<typeof createInitialState>) {
+  saveCheckpoint(state, runId, tmpRoot);
+  await _flushAllWritesForTest();
+  const enqueue = vi.fn(async () => ({ enqueued: true }));
+  const base = createMockApi({ maxConcurrentAutopilot: 10 });
+  const api = { ...base.api, session: { ...base.api.session, workflow: { enqueueNextTurnInjection: enqueue } } };
+  _resetForTest();
+  _enableCheckpointingForTest();
+  register(api);
+  return enqueue;
+}
+
+describe('E11 — crash-recovery kicks a restored mid-cross-turn run', () => {
+  it('a restored needsCrossTurnResume CLAIMED run is kicked on register()', async () => {
+    // §2.7 real-run shape: orchState 'claimed' + needsCrossTurnResume, never
+    // kicked → dead until the 24h sweep. enqueueInjectionFn is set before the
+    // restore loop, so the kick fires at restore, not on the stall tick.
+    const enqueue = await restoreRunWithKickSpy('run-crash', {
+      ...createInitialState('sess-crash', 'run-crash'),
+      orchestrationState: 'claimed' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ sessionKey: 'sess-crash' }));
+  });
+
+  it('a restored run WITHOUT needsCrossTurnResume is not kicked', async () => {
+    // Over-kick guard: only mid-cross-turn (needsCrossTurnResume) restored runs
+    // get the kick; a plain claimed run is left for the stall/retry tick.
+    const enqueue = await restoreRunWithKickSpy('run-plain', {
+      ...createInitialState('sess-plain', 'run-plain'),
+      orchestrationState: 'claimed' as const,
+      enabled: true,
+      needsCrossTurnResume: false,
+    });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('a restored needsCrossTurnResume run in a NON-claimed state is NOT kicked', async () => {
+    // Pins kickResumedTurn's orchState==='claimed' guard (index.ts ~line 114):
+    // a run that was mid-turn ('running') at crash has needsCrossTurnResume but
+    // is not 'claimed', so it must NOT be force-kicked — stall detection owns
+    // it. Drop the guard and this test goes red.
+    const enqueue = await restoreRunWithKickSpy('run-running', {
+      ...createInitialState('sess-running', 'run-running'),
+      orchestrationState: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('E1 — register() migrates a legacy-cwd checkpoint into the fixed root', () => {
+  it('restores a run whose checkpoint lived in the pre-fix cwd location', async () => {
+    // Code-review (Standards) finding: register()'s migrateLegacyCheckpoints
+    // wiring is otherwise untested — in the other tests process.cwd()===override
+    // so migration always hits the canonical-equality skip. Here they differ.
+    const legacyCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-legcwd-'));
+    const fixedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autopilot-fixed-'));
+    try {
+      const state = { ...createInitialState('sess-leg', 'run-leg'), orchestrationState: 'claimed' as const, enabled: true };
+      saveCheckpoint(state, 'run-leg', legacyCwd);
+      await _flushAllWritesForTest();
+
+      // Distinct fixed root; chdir to the legacy location so register()'s
+      // migrateLegacyCheckpoints([process.cwd()]) finds and moves the checkpoint.
+      process.chdir(legacyCwd);
+      _resetForTest();
+      _enableCheckpointingForTest();
+      _setCheckpointRootForTest(fixedRoot);
+      const mock = createMockApi({ maxConcurrentAutopilot: 10 });
+      register(mock.api);
+
+      // Restored — proves register()'s wiring migrated legacy→fixed root.
+      // Without migration, listResumableCheckpoints(fixedRoot) returns [].
+      expect(_getInternalStateForTest().stateByRunSize).toBe(1);
+    } finally {
+      process.chdir(originalCwd);
+      _setCheckpointRootForTest(undefined);
+      fs.rmSync(legacyCwd, { recursive: true, force: true });
+      fs.rmSync(fixedRoot, { recursive: true, force: true });
+    }
   });
 });
 

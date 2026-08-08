@@ -25,6 +25,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import type { AutopilotState } from './types';
 import type { WorkspaceRecord, RetryEntry, WorkflowConfig } from './types';
 import { deriveStatus } from './orchestrator';
@@ -49,6 +50,26 @@ let _checkpointingDisabledForTest = false;
 export function _disableCheckpointingForTest(): void { _checkpointingDisabledForTest = true; }
 export function _enableCheckpointingForTest(): void { _checkpointingDisabledForTest = false; }
 export function _isCheckpointingDisabledForTest(): boolean { return _checkpointingDisabledForTest; }
+
+/**
+ * E1 / P0-2: the checkpoint root is a FIXED user-level location, decoupled from
+ * the run's workspace. Previously writes landed at `state.workspace.root` (or
+ * process.cwd()) while reads hardcoded process.cwd() — so a run activated with a
+ * configured workspacePath was structurally unrecoverable (its checkpoint sat in
+ * the workspace dir; reads scanned the gateway cwd). A checkpoint is engine
+ * coordination state, not workspace content (ADR-008), so it lives under the
+ * user's matrix dir, not the workspace. `state.workspace` is still persisted ON
+ * the checkpoint (containment boundary) — only the FILE LOCATION is decoupled.
+ *
+ * The persister functions still take a `workspaceRoot` and append
+ * `.autopilot/checkpoints`; callers pass this fixed root so the dir resolves to
+ * `~/.matrix/.autopilot/checkpoints`.
+ */
+let _checkpointRootOverride: string | undefined;
+export function _setCheckpointRootForTest(root: string | undefined): void { _checkpointRootOverride = root; }
+export function getCheckpointRoot(): string {
+  return _checkpointRootOverride ?? path.join(os.homedir(), '.matrix');
+}
 
 /**
  * Resolve the checkpoint directory for a workspace root, following symlinks
@@ -381,7 +402,16 @@ export function listResumableCheckpoints(workspaceRoot: string): string[] {
   if (!fs.existsSync(dir)) return [];
   let files: string[];
   try {
-    files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && f !== SESSION_INDEX_FILE);
+    const all = fs.readdirSync(dir);
+    // E1 / §5.8: sweep `.tmp.*` orphans left by a crash mid-atomicWriteFileSync
+    // (the tmp file is written beside the target, then renamed; a crash between
+    // leaves garbage). Always stale — unlink on sight during the directory scan.
+    for (const f of all) {
+      if (f.includes('.tmp.')) {
+        try { fs.unlinkSync(path.join(dir, f)); } catch { /* fail-silent */ }
+      }
+    }
+    files = all.filter(f => f.endsWith('.json') && f !== SESSION_INDEX_FILE);
   } catch {
     return [];
   }
@@ -420,6 +450,82 @@ export function listResumableCheckpoints(workspaceRoot: string): string[] {
     }
   }
   return resumable;
+}
+
+/**
+ * E1 / P0-2: one-time migration of checkpoints from legacy locations (where the
+ * pre-fix code wrote/read — `process.cwd()/.autopilot/checkpoints`, typically
+ * the gateway install dir) into the fixed root. Writes SYNCHRONOUSLY (not via
+ * saveCheckpoint's async lock chain) so the dest files are on disk before
+ * register()'s restore loop reads them — no race.
+ *
+ * Limitation: checkpoints scattered under past `state.workspace.root` dirs
+ * cannot be auto-discovered without a workspace registry (form B, rejected).
+ * Only the passed legacy roots are migrated; workspace-scattered checkpoints
+ * are a documented manual move. Forward of this fix every new checkpoint lands
+ * in the fixed root regardless of workspace, so this is a one-time legacy
+ * concern. Returns the count migrated (for a startup log line).
+ */
+export function migrateLegacyCheckpoints(legacyRoots: readonly string[]): number {
+  if (_checkpointingDisabledForTest) return 0;
+  const destRoot = getCheckpointRoot();
+  let migrated = 0;
+  for (const legacy of legacyRoots) {
+    if (!legacy) continue;
+    // Compare CANONICAL checkpoint dirs (realpath), not string paths: on macOS
+    // /var and /private/var differ as strings but resolve to the same dir, so a
+    // string compare would wrongly treat the fixed root as a "legacy" location
+    // and delete the checkpoint it just wrote.
+    let legacyDir: string;
+    let destDir: string;
+    try {
+      legacyDir = getCheckpointDir(legacy);
+      destDir = getCheckpointDir(destRoot);
+    } catch { continue; }
+    if (legacyDir === destDir) continue; // already the fixed root
+    let runIds: string[];
+    try {
+      runIds = listResumableCheckpoints(legacy);
+    } catch {
+      continue;
+    }
+    let rootMigrated = 0;
+    for (const runId of runIds) {
+      const state = loadCheckpoint(runId, legacy);
+      if (!state) continue;
+      // Sync dest write — must land before the restore loop reads the fixed root.
+      let destOk = false;
+      try {
+        const cp = buildCheckpoint(state, runId, destRoot);
+        atomicWriteFileSync(getCheckpointPath(destRoot, runId), JSON.stringify(cp));
+        updateSessionIndex(destRoot, cp.sessionKey, runId);
+        destOk = true;
+      } catch (e) {
+        _writeFailureCount++;
+        try { console.error('[autopilot] checkpoint migration failed:', e); } catch { /* noop */ }
+      }
+      // Delete the legacy copy ONLY on successful dest write — a failed dest
+      // write must not lose the run (leave it for a retry rather than orphan it).
+      if (destOk) {
+        try {
+          const legacyPath = getCheckpointPath(legacy, runId);
+          if (fs.existsSync(legacyPath)) fs.unlinkSync(legacyPath);
+        } catch { /* fail-silent */ }
+        migrated++;
+        rootMigrated++;
+      }
+    }
+    // Drop the legacy session-index ONLY if runs actually moved from this root —
+    // otherwise skipped (e.g. workspace-gone) runs keep their index entries
+    // rather than being silently de-indexed.
+    if (rootMigrated > 0) {
+      try {
+        const legacyIndex = getSessionIndexPath(legacy);
+        if (fs.existsSync(legacyIndex)) fs.unlinkSync(legacyIndex);
+      } catch { /* fail-silent */ }
+    }
+  }
+  return migrated;
 }
 
 // Mirror of RESUMABLE_BLOCKED_REASONS from orchestrator.ts (kept local to avoid

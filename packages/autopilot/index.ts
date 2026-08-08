@@ -5,9 +5,6 @@ import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-inj
 import { resolveModelTier, resolveModelId, isSubagentSession, parseModelRouting, extractParentSessionKey } from './src/model-routing';
 import { log, warn, error, logWithContext } from './src/logger';
 import {
-  activate,
-  deactivate,
-  pause,
   resume,
   incrementTurn,
   incrementTotal,
@@ -36,7 +33,10 @@ import {
   lookupRunIdBySessionKey,
   listResumableCheckpoints,
   clearSessionIndexEntry,
+  getCheckpointRoot,
+  migrateLegacyCheckpoints,
   _disableCheckpointingForTest,
+  _setCheckpointRootForTest,
 } from './src/state-persister';
 
 // Public re-export so consumers import AutopilotProjection from the package
@@ -197,15 +197,10 @@ export function _resetForTest(): void {
   if (stallInterval) { clearInterval(stallInterval); stallInterval = null; }
 }
 
-/**
- * Resolve the workspace root under which checkpoints are stored for a run.
- * Prefers the run's own workspace.root (the containment boundary the run was
- * activated under); falls back to process.cwd() so checkpointing still works
- * for runs activated before a workspace record is attached.
- */
-function resolveCheckpointRoot(state: AutopilotState): string {
-  return state.workspace?.root ?? process.cwd();
-}
+// E1/P0-2: checkpoint root is a fixed user-level location (getCheckpointRoot),
+// decoupled from the run's workspace — see state-persister.ts. Callers below
+// all pass getCheckpointRoot(); the run's workspace is persisted ON the
+// checkpoint (containment boundary), only the FILE LOCATION is decoupled.
 
 /**
  * Decide whether a state transition should trigger a checkpoint write. We write
@@ -239,13 +234,13 @@ function persistAfterTransition(runId: string, prev: AutopilotState | undefined,
   // so it can't be resurrected stale on a later restart, and clear the index.
   const orch = next.orchestrationState;
   if (orch === 'done' || (orch === 'blocked' && next.blockedReason === 'user_stopped')) {
-    const root = resolveCheckpointRoot(next);
+    const root = getCheckpointRoot();
     deleteCheckpoint(runId, root);
     clearSessionIndexEntry(root, next.sessionKey);
     return;
   }
   if (shouldCheckpoint(prev, next)) {
-    saveCheckpoint(next, runId, resolveCheckpointRoot(next));
+    saveCheckpoint(next, runId, getCheckpointRoot());
   }
 }
 
@@ -347,7 +342,7 @@ function evictOldestRuns(): void {
     // S8: release audit refCount for an evicted still-running run before delete.
     if (oldestState?.status === 'running') setAuditMode('active');
     // Review #4 #6b: also delete the checkpoint so evicted runs don't leak files.
-    if (oldestState) deleteCheckpoint(oldestRunId, resolveCheckpointRoot(oldestState));
+    if (oldestState) deleteCheckpoint(oldestRunId, getCheckpointRoot());
     stateByRun.delete(oldestRunId);
     if (oldestState) {
       sessionKeyToRunId.delete(oldestState.sessionKey);
@@ -489,7 +484,11 @@ export function register(api: OpenClawPluginApi): void {
   // released/unclaimed) whose workspace still exists. Restored runs are marked
   // degraded:true so operators can tell a restored run from a fresh one.
   {
-    const root = process.cwd();
+    // E1/P0-2: migrate legacy-location checkpoints (the gateway-cwd read
+    // location) into the fixed root, then read from the fixed root. Going
+    // forward every checkpoint lands in the fixed root regardless of workspace.
+    const migratedCount = migrateLegacyCheckpoints([process.cwd()]);
+    const root = getCheckpointRoot();
     const resumable = listResumableCheckpoints(root);
     for (const runId of resumable) {
       const restored = loadCheckpoint(runId, root);
@@ -497,10 +496,19 @@ export function register(api: OpenClawPluginApi): void {
         stateByRun.set(runId, restored);
         sessionKeyToRunId.set(restored.sessionKey, runId);
         if (restored.needsCrossTurnResume) {
-          // A restored run that was mid-cross-turn needs a kick to restart the
-          // agent loop; defer to kickResumedTurn once enqueueInjectionFn is set.
+          // E11: enqueueInjectionFn is set above (before this restore loop), so
+          // kick now rather than waiting for the next stall/retry tick. A
+          // restored mid-cross-turn run is 'claimed' and cannot start a turn on
+          // its own — without this kick it sits dead until the 24h orphan sweep.
+          // kickResumedTurn self-guards on orchState==='claimed'. NOTE (E13):
+          // this is a cross-turn send path; E13 (P3-29) must account for it when
+          // hardening gateway-restart double-spend.
+          kickResumedTurn(runId, restored);
         }
       }
+    }
+    if (migratedCount > 0) {
+      log(`[autopilot] checkpoint migration: moved ${migratedCount} run(s) into the fixed root`);
     }
     if (resumable.length > 0) {
       log(`[autopilot] crash-recovery: restored ${stateByRun.size} run(s) from checkpoints`);
@@ -588,7 +596,7 @@ export function register(api: OpenClawPluginApi): void {
         return buildCrossTurnReviseFallback(runId, state, decision.retryInstruction);
       }
       case 'pause': {
-        setState(runId, pause(state, decision.pauseReason!));
+        setState(runId, orchestratorReducer(state, { type: 'pause_requested', runId, reason: decision.pauseReason!, now: Date.now() }));
         // Release audit monitor during pause — resume will re-acquire when session continues.
         setAuditMode('active');
         return { action: 'finalize' };
@@ -974,7 +982,7 @@ export function register(api: OpenClawPluginApi): void {
     // in memory (different process, late-arriving session_start).
     const sessionKey = event.sessionKey;
     if (sessionKey && !findRunBySession(sessionKey)) {
-      const root = process.cwd();
+      const root = getCheckpointRoot();
       const runId = lookupRunIdBySessionKey(root, sessionKey);
       if (runId) {
         const restored = loadCheckpoint(runId, root);
@@ -1002,7 +1010,7 @@ export function register(api: OpenClawPluginApi): void {
       // so a crash between session_end and the next activity doesn't lose work.
       // (Terminal runs already had their checkpoint deleted in setState.)
       if (state.orchestrationState !== 'done' && state.orchestrationState !== 'blocked') {
-        saveCheckpoint(state, runId, resolveCheckpointRoot(state));
+        saveCheckpoint(state, runId, getCheckpointRoot());
       }
       stateByRun.delete(runId);
       sessionKeyToRunId.delete(sessionKey);
@@ -1024,11 +1032,11 @@ export function register(api: OpenClawPluginApi): void {
     canaryFired.delete(sessionKey);
 
     if (!didFire) {
-      const updated = { ...state, degraded: true };
+      const updated = orchestratorReducer(state, { type: 'degradation_marked', runId, now: Date.now() });
       // M-4: When at max continuations, pause directly instead of requesting cross-turn
       // (cross-turn would just hit max_total_reached again — wasted IPC round-trip)
       if (state.status === 'running' && state.totalContinuations >= state.maxTotalContinuations) {
-        setState(runId, pause(updated, 'max_total_reached'));
+        setState(runId, orchestratorReducer(updated, { type: 'pause_requested', runId, reason: 'max_total_reached', now: Date.now() }));
         warn(`[autopilot] agent_end: degraded at max continuations, pausing session=${sessionKey}`);
         return;
       }
@@ -1086,9 +1094,9 @@ export function register(api: OpenClawPluginApi): void {
     }
 
     const isBreaker = !event.success && event.error?.toLowerCase().includes('circuit breaker');
-    const afterPause = isBreaker ? pause(state, 'loop_breaker_triggered') : state;
+    const afterPause = isBreaker ? orchestratorReducer(state, { type: 'pause_requested', runId, reason: 'loop_breaker_triggered', now: Date.now() }) : state;
     // GAP-24: Clear degraded when canary fired — system recovered from degradation
-    const afterDegradedClear = didFire ? { ...afterPause, degraded: false } : afterPause;
+    const afterDegradedClear = didFire ? orchestratorReducer(afterPause, { type: 'degradation_cleared', runId, now: Date.now() }) : afterPause;
     // Phase 1: Dispatch agent_turn_finished through orchestrator reducer
     const afterOrchestrator = orchestratorReducer(resetTurnAttempts(afterDegradedClear), {
       type: 'agent_turn_finished',
@@ -1277,7 +1285,7 @@ export function register(api: OpenClawPluginApi): void {
           stateByRun.delete(oldRunId);
           sessionKeyToRunId.delete(sessionKey);
           const runId = generateRunId();
-          let newState = activate(createInitialState(sessionKey, runId, config));
+          let newState = createInitialState(sessionKey, runId, config);
           // Preserve existing goal only if no new goal provided in payload
           const goalForEvent = payloadGoal ?? state.goal ?? newState.goal;
           newState = orchestratorReducer(newState, { type: 'activate_requested', sessionKey, goal: goalForEvent, now: Date.now() });
@@ -1299,7 +1307,7 @@ export function register(api: OpenClawPluginApi): void {
         }
       } else {
         const runId = generateRunId();
-        let state = activate(createInitialState(sessionKey, runId, config));
+        let state = createInitialState(sessionKey, runId, config);
         state = orchestratorReducer(state, { type: 'activate_requested', sessionKey, goal: payloadGoal, now: Date.now() });
         state = applyPayload(state);
         state = applyWorkflowConfig(state);
@@ -1355,7 +1363,7 @@ export function register(api: OpenClawPluginApi): void {
       if (state.status === 'running' || state.status === 'paused' || state.status === 'done') {
         // M2: Dispatch stop_requested through orchestrator reducer for M2 state tracking
         const orchestrated = orchestratorReducer(state, { type: 'stop_requested', runId, now: Date.now() });
-        setState(runId, deactivate(orchestrated));
+        setState(runId, orchestrated);
         log(`[autopilot] stop: session=${sessionKey} ${state.status}→idle`);
       }
       // Release audit monitor refcount when session stops.

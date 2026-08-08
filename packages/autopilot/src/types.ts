@@ -254,7 +254,14 @@ export type OrchestratorEvent =
   | { type: 'cross_turn_degraded'; runId: string; now: number }
   // ADR-020 step 2: clears needsCrossTurnResume when the resumed turn begins
   // finalizing (before_agent_finalize handshake, NOT agent_turn_started).
-  | { type: 'cross_turn_resume_consumed'; runId: string; now: number };
+  | { type: 'cross_turn_resume_consumed'; runId: string; now: number }
+  // ADR-020 step 4 (degraded lifecycle): the canary-failed / canary-fired flag
+  // flips on `degraded` were bare spreads in index.ts (agent_end). Folding them
+  // into the reducer makes it the sole writer of `degraded`. The two
+  // needsCrossTurnResume bare spreads remain until E13 (P3-29) — they ARE the
+  // cross-turn handshake / gateway-restart double-spend surface.
+  | { type: 'degradation_marked'; runId: string; now: number }
+  | { type: 'degradation_cleared'; runId: string; now: number };
 
 // ─── Core State ───────────────────────────────────────────────
 

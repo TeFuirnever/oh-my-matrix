@@ -455,7 +455,7 @@ src/stores/autopilot-continuous.ts:96   若 needsCrossTurnResume → chat.send(m
 2. MA 全部日志中 `[autopilot]` 仅 67 行，只有 `activate rejected` 与 `stall detected` 两种，**零**续跑痕迹；
 3. canary 警告零次，且已证该日志通道通畅（同级 WARN 出现 19 次）。
 
-**触发条件**：**已定位为 P0-1b**（跨轮 resume 发空消息被 gateway 拒绝）。该机制解释了本条的全部观察现象——见 P0-1b 的对照表。
+**触发条件**：**已定位为 P0-1b**（跨轮 resume 发空消息被 gateway 拒绝）。该机制解释了本条的全部观察现象——见 P0-1b 的对照表。**（8-08 更新）** P0-1b 机制已于 8-08 随 §5.10 修复（见 P0-1b 条目状态注记），但「loop 真能多轮转」仍待 §5.0 运行时验证——**P0-1 不因机制修复而自动闭环**。
 
 > **本条与 P0-1b 的关系**：P0-1 是**现象**（无成功多轮 run 的证据），P0-1b 是**机制**（跨轮驱动的空消息被拒且失败被静默吞掉）。修 P0-1b 是让 loop 转起来的第一步，但**不保证充分**——`totalTokensUsed: 0` 仍提示 `llm_output` hook 可能也未匹配到 run（见 P2-19 的 sessionKey 双源问题），这部分仍未证。
 
@@ -536,7 +536,7 @@ return { success: false, error: String(error) };   // ← 不 throw
 
 **修法**（**v2.1 更新：不再单独修**）：v2 原计划三处分别修——(a) 发非空占位文本、(b) `.then()` 检查 `result.success`、(c) 重新界定重试时的幂等键语义。**§5.10 翻转为主进程单驱动后，第 3、4 跳所在的渲染侧驱动整体删除**，(b)(c) 随之消失，只剩 (a) 以「主进程发非空占位文本」的形式并入 5.10。
 
-⚠️ 但**缺口本身的严重度不变**：在 5.10 落地前它仍是活的，且它是 §2.7 那个真实 run 零轮死亡的最可能机制。**它也是 P0-6 双 turn 风险的当前抑制器**——空消息先被拒绝，故并发场景现在不可达；5.10 落地即解除该抑制（见 §10.6）。
+⚠️ **状态（8-08 核实更新）**：§5.10 已于 2026-08-08 在 MA 侧落地——主进程单驱动 `autopilot-cross-turn-driver.ts:486` 发非空占位 `'[autopilot: next turn]'`，渲染侧空消息驱动已删（`autopilot-continuous.ts` 缩到 99 行）。**P0-1b 根因已消除，本条从「活的缺口」改为「已修待运行时验证」**：它仍是 §2.7 那个真实 run 零轮死亡的机制级根因，但机制已修，loop 真能多轮转待 §5.0 验证。原「P0-6 双 turn 风险的当前抑制器」随之解除——空消息不再先被拒，并发场景**现已可达**（见 §10.6 / 行 698，均已更新）。
 
 **为何 861 个测试没抓到**：UI e2e 全部 mock IPC（`getAutopilotMockScript()`），mock 的 `chat.send` 不实现空消息校验；引擎测试根本不经过渲染进程。这是**跨进程契约无测试**的典型漏网。
 
@@ -1156,6 +1156,8 @@ run 在第 0 轮即 `complete`（连 2 轮早停守卫都不经过），且因�
 
 ### 5.0 loop 活性定位（P0-1 · 实施前置，非代码方案）
 
+> **（8-08 状态更新）** P0-1b（loop 转不起来的机制根因）已随 §5.10 修复。本节性质因此从「**定位**为什么转不起来」转为「**验证**修复后 loop 真能多轮转 + 排残留（P2-19 sessionKey 双源、`before_agent_finalize` 是否触发）」。步骤 5 分流前置条件变更：不再是「loop 从未转」，而是「loop 机制已修待验证」。
+
 **这不是一个代码方案，而是其余方案的前置条件。** 若 loop 在 MA 的真实 runner 下从未转动，则 5.2 的上限、5.4 的判定、5.6 的检测都是在给不运行的代码加特性。
 
 步骤：
@@ -1507,7 +1509,7 @@ t(`autopilot.blocked.${projection.blockedReason}`, projection.blockedReason)  //
 | **可观测性收缩（5.11 撤销）** | 无迁移动作，因为面板早已不存在（`347df92a3`，2026-06-10）。用户视角**零变化**。记录于此仅为说明：P1-12 列出的 26 个暗字段在本轮后仍不可见，仅 `lastActivityAt` 等经 5.14 托盘 tooltip 部分可见 |
 | 新 `PauseReason` | UI 侧 5.12 的穷举映射必须同步，否则显示原始 code |
 | 错误分类变更（5.3） | 之前落 `unrecoverable_error` 的限流/网络错误将改为可恢复 → 这些 run 会自动重试而非死亡。属**行为改善**，但会让「run 存活更久」，与 5.2 的上限须一并上线，否则失去刹车 |
-| ADR | 实施时在 oh-my-matrix 补 **ADR-020**（记录 5.2 上限、5.4 evidence 门与 resume 守门、5.1 checkpoint 根三个决策）。本文不占用该编号——决策未落地前不写 ADR |
+| ADR | 实施时在 oh-my-matrix 补 **ADR-021（编号待定）**（记录 5.2 上限、5.4 evidence 门与 resume 守门、5.1 checkpoint 根三个决策）。⚠️ **8-06/07 更新**：ADR-020 已被 reducer sole-writer（`cross_turn_degraded` / `cross_turn_resume_consumed`）占用，原"本文不占用该编号"前提失效，5.x 决策须另起 ADR-021 |
 
 ### 改动落在哪个仓（实施前必读）
 
@@ -1515,7 +1517,7 @@ t(`autopilot.blocked.${projection.blockedReason}`, projection.blockedReason)  //
 
 | 仓 / 位置 | 方案 | 说明 |
 |---|---|---|
-| **oh-my-matrix `packages/autopilot/`** | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.13（**10 项**，全部 P0/P1 核心） | 引擎源码的唯一真实位置。ADR-020 也落这里（该仓已有 ADR 014–019）。回归基线：`cd oh-my-matrix/packages/autopilot && npx vitest run` |
+| **oh-my-matrix `packages/autopilot/`** | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.13（**10 项**，全部 P0/P1 核心） | 引擎源码的唯一真实位置。ADR-021（编号待定）也落这里（该仓已有 ADR 014–020；ADR-020 已用于 reducer sole-writer，非 5.x 决策）。回归基线：`cd oh-my-matrix/packages/autopilot && npx vitest run` |
 | **MatrixAssistant**（本仓） | 5.10, 5.12, 5.14，及 5.0 的日志采集级别修复（**4 项**，全为消费侧，**无新 UI 界面**） | **v2 范围调整**：MA 侧定位为后台逻辑 + 异常提醒。5.11 已撤销。按层分布：**主进程** = 5.10 跨轮驱动器 + 5.12 必做 3（`electron/main/ipc/autopilot-handlers.ts:76`、`resources/plugins/plugin-registry.json:6`）+ 5.14 托盘 + 5.0 日志（`classifyStdoutMessage`）；**渲染层** = 5.12 必做 1（`ContinuousModeToggle.tsx:168` 一行条件）+ 必做 2（i18n 穷举映射）。⚠️ **P0-1b 不再单独修**——渲染侧驱动整体删除后该 bug 随之消失（见 5.10） |
 | **openclaw host** | **无需改动** | P0-1b 的空消息守卫虽在 host（`build/openclaw/dist/chat-*.js`），但从 MA 侧发非空占位即可绕过，无需碰 host。⚠️ MA 运行的是 `build/openclaw/` **构建产物**，源码在另一处（`社区工程/openclaw`）——改 host 需走上游 + 重新构建，成本远高于 MA 侧改一行 |
 
@@ -1743,4 +1745,4 @@ v1 全部结论来自**静态源码阅读**。这让它错失了三类问题，�
 - P2-16（`hasNoActionableTask`）只给了缓解方向，未纳入 §5 方案——需另行评估模式精度后再定；
 - §2.7 的日志分析基于本机单用户数据（2026-05-28 起）。样本中只有一个真实 run checkpoint，**样本量小**是本文最大的证据弱点；结论已按此收敛措辞（「无成功多轮 run 的证据」而非「autopilot 不可用」）；
 - 审计的原始范围声明仍适用：其 index.ts 只做了 4 个定点验证，未逐行审；未做定量性能基准；oh-my-claudecode 侧部分文件未读；
-- 所有方案均**未实施**，实施时须补 oh-my-matrix ADR-020（见 §7）。
+- 所有方案均**未实施**，实施时须补 oh-my-matrix ADR-021（编号待定，见 §7；ADR-020 已被 reducer sole-writer 占用）。
