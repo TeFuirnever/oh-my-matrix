@@ -410,6 +410,70 @@ describe('orchestrator reducer — state transition table', () => {
     });
   });
 
+  // ─── ADR-020 step 4: coupled aux resets ride into the reducer ───────
+  describe('ADR-020 step 4 — coupled aux resets ride into reducer events', () => {
+    // The reducer must be the sole writer of enabled/pauseReason/
+    // needsCrossTurnResume/degraded. Seed them "dirty" and assert each
+    // transition event resets them atomically — a regression that drops one
+    // field from the spread fails here (CONTRIBUTING.md PR Rule 3).
+    it('pause_requested resets enabled/pauseReason/needsCrossTurnResume', () => {
+      const state = makeState({
+        orchestrationState: 'running',
+        enabled: true,
+        pauseReason: 'tool_error_repeated',
+        needsCrossTurnResume: true,
+      });
+      const next = orchestratorReducer(state, {
+        type: 'pause_requested', runId: 'run-1', reason: 'token_budget_exceeded', now: NOW,
+      });
+      expect(next.orchestrationState).toBe('blocked');
+      expect(next.blockedReason).toBe('token_budget_exceeded');
+      expect(next.enabled).toBe(false);
+      expect(next.pauseReason).toBe('token_budget_exceeded');
+      expect(next.needsCrossTurnResume).toBe(false);
+    });
+
+    it('stop_requested resets enabled/pauseReason/needsCrossTurnResume/degraded', () => {
+      const state = makeState({
+        orchestrationState: 'running',
+        enabled: true,
+        pauseReason: 'validation_failed',
+        needsCrossTurnResume: true,
+        degraded: true,
+      });
+      const next = orchestratorReducer(state, {
+        type: 'stop_requested', runId: 'run-1', now: NOW,
+      });
+      expect(next.orchestrationState).toBe('blocked');
+      expect(next.blockedReason).toBe('user_stopped');
+      expect(next.enabled).toBe(false);
+      expect(next.pauseReason).toBeUndefined();
+      expect(next.needsCrossTurnResume).toBe(false);
+      expect(next.degraded).toBe(false);
+    });
+
+    it('degradation_marked sets degraded true WITHOUT advancing lastActivityAt', () => {
+      const state = makeState({ orchestrationState: 'running', degraded: false, lastActivityAt: NOW });
+      const next = orchestratorReducer(state, {
+        type: 'degradation_marked', runId: 'run-1', now: NOW + 9999,
+      });
+      expect(next.degraded).toBe(true);
+      // Must NOT advance: degradation_marked fires when the canary FAILED
+      // (before_agent_finalize never ran = the run is stalled). Stamping
+      // activity here would mask the stall from the stall detector.
+      expect(next.lastActivityAt).toBe(NOW);
+    });
+
+    it('degradation_cleared sets degraded false WITHOUT advancing lastActivityAt', () => {
+      const state = makeState({ orchestrationState: 'running', degraded: true, lastActivityAt: NOW });
+      const next = orchestratorReducer(state, {
+        type: 'degradation_cleared', runId: 'run-1', now: NOW + 9999,
+      });
+      expect(next.degraded).toBe(false);
+      expect(next.lastActivityAt).toBe(NOW);
+    });
+  });
+
   // ─── blocked + resume_requested → claimed (only if recoverable) ─────
   describe('blocked + resume_requested', () => {
     it('resumes to claimed when blockedReason is recoverable', () => {

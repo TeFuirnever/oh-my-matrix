@@ -11,14 +11,19 @@
 | 1 | `cross_turn_degraded` event + migrate spread `index.ts:1058` | **done** (`b4652b0`, race fix `693cda7`) |
 | 2 | clear `needsCrossTurnResume` via reducer (was spread `index.ts:530`) | **done** (`db94b1c`) — see the lifecycle correction under Decision 5 |
 | 3 | `evidence_finished` race-warn + delete `complete()` call site | **done** (`052d2d0` pins the reducer no-op; `6f2cd7f` removes the caller backdoor) |
-| 4 | fold `activate`/`pause`/`resume` setters | pending |
-| 5 | fold `deactivate` → `stop_requested` | pending |
-| 6 | delete throw-guards + apology comments | pending |
+| 4 | fold `activate`/`pause`/`resume` setters | **partial** (`a534c60`: activate/pause/deactivate folded; `resume` deferred → E4/P1-8) |
+| 5 | fold `deactivate` → `stop_requested`; delete `complete()` | **partial** (`a534c60`: `stop_requested` carries aux resets; `complete()` already zero-callers) |
+| 6 | delete throw-guards + apology comments; add 6-aux invariant | pending (E13-gated — see below) |
 
-Steps 4-6 remain: the 5 imperative setters in `autopilot-state.ts` and the
-remaining bare spreads (`index.ts:569`, `index.ts:1075`, `index.ts:1083`) still
-write coupled aux fields, so the sole-writer claim holds today only for
-`status` (ADR-016) plus the three migrated transitions above.
+Steps 4/5 landed the transition folds for `activate`/`pause`/`deactivate`
+(`a534c60`) plus the `degraded` flag-lifecycle events `degradation_marked` /
+`degradation_cleared` (`0bc9304`), so the reducer is now sole writer of
+`enabled` / `pauseReason` / `toolErrorCount` / `lastToolError` / `degraded`.
+Still outstanding: `resume` (deferred to E4 — its setter force-claims past the
+reducer's resumability guard); the two `needsCrossTurnResume` bare spreads
+(deferred to E13/P3-29 — they are the cross-turn handshake); setter deletion +
+throw-guards + the full 6-aux invariant (blocked on `needsCrossTurnResume`
+becoming reducer-only).
 
 ## Context
 
@@ -97,7 +102,8 @@ Same posture as ADR-016: single-writer enforced by test gate + machine-checked i
 - ~~**Step 1**: add `cross_turn_degraded` event + reducer handler; migrate `index.ts:1058` to dispatch it (dual-track).~~ **Done.** Implementation surfaced a call-site race the reducer guard alone could not close: the degraded path `await`s `enqueueNextTurnInjection` before dispatching, so a concurrent stop/pause/stall could move the run off `running` after the host had already queued the cross-turn — the guard then no-oped while a false success warn fired. Fixed at the call site (re-check status after the await; skip the dispatch and emit a race warn) and pinned in `tests/plugin-entry.test.ts`.
 - ~~**Step 2**: clear `needsCrossTurnResume` through the reducer.~~ **Done** as `cross_turn_resume_consumed` at `before_agent_finalize` (see the Decision 5 lifecycle correction).
 - ~~**Step 3**: `evidence_finished` race-warn + delete `complete()`.~~ **Done.** The reducer no-op is pinned by `tests/evidence-finished-race-pin.test.ts`; the `index.ts` caller backdoor is removed, so the single path to `done` is now the reducer. Removing it required migrating 8 tests across 4 files that drove completion without firing `agent_turn_prepare` — their runs sat in `claimed` and reached `done` only via the backdoor. `complete()` remains exported from `autopilot-state.ts` (still unit-tested) but has zero production callers.
-- **Steps 4-6**: fold the `activate`/`pause`/`resume`/`deactivate` setters, then delete the throw-guards and apology comments. Order recorded in design doc §8.2.1.
+- **Steps 4-6**: fold the `activate`/`pause`/`resume`/`deactivate` setters, then delete the throw-guards and apology comments. Order recorded in design doc §8.2.1. **Partial** as of 2026-08-08: `activate`/`pause`/`deactivate` folded (`a534c60`); `resume` deferred to E4 (its setter bypasses the reducer's resumability guard — P1-8); the two `needsCrossTurnResume` bare spreads deferred to E13 (they are the P3-29 cross-turn handshake); setter deletion + the 6-aux invariant blocked on `needsCrossTurnResume`.
+- **Event vocabulary extension (step 4, 2026-08-08)**: Decision #5 enumerated one new event (`cross_turn_degraded`, +`cross_turn_resume_consumed` via the lifecycle correction). Step 4 added two more — `degradation_marked` / `degradation_cleared` (`0bc9304`) — to fold the agent_end `degraded` flag-lifecycle (canary-failed → `degraded:true`; canary-fired recovery → `degraded:false`) into the reducer. These are pure flag flips with **no orchState transition**, a shape Decision #1's "one event, one transition, one reset" framing did not contemplate. It is ticket-authorized (E12) and mirrors the original bare spreads exactly — including deliberately NOT advancing `lastActivityAt` (`degradation_marked` fires when the run is stalled; stamping activity would mask the stall detector). Recorded here so the ADR lists its own implemented vocabulary.
 - **ADR-016 follow-up W1a** ("route the 8 setter call sites through reducer events") is subsumed by this ADR's migration.
 - ~~**Race-warn observability**: the new warn on evidence-outside-`released` should be observable enough that a mis-ordered upstream is diagnosable, not just silenced.~~ **Done** — the warn names the evidence status, `orchestrationState` and `status`.
 - **Enforcement gap (open)**: `tests/status-invariant.test.ts` does not yet assert that the 6 coupled aux fields are reducer-only (see Enforcement). Until steps 4-6 land, that invariant would fail by construction — the remaining setters and spreads are still writers. Add the assertion as part of step 6.
