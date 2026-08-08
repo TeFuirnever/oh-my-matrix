@@ -9,6 +9,7 @@ import * as path from 'path';
 import type { WorkflowConfig, ValidationCommand } from './types';
 import { parseModelRouting } from './model-routing';
 import { tokenizeShell } from '@oh-my-matrix/permission-policy';
+import { DEFAULT_RETRY_JITTER } from './retry-queue';
 
 export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   version: 1,
@@ -17,7 +18,9 @@ export const DEFAULT_WORKFLOW_CONFIG: WorkflowConfig = {
   maxRetries: 3,
   stallTimeoutMs: 300_000,
   maxRetryBackoffMs: 300_000,
-  retryJitter: 0.2,
+  // E3: single source of truth — DEFAULT_RETRY_JITTER (retry-queue.ts). Review
+  // follow-up: previously a hardcoded 0.2 here shadowed the exported constant.
+  retryJitter: DEFAULT_RETRY_JITTER,
   workspace: {
     root: '.matrix/autopilot-worktrees',
     cleanup: 'manual',
