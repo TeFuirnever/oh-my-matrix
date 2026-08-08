@@ -127,8 +127,13 @@ export function buildRetryInstruction(state: AutopilotState): string {
   const goal = state.goal?.substring(0, 500) || '继续执行当前任务';
   // E5: prefer the structured ledger summary over the legacy progress string
   // (which may be a stale counter restored from progressSnapshot post-compaction).
-  const progress = state.ledger
-    ? summarizeLedger(state.ledger)
+  // Review follow-up: CAP the JSON — a large ledger (6+ turns × many files) would
+  // otherwise exceed MAX_INSTRUCTION_LENGTH (2000) and break truncatePreservingClosing.
+  // Truncation may slice the JSON mid-string; the leading fields (foldedTurns,
+  // filesTouchedSoFar) carry the highest-signal info and come first by construction.
+  const ledgerSummary = state.ledger ? summarizeLedger(state.ledger) : '';
+  const progress = ledgerSummary
+    ? (ledgerSummary.length > 700 ? `${ledgerSummary.substring(0, 697)}...` : ledgerSummary)
     : (state.progress?.substring(0, 500) || '');
   // Agent-facing instructions (not user-visible) — intentionally bypass i18n.
   // English is used for better model comprehension across all language settings.
