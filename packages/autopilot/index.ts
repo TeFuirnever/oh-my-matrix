@@ -380,6 +380,12 @@ export function shouldCheckpoint(prev: AutopilotState | undefined, next: Autopil
   // must reach disk, else crash-resume continues toward a stale goal.
   if (prev.goal !== next.goal) return true;
   if (prev.progress !== next.progress) return true;
+  // E13 hardening: the resume_run RPC consumes needsCrossTurnResume via the
+  // reducer — that flip must reach disk, else a gateway restart between the
+  // RPC success and the resumed turn's finalize would restore flag=true and
+  // re-open the P3-29 double-spend via the restart leg (host re-sends
+  // chat.send on the stale flag).
+  if (prev.needsCrossTurnResume !== next.needsCrossTurnResume) return true;
   return false;
 }
 
@@ -667,8 +673,9 @@ export function register(api: OpenClawPluginApi): void {
         // "flag → turn" link: gateway restart cleared openclaw's in-memory dedup,
         // so re-kicking with the same idempotency key spent a SECOND real turn
         // (double-spend). Continuation is now EXPLICIT — the driver/host calls
-        // `autopilot.resume_run` once to resume. needsCrossTurnResume stays true
-        // as a state fact (the run is mid-cross-turn).
+        // `autopilot.resume_run` once to resume. needsCrossTurnResume marks the
+        // run mid-cross-turn until the RPC consumes it (or the resumed turn
+        // finalizes — the before_agent_finalize fallback clear).
         //
         // Residual: the stall path can still re-fire a turn after stallTimeout
         // (retry_due advances lastActivityAt, so its key differs from the
@@ -1683,6 +1690,12 @@ export function register(api: OpenClawPluginApi): void {
         return;
       }
       log(`[autopilot] resume_run: session=${sessionKey} run=${runId} explicit cross-turn resume`);
+      // E13 hardening: consume the flag via the reducer (the same event the
+      // before_agent_finalize path uses) so a SECOND resume_run — driver retry,
+      // network replay — is rejected by the needsCrossTurnResume guard instead
+      // of double-kicking the resumed turn (P3-29 double-spend at the RPC layer).
+      // The before_agent_finalize clear stays as the turn-completion fallback.
+      setState(runId, orchestratorReducer(state, { type: 'cross_turn_resume_consumed', runId, now: Date.now() }));
       respond(true, { ok: true, runId });
     } catch (err) {
       respond(false, undefined, { code: 'INVALID_REQUEST', message: `resume injection failed: ${err}` });

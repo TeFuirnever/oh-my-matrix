@@ -241,6 +241,27 @@ describe('E13 — crash-recovery no longer auto-kicks; explicit resume_run RPC',
     expect(respond.mock.calls[0][0]).toBe(false);
   });
 
+  it('a second resume_run is rejected after the first succeeded (P3-29 double-spend guard)', async () => {
+    // The RPC consumes needsCrossTurnResume via the reducer on success — a
+    // driver retry / network replay must not double-kick the resumed turn.
+    const { enqueue, gatewayMethods } = await restoreRunWithKickSpy('run-twice', {
+      ...createInitialState('sess-twice', 'run-twice'),
+      orchestrationState: 'claimed' as const,
+      status: 'running' as const,
+      enabled: true,
+      needsCrossTurnResume: true,
+    });
+    const respond1 = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-twice' }, respond: respond1 });
+    expect(respond1.mock.calls[0][0]).toBe(true);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    // Second call: flag consumed by the reducer → rejected, no second kick.
+    const respond2 = vi.fn();
+    await gatewayMethods.get('autopilot.resume_run')!({ params: { sessionKey: 'sess-twice' }, respond: respond2 });
+    expect(respond2.mock.calls[0][0]).toBe(false);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
   it('resume_run reports false when the injection facade rejects (review follow-up)', async () => {
     // The kick is fire-and-forget elsewhere, but resume_run is an RPC and must not
     // claim success when the host rejected the enqueue.

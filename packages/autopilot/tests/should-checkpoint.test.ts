@@ -30,4 +30,13 @@ describe('E8 — shouldCheckpoint triggers', () => {
     const s = createInitialState('sess-1', 'run-1');
     expect(shouldCheckpoint(undefined, s)).toBe(true);
   });
+
+  it('needsCrossTurnResume flip triggers (E13: resume_run consumption must reach disk)', () => {
+    const before = { ...createInitialState('sess-1', 'run-1'), needsCrossTurnResume: true };
+    const after = { ...before, needsCrossTurnResume: false };
+    expect(shouldCheckpoint(before, after)).toBe(true);
+    // No-op when the flag never changed.
+    const unchanged = { ...before, needsCrossTurnResume: true };
+    expect(shouldCheckpoint(before, unchanged)).toBe(false);
+  });
 });
