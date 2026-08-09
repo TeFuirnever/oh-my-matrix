@@ -13,6 +13,8 @@
 
 > **状态 reconcile（2026-08-09 · 发布完成）**：**autopilot 4.0.0 + dynamic-workflows 1.0.0 + permission-policy 0.1.4 已发布 npm**（tag + GitHub Release 齐全）。发布前的收尾：ponytail shrink（3 处 inline，-39 行）、共享 logger 提取到 permission-policy（-245 行）、publish.sh 强制 npmjs.org registry（镜像坑）、verify-publish.sh 更新 4.0.0 标记 + ref 计数 7。文档资产（.scratch/、docs/analysis、docs/audits、docs/design）已入库。OMM 侧全部收尾，剩余跨仓依赖不变（MA 消费 resume_run RPC + X1 vendor）。
 >
+> **状态 reconcile（2026-08-09 下午 · 验证补强）**：发布后核查发现并修复——① E13 resume_run 双花缺口（RPC 不消费 flag → 二次调用双 kick；修复 + 落盘 + 2 测试，968 全绿）；② 覆盖率门禁形同虚设（阈值配置存在但 CI 不跑；3 包阈值启用 + CI/verify 强制执行）；③ host smoke 缺失（MA 宿主升级 4.0.0 + `smoke-plugin-runtime.mjs` 补跑通过）。T0 残余：完整 gateway loop（bundle 未重建，MA 生产路径仍旧）。
+>
 > **状态 reconcile（2026-08-08 第三阶段 · HEAD `fabdad9`）**：本会话落地**全部**无阻塞 OMM 引擎 ticket，**OMM frontier 穷尽**。
 > - **已合入 master（PR #134–#146）**：E8、E10、E2、E3（同批）、E5、E9、E13、E6、E7、E4(step1-2)、E12(fold)，各配深度 `/code-review` + follow-up fix。E1、E11、E12(部分) 于前一阶段落地。
 > - **T0 重审**：T0 是运行时验证（非代码依赖），非硬阻塞——E6/E7/E4 顶着 T0 标签落地证明。真硬阻塞仅 M2（跨仓，E4 step3）+ MA 侧。

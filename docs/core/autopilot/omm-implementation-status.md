@@ -23,6 +23,11 @@
 
 **发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）+ **permission-policy 0.1.4**（共享 logger 提取）。**2026-08-09 已发布 npm**（tag：`autopilot-v4.0.0` / `dynamic-workflows-v1.0.0` / `permission-policy-v0.1.4`，release notes 见 GitHub Releases）。发布实操与坑（镜像 registry / 2FA / sync-plugin-versions）见 `docs/runbooks/npm-release.md` + memory `npm-publish-flow`。
 
+**发布后补强（2026-08-09）**：
+- **E13 双花闭环**：resume_run RPC 成功即经 reducer 消费 `needsCrossTurnResume`（第二次调用拒绝）+ `shouldCheckpoint` 持久化 flag 翻转（重启腿不重开 P3-29）。
+- **覆盖率门禁生效**：3 包 vitest coverage 阈值 + CI/`pnpm verify` 强制执行（autopilot 93.5/85.8/96.3/93.5、dw 89/75/100/89、pp 80/92/94/80 实测）。
+- **host smoke 补跑通过**：MA 宿主升级 4.0.0 + `scripts/smoke-plugin-runtime.mjs`（真实 SDK：12 hooks + 7 RPC + destructive blocked / safe allowed）——host-deploy §5 兑现。
+
 ## OMM frontier 剩余（0 张可立即开）
 
 | 项 | 阻塞 |
