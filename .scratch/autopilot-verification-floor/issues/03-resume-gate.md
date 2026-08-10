@@ -6,7 +6,7 @@
 
 **Status:** ✅ 已实施（2026-08-09 代码核验：`orchestrator.ts:399-419` RESUMABLE 守卫 + REV-1 unclaimed 修复；gateway `index.ts:1622`）
 
-> 实现偏差记录：设计要求"reducer no-op → gateway respond INVALID_REQUEST"；实现改为 `status==='paused'` 前置拒绝（非可恢复 blocked 不派生 paused）+ reducer 内部守门。功能等价，未按设计显式检查 no-op。可选跟进：gateway 显式比对 reducer 结果是否变化。
+> 实现偏差 → 已修复（2026-08-09）：对抗 review 实证"门 INVERTED"（非可恢复强制复活 / 可恢复抛错）。修复 = gateway reducer 后 no-op 检查 + reducer sole writer（不调 resume() setter）+ enabled:true 补位 + stop paused/done 双释放修复。新增 resume-gateway.test.ts（2 测）；lifecycle T10 改 terminal 拒绝语义。966 测试绿。
 
 - [ ] 不可恢复的 blocked run resume → 拒绝 + 明确错误（含原因），不再静默调 setter
 - [ ] 可恢复的 blocked（含 evidence_missing）→ resume 成功

@@ -291,7 +291,7 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       expect(respond.mock.calls[0][2]?.message).toContain('cannot resume from status "done"');
     });
 
-    it('resumes a paused session back to running and clears the pause reason', async () => {
+    it('rejects resume of a terminal paused session (max_total_reached) — W1 terminal reasons are not resumable', async () => {
       await activateAndStart(mock, 'sess-rs-pause', 'sid-rs-pause');
       // Pause via the max_total_reached path: drive totalContinuations to max (default 50).
       const finalize = mock.hooks.get('before_agent_finalize')!;
@@ -309,12 +309,13 @@ describe('E2E: activate → loop → complete lifecycle', () => {
       const resume = mock.gatewayMethods.get('autopilot.resume')!;
       const respond = vi.fn();
       await resume({ params: { sessionKey: 'sess-rs-pause' }, respond });
-      expect(respond.mock.calls[0][0]).toBe(true);
+      expect(respond.mock.calls[0][0]).toBe(false);
+      expect(respond.mock.calls[0][2]?.message).toContain('not recoverable');
 
-      const projResumed = await projectionFor(mock, 'sess-rs-pause');
-      expect(projResumed.status).toBe('running');
-      expect(projResumed.enabled).toBe(true);
-      expect(projResumed.pauseReason).toBeUndefined();
+      // Run must NOT have been resurrected.
+      const projAfter = await projectionFor(mock, 'sess-rs-pause');
+      expect(projAfter.status).toBe('paused');
+      expect(projAfter.enabled).toBe(false);
     });
   });
 

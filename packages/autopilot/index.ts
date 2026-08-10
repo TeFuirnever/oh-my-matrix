@@ -5,7 +5,6 @@ import { buildEffortInjection, resolveThinkingIntensity } from './src/effort-inj
 import { resolveModelTier, resolveModelId, isSubagentSession, parseModelRouting, extractParentSessionKey } from './src/model-routing';
 import { log, warn, error, logWithContext } from '@oh-my-matrix/permission-policy';
 import {
-  resume,
   incrementTurn,
   incrementTotal,
   resetTurnAttempts,
@@ -20,7 +19,7 @@ import { detectCapExceeded } from './src/cost';
 import { emptyLedger, recordTurn, buildEntry, summarizeLedger, buildProgressHeadline } from './src/progress-ledger';
 import type { CommandClass } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
-import { orchestratorReducer } from './src/orchestrator';
+import { orchestratorReducer, deriveStatus } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
@@ -820,14 +819,17 @@ export function register(api: OpenClawPluginApi): void {
             results: evidenceResults,
             diffSummary: '',
             now,
+            failOnOptional: state.workflow?.validation.failOnOptional,
           });
         } catch (err) {
-          // Fail-open (skipped) to avoid zombie sessions — runValidationCommands
+          // Fail-closed for completion: an evaluation error becomes skipped with
+          // skipReason='not_executed' → the reducer maps it to blocked
+          // 'evidence_missing' (resumable), never to done. runValidationCommands
           // never throws and evaluateEvidence is pure, so this only trips on a
           // future bug. But do NOT let that bug pass silently: emit it at error
           // level with the failureReason so a monitor can tell an evaluation
-          // failure apart from a normal no-commands skip (both end as 'skipped').
-          logWithContext('error', 'evidence gate evaluation error (failing open → skipped)', { sessionKey, runId, error: String(err) });
+          // failure apart from a normal no-commands skip.
+          logWithContext('error', 'evidence gate evaluation error (fail-closed → blocked evidence_missing)', { sessionKey, runId, error: String(err) });
           evidenceSummary = { status: 'skipped' as const, diffSummary: '', commands: [], completedAt: now, failureReason: 'evaluation error', skipReason: 'not_executed' as const };
         }
         // Dispatch orchestrator events to advance orchState to 'done'.
@@ -1631,7 +1633,29 @@ export function register(api: OpenClawPluginApi): void {
 
       // M2: Dispatch resume_requested through orchestrator reducer
       const orchestrated = orchestratorReducer(state, { type: 'resume_requested', runId, now: Date.now() });
-      const resumed = resume(orchestrated);
+      // T03/ADR-016: the reducer is the transition's sole writer. When it no-ops
+      // (non-resumable blockedReason), stop with an explicit error instead of
+      // force-resuming through the legacy setter — which would resurrect terminal
+      // runs (token_budget_exceeded / loop_breaker_triggered / max_total_reached…)
+      // and erase the blockedReason. Closes the W1 TENSION-1 gate at the dispatcher.
+      if (orchestrated.orchestrationState !== 'claimed') {
+        respond(false, undefined, {
+          code: 'INVALID_REQUEST',
+          message: `cannot resume: ${state.blockedReason ?? 'unknown'} is not recoverable`,
+        });
+        return;
+      }
+      // Reducer moved blocked → claimed. Clear coupled aux state only; keep
+      // needsCrossTurnResume=true (set by the reducer) so kickResumedTurn works.
+      const resumedBase = {
+        ...orchestrated,
+        enabled: true,
+        toolErrorCount: 0,
+        lastToolError: undefined,
+        degraded: false,
+        retry: undefined,
+      };
+      const resumed = { ...resumedBase, status: deriveStatus(resumedBase) };
       setState(runId, resumed);
       // LOGIC-4: a programmatic resume has no follow-up user message to trigger
       // agent_turn_prepare, so kick a cross-turn injection to actually continue.
@@ -1716,8 +1740,12 @@ export function register(api: OpenClawPluginApi): void {
         setState(runId, orchestrated);
         log(`[autopilot] stop: session=${sessionKey} ${state.status}→idle`);
       }
-      // Release audit monitor refcount when session stops.
-      setAuditMode('active');
+      // Release audit monitor refcount when the run actually terminates here.
+      // Only 'running' reaches this as its FIRST terminal transition — paused and
+      // done already released at pause/complete. Releasing again would over-release
+      // the shared refcount (S8 design), which the old resume() force-resume used
+      // to mask by re-acquiring monitor.
+      if (state.status === 'running') setAuditMode('active');
       respond(true, { ok: true });
   });
 
@@ -1835,7 +1863,10 @@ export function register(api: OpenClawPluginApi): void {
             runId,
             now,
           });
-          setState(runId, updated);
+          // T03 fix: the in-flight tool is abandoned at stall — clear the marker
+          // so the resumed turn falls back to stallTimeoutMs instead of inheriting
+          // the 30min INFLIGHT cap for a full turn.
+          setState(runId, { ...updated, inFlightToolStartedAt: undefined });
           warn(`[autopilot] stall detected: session=${state.sessionKey} run=${runId} lastActivity=${stallResult.stallDurationMs ?? 0}ms stall, orchState=${updated.orchestrationState}`);
         }
       }

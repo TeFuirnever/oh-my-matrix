@@ -401,6 +401,10 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       // REV-1 fix: also handle 'unclaimed' (a run paused before dispatch).
       // Without this, resume of an unclaimed run is a silent no-op: state stays
       // unclaimed, kickResumedTurn early-returns, but the caller sees success.
+      // NOTE: the unclaimed branch is currently unreachable via the gateway
+      // (deriveStatus(unclaimed) = 'running' → the resume handler's paused
+      // precheck rejects it); pinned here for reducer-level semantics and for
+      // any future dispatcher that does not precheck status.
       if (state.orchestrationState !== 'blocked' && state.orchestrationState !== 'unclaimed') return state;
       // For blocked runs, only recoverable reasons can resume.
       if (state.orchestrationState === 'blocked') {
