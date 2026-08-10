@@ -3,6 +3,7 @@ import { resolveThinkingIntensity } from './effort-injection';
 import { resolveModelTier, resolveModelId } from './model-routing';
 import { getCheckpointWriteFailureCount } from './state-persister';
 import { computeCostUsd } from './cost';
+import { RESUMABLE_BLOCKED_REASONS } from './orchestrator';
 
 export interface AutopilotProjection {
   status: AutopilotState['status'];
@@ -54,6 +55,8 @@ export interface AutopilotProjection {
   inFlightToolStartedAt?: number;
   /** E4: completion reached without a passed evidence gate (observability). */
   completionUnverified?: boolean;
+  /** T03/§3.3: true when blocked with a resumable reason — host resume button gate. */
+  canResume: boolean;
 }
 
 /**
@@ -122,5 +125,9 @@ export function projectState(
     checkpointWriteFailures: getCheckpointWriteFailureCount(),
     inFlightToolStartedAt: state.inFlightToolStartedAt,
     completionUnverified: state.completionUnverified,
+    // T03/§3.3: defensive — gate on the blocked state too, so a legacy checkpoint
+    // with an inconsistent blockedReason/orchestrationState pair can't show a
+    // resume button on a running run (the gateway + reducer still guard anyway).
+    canResume: state.orchestrationState === 'blocked' && state.blockedReason != null && RESUMABLE_BLOCKED_REASONS.has(state.blockedReason),
   };
 }

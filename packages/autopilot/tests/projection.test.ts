@@ -129,4 +129,26 @@ describe('projection', () => {
       expect(proj.recommendedModelId).toBeUndefined();
     });
   });
+
+  describe('canResume projection (T03 / design §3.3)', () => {
+    it('true for resumable blocked (evidence_missing)', () => {
+      const state = { ...createInitialState('s', 'r'), status: 'paused' as const, orchestrationState: 'blocked' as const, blockedReason: 'evidence_missing' as const };
+      expect(projectState(state)!.canResume).toBe(true);
+    });
+
+    it('true for resumable blocked (no_progress)', () => {
+      const state = { ...createInitialState('s', 'r'), status: 'paused' as const, orchestrationState: 'blocked' as const, blockedReason: 'no_progress' as const };
+      expect(projectState(state)!.canResume).toBe(true);
+    });
+
+    it('false for terminal blocked (max_total_reached)', () => {
+      const state = { ...createInitialState('s', 'r'), status: 'paused' as const, orchestrationState: 'blocked' as const, blockedReason: 'max_total_reached' as const };
+      expect(projectState(state)!.canResume).toBe(false);
+    });
+
+    it('false when running', () => {
+      const state = { ...createInitialState('s', 'r'), status: 'running' as const, orchestrationState: 'claimed' as const };
+      expect(projectState(state)!.canResume).toBe(false);
+    });
+  });
 });

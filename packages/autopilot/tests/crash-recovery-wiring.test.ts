@@ -438,3 +438,38 @@ function lookupCheckpointForSession(sessionKey: string): boolean {
     return false;
   }
 }
+
+describe('E6 dir-1 — in-flight marker across restart', () => {
+  it('in-flight marker is a runtime transient — not persisted, absent after restart', async () => {
+    // Phase 1: activate + set the marker via an allowed tool call, let it checkpoint.
+    let mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const sessionStart = mock.hooks.get('session_start')!;
+    await sessionStart({ sessionId: 'sid-mk', sessionKey: 'sess-mk' });
+    const activate = mock.gatewayMethods.get('autopilot.activate')!;
+    await activate({ params: { sessionKey: 'sess-mk', workspacePath: tmpRoot }, respond: vi.fn() });
+
+    // Sanity: the marker IS set in memory on an allowed tool dispatch.
+    const beforeToolCall = mock.hooks.get('before_tool_call')!;
+    await beforeToolCall({ toolName: 'Read', params: { file_path: 'x' }, runId: 'run-mk', toolCallId: 't1' }, { sessionKey: 'sess-mk' });
+    const statusPre = mock.gatewayMethods.get('autopilot.status')!;
+    const respondPre = vi.fn();
+    await statusPre({ params: { sessionKey: 'sess-mk' }, respond: respondPre });
+    expect(typeof respondPre.mock.calls[0][1]?.projection.inFlightToolStartedAt).toBe('number');
+    await _flushAllWritesForTest();
+
+    // Phase 2: simulate a process restart.
+    _resetForTest();
+    _enableCheckpointingForTest();
+    mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+
+    // The marker must NOT survive: a restarted process means the in-flight tool
+    // is dead, so the restored run falls back to stallTimeoutMs — not a stale
+    // 30min cap. state-persister deliberately excludes the transient.
+    const status = mock.gatewayMethods.get('autopilot.status')!;
+    const statusRespond = vi.fn();
+    await status({ params: { sessionKey: 'sess-mk' }, respond: statusRespond });
+    expect(statusRespond.mock.calls[0][1]?.projection.inFlightToolStartedAt).toBeUndefined();
+  });
+});

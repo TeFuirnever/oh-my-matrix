@@ -7,6 +7,7 @@ import {
   buildEntry,
   recordTurn,
   summarizeLedger,
+  buildProgressHeadline,
   LEDGER_MAX_DETAIL,
 } from '../src/progress-ledger';
 
@@ -107,6 +108,46 @@ describe('E5: progress-ledger', () => {
       const parsed = JSON.parse(summarizeLedger(l));
       expect(parsed.foldedTurns).toBe(1);
       expect(parsed.filesTouchedSoFar).toEqual(['f1.ts']);
+    });
+  });
+
+  describe('buildEntry volume caps', () => {
+    it('caps files at 8 and commands at 4', () => {
+      const files = Array.from({ length: 12 }, (_, i) => `f${i}.ts`);
+      const cmds = Array.from({ length: 6 }, (_, i) => `c${i}`);
+      const e = buildEntry(1, files, cmds);
+      expect(e.filesTouched.length).toBe(8);
+      expect(e.commandsRun.length).toBe(4);
+      expect(e.filesTouched).toEqual(files.slice(0, 8));
+      expect(e.commandsRun).toEqual(cmds.slice(0, 4));
+    });
+  });
+
+  describe('buildProgressHeadline', () => {
+    it('empty ledger → Turn 0 with plural defaults', () => {
+      expect(buildProgressHeadline(emptyLedger())).toBe('Turn 0 · 0 files · 0 commands');
+    });
+
+    it('singular for 1 file / 1 command', () => {
+      const l = recordTurn(emptyLedger(), buildEntry(1, ['a.ts'], ['npm test']));
+      expect(buildProgressHeadline(l)).toBe('Turn 1 · 1 file · 1 command');
+    });
+
+    it('plural for many files/commands', () => {
+      const l = recordTurn(emptyLedger(), buildEntry(1, ['a.ts', 'b.ts', 'c.ts'], ['t1', 't2', 't3']));
+      expect(buildProgressHeadline(l)).toBe('Turn 1 · 3 files · 3 commands');
+    });
+
+    it('folded note uses singular/plural correctly', () => {
+      let l = emptyLedger();
+      for (let i = 1; i <= LEDGER_MAX_DETAIL + 1; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`]));
+      }
+      expect(buildProgressHeadline(l)).toContain('1 earlier turn folded');
+      for (let i = LEDGER_MAX_DETAIL + 2; i <= LEDGER_MAX_DETAIL + 3; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`]));
+      }
+      expect(buildProgressHeadline(l)).toContain('3 earlier turns folded');
     });
   });
 });

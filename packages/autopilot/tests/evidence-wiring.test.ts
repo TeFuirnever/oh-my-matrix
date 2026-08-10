@@ -266,4 +266,30 @@ describe('Evidence Gate wiring', () => {
       expect(projection.status).not.toBe('done');
     }, 10000);
   });
+
+  describe('in-flight marker lifecycle', () => {
+    it('before_agent_finalize clears a set inFlightToolStartedAt', async () => {
+      _resetForTest();
+      const mockWithCmd = createMockApi();
+      register(mockWithCmd.api as unknown as Parameters<typeof register>[0]);
+
+      await mockWithCmd.gatewayMethods.get('autopilot.activate')!({ params: { sessionKey: 'sess-mk2', trustWorkspace: true }, respond: vi.fn() });
+      await mockWithCmd.hooks.get('session_start')!({ sessionId: 'sid-mk2', sessionKey: 'sess-mk2' });
+
+      // Set the marker via an allowed tool call (Read is allow-by-default).
+      await mockWithCmd.hooks.get('before_tool_call')!({ toolName: 'Read', params: { file_path: 'x' }, runId: 'r', toolCallId: 't1' }, { sessionKey: 'sess-mk2' });
+
+      // Sanity: the marker WAS set (non-vacuous — if Read stops being allow, this fails loudly).
+      const respondPre = vi.fn();
+      await mockWithCmd.gatewayMethods.get('autopilot.status')!({ params: { sessionKey: 'sess-mk2' }, respond: respondPre });
+      expect(typeof respondPre.mock.calls[0][1]?.projection.inFlightToolStartedAt).toBe('number');
+
+      // finalize clears it (leak-plug site per design §5).
+      await mockWithCmd.hooks.get('before_agent_finalize')!({ sessionId: 'sid-mk2', sessionKey: 'sess-mk2', stopHookActive: false, lastAssistantMessage: 'working...' });
+
+      const respond = vi.fn();
+      await mockWithCmd.gatewayMethods.get('autopilot.status')!({ params: { sessionKey: 'sess-mk2' }, respond });
+      expect(respond.mock.calls[0][1]?.projection.inFlightToolStartedAt).toBeUndefined();
+    });
+  });
 });
