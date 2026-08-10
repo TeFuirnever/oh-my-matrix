@@ -1,6 +1,6 @@
 # Autopilot 验收基线 + 进展结构化（落地设计）
 
-> **Status**: Proposed · 2026-08-08
+> **Status**: ✅ 必做部分已实施核验（2026-08-09）—— 本设计为事后文档化；§5.4/§5.5/§5.6 已落地于代码（见 §8 核验表），剩选做 T05/T06 待办
 > **裁决性质**：本设计是 5-agent 对抗 review 后的**落地决策**——确认两块缺口 = `long-horizon-autonomy.md` 既有的 §5.4（验收）+ §5.5（进展）ticket，**排除所有外部引入方案**（Task Flow / planning-with-files / cwc evaluator / spec-kit），直接实施既有自建设计的**最小子集**。
 > **关联**：`docs/core/autopilot/long-horizon-autonomy.md` §5.4/§5.5/§5.6/§5.12 · `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/audits/openclaw-native-vs-autopilot-2026-08-05.md`（E4+E7/E5）· 研究报告 `.claude/plans/users-guanxueliang-desktop-matrix-dynam-happy-sundae.md` Part H
 
@@ -194,7 +194,7 @@ progress: `[Turn ${n}/${max}] files: ${filesTouched.join(',') || 'none'} | ${tai
 
 ---
 
-## 8. 验证（端到端 + 回归）
+## 9. 验证（端到端 + 回归）
 
 - `pnpm verify`（lint + typecheck + test + docs:build）—— typecheck 自动守住 `pauseReasonToBlockedReason` total（约束 1）。
 - §3.4 contract 测（skipped 两因 / fail-open / canResume）。
@@ -204,7 +204,28 @@ progress: `[Turn ${n}/${max}] files: ${filesTouched.join(',') || 'none'} | ${tai
 
 ---
 
-## 9. 引用
+## 8. 实现状态核验（2026-08-09，执行前最后确认）
+
+> 用真实源码对照本设计 §3-§5 逐条核验。**必做 4 项已在代码中实施**（前序 session 落地 E4+E7/E5/E6），tickets 01-04 已同步标记。剩选做 T05/T06 为真待办。
+
+| 改动 | 状态 | 源码证据 |
+|---|---|---|
+| §5.6 在飞守卫（T01） | ✅ 已实施 | `index.ts:268`（validation 前置置位，注释 "E6 stall patrol"）、`:811`（evidence 期）、`:912/920/1293`（清零） |
+| §5.4a skipped 两因（T02） | ✅ 已实施 | `orchestrator.ts:257-295`（passed→done/not_executed→blocked+evidence_missing/其它→done+completionUnverified）、`evidence-gate.ts:34`（skipReason:'not_configured'） |
+| §5.4b resume 守门（T03） | ✅ 已实施（1 处偏差） | `orchestrator.ts:399-419`（RESUMABLE_BLOCKED_REASONS 守卫 + REV-1 unclaimed 修复）、gateway `index.ts:1622` |
+| §5.5 progress 结构化（T04） | ✅ 已实施（**超预期**：完整 ledger 非最小子集） | `src/progress-ledger.ts`（LedgerEntry/buildEntry/recordTurn/buildProgressHeadline）、`index.ts:1289`、`continuation-engine.ts:4`（summarizeLedger） |
+| AC-NNN 谓词（T05，选做） | ❌ 待办 | `types.ts:334` goal 仍 free-text |
+| size-classifier（T06，选做） | ❌ 待办 | effort-injection/model-routing 无 |
+
+**记录的两点**：
+1. **T03 实现偏差**：设计要求"reducer no-op → gateway respond INVALID_REQUEST"；实现改为 `status==='paused'` 前置拒绝（非可恢复 blocked 不派生 paused）+ reducer 内部守门。功能等价，未显式比对 reducer 结果。可选跟进：gateway 比对 `orchestrated !== state` 后拒绝。
+2. **E6 dir-2 生产力检测（no_progress）也在代码中**（`orchestrator.ts:33` + `state-persister.ts:561` 同步）——超出本设计 §5 范围，属 E6 完整实施。
+
+**结论**：本设计必做部分 = 已实施工作的事后文档化（对照核验一致）；真正待办 = T05（AC-NNN）/ T06（size-classifier）选做。
+
+---
+
+## 10. 引用
 
 - **既有设计**：`docs/core/autopilot/long-horizon-autonomy.md` §5.4(L1250)/§5.5(L1291)/§5.6(L1321)/§5.7(L1342)/§5.12 · `docs/adr/019-conditional-evidence-judging-boundary.md`
 - **审计**：`docs/audits/openclaw-native-vs-autopilot-2026-08-05.md`（E4+E7/E5/E1-E8 ticket 顺序）
