@@ -206,7 +206,7 @@ progress: `[Turn ${n}/${max}] files: ${filesTouched.join(',') || 'none'} | ${tai
 
 ## 8. 实现状态核验（2026-08-09，执行前最后确认）
 
-> 用真实源码对照本设计 §3-§5 逐条核验。**必做 4 项已在代码中实施**（前序 session 落地 E4+E7/E5/E6），tickets 01-04 已同步标记。剩选做 T05/T06 为真待办。
+> 用真实源码对照本设计 §3-§5 逐条核验。**必做 4 项 + 选做 T05/T06 均已在代码中实施**（T05/T06 于 2026-08-11 落地）。本设计全部完成。
 
 | 改动 | 状态 | 源码证据 |
 |---|---|---|
@@ -214,8 +214,8 @@ progress: `[Turn ${n}/${max}] files: ${filesTouched.join(',') || 'none'} | ${tai
 | §5.4a skipped 两因（T02） | ✅ 已实施 | `orchestrator.ts:257-295`（passed→done/not_executed→blocked+evidence_missing/其它→done+completionUnverified）、`evidence-gate.ts:34`（skipReason:'not_configured'） |
 | §5.4b resume 守门（T03） | ✅ 已实施（1 处偏差） | `orchestrator.ts:399-419`（RESUMABLE_BLOCKED_REASONS 守卫 + REV-1 unclaimed 修复）、gateway `index.ts:1622` |
 | §5.5 progress 结构化（T04） | ✅ 已实施（**超预期**：完整 ledger 非最小子集） | `src/progress-ledger.ts`（LedgerEntry/buildEntry/recordTurn/buildProgressHeadline）、`index.ts:1289`、`continuation-engine.ts:4`（summarizeLedger） |
-| AC-NNN 谓词（T05，选做） | ❌ 待办 | `types.ts:334` goal 仍 free-text |
-| size-classifier（T06，选做） | ❌ 待办 | effort-injection/model-routing 无 |
+| AC-NNN 谓词（T05，选做） | ✅ 已实施（2026-08-11，commit bdf4815，autopilot 4.2.0） | `src/acceptance-criteria.ts`：AC 块内嵌 goal 字符串（parse/render/inject），零 schema 变更 |
+| size-classifier（T06，选做） | ✅ 已实施（2026-08-11，commit 22c9e23，autopilot 4.3.0） | `src/size-classifier.ts`：确定性精简版（信号词+长度+AC 数 → 4 tier），trivial 降 effort |
 
 **记录的三点（2026-08-11 增补）**：
 1. **T03 实现偏差 → 已修复（2026-08-09，对抗 review 实证）**：初始实现未显式检查 reducer no-op，靠 `status==='paused'` 前置——对抗 review（opus×2）实证发现**门 INVERTED**：非可恢复 blocked（含 max_total/token_budget/loop_breaker）因 deriveStatus 映射 `'paused'` 过前置 → `resume()` setter 强制复活（预算/上限绕过）；可恢复路径反而因 reducer 转 claimed 后 `resume()` 抛错。修复：gateway reducer 后检查 `orchestrationState !== 'claimed'` → INVALID_REQUEST；**reducer sole writer**（gateway 不再调 `resume()` setter，构造 resumed 时补 `enabled:true` + 清副状态 + deriveStatus）。附带修复：`stop` 对 paused/done 的 audit 双释放（S8 语义，旧 resume 掩盖）。新增 `tests/resume-gateway.test.ts`（非可恢复拒绝 + no_progress 可恢复成功）；lifecycle T10 改 terminal 拒绝语义。966 测试绿。
