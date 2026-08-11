@@ -1,0 +1,9 @@
+{
+  "id": "instinct",
+  "name": "Instinct (context memory)",
+  "description": "Cross-session context memory: observes tool calls (scrubbed) and recalls recent observations at session start.",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "activation": { "onStartup": true },
+  "hooks": ["after_tool_call", "session_start"]
+}
