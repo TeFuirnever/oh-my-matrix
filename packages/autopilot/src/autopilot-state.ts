@@ -2,7 +2,7 @@ import type { AutopilotState, PauseReason } from './types';
 import { pauseReasonToBlockedReason } from './types';
 import { deriveStatus } from './orchestrator';
 
-const MAX_GOAL_LENGTH = 500;
+const MAX_GOAL_LENGTH = 2000; // T05: goals may carry an embedded AC-NNN block
 
 /**
  * W1 Phase 2: the setters now derive `status` via `deriveStatus` instead of

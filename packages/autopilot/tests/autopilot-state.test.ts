@@ -122,10 +122,10 @@ describe('autopilot-state', () => {
   });
 
   describe('goal management', () => {
-    it('setGoal sets goal and truncates at 500 chars', () => {
+    it('setGoal sets goal and truncates at 2000 chars (T05: AC-NNN block room)', () => {
       const state = base();
-      const next = setGoal(state, 'A'.repeat(1000));
-      expect(next.goal).toBe('A'.repeat(500));
+      const next = setGoal(state, 'A'.repeat(3000));
+      expect(next.goal).toBe('A'.repeat(2000));
     });
 
     it('setGoal updates existing goal (GAP-29 upsert)', () => {
@@ -134,10 +134,10 @@ describe('autopilot-state', () => {
       expect(next.goal).toBe('new goal');
     });
 
-    it('setGoal truncates updated goal at 500 chars', () => {
+    it('setGoal truncates updated goal at 2000 chars (T05)', () => {
       const state = { ...base(), goal: 'short' };
-      const next = setGoal(state, 'B'.repeat(600));
-      expect(next.goal).toBe('B'.repeat(500));
+      const next = setGoal(state, 'B'.repeat(2500));
+      expect(next.goal).toBe('B'.repeat(2000));
     });
 
     it('snapshotGoal saves goal and progress to snapshot fields', () => {

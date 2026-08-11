@@ -2,6 +2,7 @@ import type { AutopilotState, ContinuationDecision, EvidenceSummary } from './ty
 import { isTaskComplete, hasNoActionableTask } from './completion-detector';
 import { detectCostCap } from './cost';
 import { summarizeLedger } from './progress-ledger';
+import { goalInjectionText } from './acceptance-criteria';
 
 interface FinalizeEvent {
   lastAssistantMessage?: string;
@@ -123,7 +124,7 @@ const MAX_FAILED_COMMANDS = 2;
 const RETRY_ESCALATION_THRESHOLD = 3;
 
 export function buildRetryInstruction(state: AutopilotState): string {
-  const goal = state.goal?.substring(0, 500) || '继续执行当前任务';
+  const goal = goalInjectionText(state.goal) || '[Autopilot] Current goal: 继续执行当前任务';
   // E5: prefer the structured ledger summary over the legacy progress string
   // (which may be a stale counter restored from progressSnapshot post-compaction).
   // Review follow-up: CAP the JSON — a large ledger (6+ turns × many files) would
@@ -136,7 +137,7 @@ export function buildRetryInstruction(state: AutopilotState): string {
     : (state.progress?.substring(0, 500) || '');
   // Agent-facing instructions (not user-visible) — intentionally bypass i18n.
   // English is used for better model comprehension across all language settings.
-  const parts = [`[Autopilot] Current goal: ${goal}`];
+  const parts = [goal];
   if (progress) {
     parts.push(`[Autopilot] Progress so far: ${progress}`);
   }

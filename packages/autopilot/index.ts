@@ -23,6 +23,7 @@ import { orchestratorReducer, deriveStatus } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
+import { goalInjectionText } from './src/acceptance-criteria'; // T05: goal + AC-NNN injection
 import { runValidationCommands } from './src/command-runner';
 import { detectValidationCommands } from './src/project-detector';
 import { appendAuditEntry, loadRecentAuditEntries } from '@oh-my-matrix/permission-policy';
@@ -1013,7 +1014,8 @@ export function register(api: OpenClawPluginApi): void {
     // Agent-facing context injections — not user-visible, intentionally bypass i18n.
     // English used for consistent model comprehension regardless of UI language.
     if (updated.goal) {
-      parts.push(`[Autopilot] Current goal: ${updated.goal}`);
+      // T05: goalInjectionText renders intent + any embedded AC-NNN block
+      parts.push(goalInjectionText(updated.goal));
     }
     // E5: prefer the structured progress ledger over the legacy progress string.
     // The ledger survives compaction in state; a stale progressSnapshot must not
