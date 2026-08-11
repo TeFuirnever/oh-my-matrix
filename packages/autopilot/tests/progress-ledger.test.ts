@@ -8,6 +8,7 @@ import {
   recordTurn,
   summarizeLedger,
   buildProgressHeadline,
+  lastProgressTurn,
   LEDGER_MAX_DETAIL,
 } from '../src/progress-ledger';
 
@@ -148,6 +149,56 @@ describe('E5: progress-ledger', () => {
         l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`]));
       }
       expect(buildProgressHeadline(l)).toContain('3 earlier turns folded');
+    });
+  });
+
+  describe('lastProgressTurn (E2 evidence-coupled accounting)', () => {
+    it('empty ledger → 0', () => {
+      expect(lastProgressTurn(emptyLedger())).toBe(0);
+    });
+
+    it('all non-failed entries → last entry turn', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c']));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c']));
+      expect(lastProgressTurn(l)).toBe(2);
+    });
+
+    it('trailing failed entry skipped → previous turn', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'failed'));
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('all failed entries → 0 (no validated progress)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'failed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'failed'));
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+
+    it('undefined evidenceStatus counts as progress (mid-run turn without validation)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'])); // no evidenceStatus
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('all detail failed but folded has validated turn → folded turn (not 0)', () => {
+      // Turn 1 passes, then enough failed turns to push turn 1 into folded.
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      for (let i = 2; i <= LEDGER_MAX_DETAIL + 2; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`], 'failed'));
+      }
+      // Detail window is all-failed now; turn 1 (passed) is in folded.
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('skipped/not_started evidence counts as progress', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped' as any));
+      expect(lastProgressTurn(l)).toBe(1);
     });
   });
 });

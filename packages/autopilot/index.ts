@@ -16,7 +16,7 @@ import { projectState } from './src/projection';
 import { createInitialState, DEFAULT_CONFIG } from './src/types';
 import type { AutopilotState, AutopilotConfig, GatewayCtx, PauseReason } from './src/types';
 import { detectCapExceeded } from './src/cost';
-import { emptyLedger, recordTurn, buildEntry, summarizeLedger, buildProgressHeadline } from './src/progress-ledger';
+import { emptyLedger, recordTurn, buildEntry, summarizeLedger, buildProgressHeadline, lastProgressTurn } from './src/progress-ledger';
 import type { CommandClass } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
 import { orchestratorReducer, deriveStatus } from './src/orchestrator';
@@ -1955,14 +1955,12 @@ export function register(api: OpenClawPluginApi): void {
       if (state.enabled && state.status === 'running') {
         const threshold = state.workflow?.noProgressTurns ?? DEFAULT_NO_PROGRESS_TURNS;
         if (threshold > 0 && state.totalContinuations > 0 && state.ledger) {
-          const lastProgressTurn = state.ledger.entries.length > 0
-            ? state.ledger.entries[state.ledger.entries.length - 1].turn
-            : 0;
-          if (state.totalContinuations - lastProgressTurn >= threshold) {
+          const lastProgress = lastProgressTurn(state.ledger);
+          if (state.totalContinuations - lastProgress >= threshold) {
             const paused = orchestratorReducer(state, { type: 'pause_requested', runId, reason: 'no_progress', now });
             setState(runId, paused);
             setAuditMode('active');
-            warn(`[autopilot] no_progress: session=${state.sessionKey} run=${runId} ${state.totalContinuations - lastProgressTurn} turn(s) without file/command output`);
+            warn(`[autopilot] no_progress: session=${state.sessionKey} run=${runId} ${state.totalContinuations - lastProgress} turn(s) without validated file/command output`);
           }
         }
       }

@@ -35,6 +35,10 @@ export interface FoldedAggregate {
   turns: number;
   filesTouched: string[];
   commandsRun: string[];
+  /** E2: the turn number of the most recent folded entry whose evidence was
+   * not 'failed' — so lastProgressTurn can see validated progress that aged
+   * out of the detail window. 0 when no folded turn qualified. */
+  lastValidatedTurn: number;
 }
 
 export interface Ledger {
@@ -52,7 +56,7 @@ const MAX_SUMMARY_CMDS = 8;
 const MAX_ITEM_LEN = 120;
 
 export function emptyLedger(): Ledger {
-  return { folded: { turns: 0, filesTouched: [], commandsRun: [] }, entries: [] };
+  return { folded: { turns: 0, filesTouched: [], commandsRun: [], lastValidatedTurn: 0 }, entries: [] };
 }
 
 /** Clamp/clean a single item (path or command) for storage. */
@@ -91,11 +95,17 @@ function dedup(arr: string[]): string[] {
 function foldOldest(ledger: Ledger): Ledger {
   if (ledger.entries.length === 0) return ledger;
   const [oldest, ...rest] = ledger.entries;
+  // E2: carry the most recent validated turn into the aggregate. If the folded
+  // aggregate already saw a validated turn, keep it (it's newer than anything
+  // folding in now, since detail is newest-last and we fold oldest-first).
+  const carryValidated = oldest.evidenceStatus !== 'failed' ? oldest.turn : 0;
+  const lastValidatedTurn = Math.max(ledger.folded.lastValidatedTurn ?? 0, carryValidated);
   return {
     folded: {
       turns: ledger.folded.turns + 1,
       filesTouched: dedup([...ledger.folded.filesTouched, ...oldest.filesTouched]).slice(-MAX_SUMMARY_FILES),
       commandsRun: dedup([...ledger.folded.commandsRun, ...oldest.commandsRun]).slice(-MAX_SUMMARY_CMDS),
+      lastValidatedTurn,
     },
     entries: rest,
   };
@@ -139,6 +149,26 @@ export function summarizeLedger(ledger: Ledger | undefined): string {
     openItems: open,
   };
   return JSON.stringify(summary);
+}
+
+/**
+ * E2 evidence-coupled accounting: the turn of the last ledger entry whose
+ * evidence was NOT 'failed'. A failed-evidence turn produced output but the
+ * output was not validated — it does not count as forward progress for the
+ * no_progress detector (so a run churning files that never pass validation
+ * still trips no_progress). Entries with undefined evidenceStatus (mid-run
+ * turns that did not run validation) count as progress. Falls back to the
+ * folded aggregate's lastValidatedTurn when all detail entries failed. Returns
+ * 0 if no qualifying turn exists (detail or folded).
+ */
+export function lastProgressTurn(ledger: Ledger | undefined): number {
+  const l = ledger ?? emptyLedger();
+  for (let i = l.entries.length - 1; i >= 0; i--) {
+    if (l.entries[i].evidenceStatus !== 'failed') {
+      return l.entries[i].turn;
+    }
+  }
+  return l.folded.lastValidatedTurn ?? 0;
 }
 
 /**
