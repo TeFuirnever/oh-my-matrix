@@ -59,7 +59,7 @@
 | `skipped` 成因 | 处置 | 理由 |
 |---|---|---|
 | **从未配置**验证命令（`commands.length === 0`） | `done` + `completionUnverified: true` | 无测试项目是合法场景，不该被拦 |
-| **配置了但没跑成**（命令缺失/超时/被 allowlist 丢弃，`commands.length > 0` 却无有效结果） | `blocked` + `blockedReason: 'evidence_missing'` + `completionUnverified: true` | "本应验证却没验证"才是真风险 |
+| **配置了但没跑成**（命令缺失/超时/被 allowlist 丢弃，`commands.length > 0` 却无有效结果） | `blocked` + `blockedReason: 'evidence_missing'` + `completionUnverified: false` | "本应验证却没验证"才是真风险；blocked 非 completion，信号由 `blockedReason` 承担（四轮 review 修正：避免 blocked 被消费方误读为"已完成但未验证"） |
 
 **实施要点**（§5.4 line 1261-1262）：
 - `evaluateEvidence`（`evidence-gate.ts:23-95`）新增**显式字段** `skipReason: 'not_configured' | 'not_executed'`，**不要靠匹配 `failureReason` 字符串**区分。

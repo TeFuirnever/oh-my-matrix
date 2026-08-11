@@ -17,6 +17,9 @@ export default tseslint.config(
       '.autopilot/**',
       '.omc/**',
       '.omx/**',
+      // worktrees are separate checkouts, not project code — their dual
+      // tsconfig roots broke eslint's parser (tsconfigRootDir ambiguity).
+      '.claude/**',
       'coverage/**',
       'packages/*/*.tgz',
     ],
