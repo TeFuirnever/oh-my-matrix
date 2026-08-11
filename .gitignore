@@ -33,3 +33,6 @@ graphify-out/
 
 # ZCode 本地会话缓存（plans/state，机器本地，不入库）
 .zcode/
+
+# Claude Code worktree checkouts（临时分支 checkout，不入库）
+.claude/worktrees/
