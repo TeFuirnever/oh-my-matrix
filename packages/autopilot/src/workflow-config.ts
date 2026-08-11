@@ -221,8 +221,14 @@ function parseAutopilotSection(raw: Record<string, unknown>): {
       }
     }
 
+    const kept = filterValidationCommands(commands, warnings);
     result.validation = {
-      commands: filterValidationCommands(commands, warnings),
+      commands: kept,
+      // V1/review: commands configured but dropped by the S1 allowlist would
+      // otherwise make commands.length===0 → skipped 'not_configured' → done
+      // (the run completes unverified exactly as before). The dropped count
+      // lets the evidence gate treat this as 'configured but didn't run'.
+      droppedCommands: commands.length - kept.length,
       failOnOptional: val.fail_on_optional === true,
     };
   }

@@ -168,7 +168,7 @@ describe('T-2: evidence-gate + command-runner pipeline', () => {
     expect(evidence.status).toBe('passed');
   });
 
-  it('timeout command pipeline: runCommands → evaluateEvidence → failed with timeout', async () => {
+  it('timeout command pipeline: runCommands → evaluateEvidence → skipped not_executed', async () => {
     const commands: ValidationCommand[] = [
       { id: 'timeout-cmd', command: `node -e "setTimeout(()=>{},2000)"`, timeoutMs: 50, required: true },
     ];
@@ -183,7 +183,10 @@ describe('T-2: evidence-gate + command-runner pipeline', () => {
       now: Date.now(),
     });
 
-    expect(evidence.status).toBe('failed');
+    // V1: timeout = "configured but didn't run" → not_executed (resumable
+    // evidence_missing), not a hard failure.
+    expect(evidence.status).toBe('skipped');
+    expect(evidence.skipReason).toBe('not_executed');
     expect(evidence.failureReason).toContain('timeout-cmd');
   }, 10000);
 

@@ -274,12 +274,22 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         // 'not_configured' (or legacy undefined) is legitimate → done. Both mark
         // completionUnverified (the run was not evidence-verified).
         if (event.evidence.skipReason === 'not_executed') {
+          // Not a completion: the run is BLOCKED on evidence_missing (resumable
+          // once the operator fixes validation). completionUnverified means
+          // "reached done without a passed evidence gate" — a blocked run has
+          // not reached completion, and blockedReason=evidence_missing already
+          // carries the "should have verified, didn't" signal. enabled:false
+          // + needsCrossTurnResume cleared like every sibling terminal branch
+          // (V6b) — a paused-but-enabled run would zombie-turn (all handlers
+          // guard on enabled) and could never reach done.
           return {
             ...state,
             orchestrationState: 'blocked',
             blockedReason: 'evidence_missing',
+            enabled: false,
+            needsCrossTurnResume: false,
             evidence: event.evidence,
-            completionUnverified: true,
+            completionUnverified: false,
             lastActivityAt: event.now,
           };
         }
@@ -417,6 +427,10 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
         ...state,
         orchestrationState: 'claimed',
         blockedReason: undefined,
+        // H1-class fix: a stale pauseReason on a resumed running run leaked into
+        // projection (status='running' + pauseReason='no_progress'). The legacy
+        // resume() setter cleared it; the reducer is the sole writer now (ADR-016).
+        pauseReason: undefined,
         needsCrossTurnResume: true,
         lastActivityAt: event.now,
       };

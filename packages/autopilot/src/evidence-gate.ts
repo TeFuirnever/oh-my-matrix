@@ -12,6 +12,10 @@ export interface EvaluateEvidenceInput {
   diffSummary: string;
   now: number;
   failOnOptional?: boolean;
+  /** V1: commands configured but dropped at load (S1 allowlist) — a dropped
+   *  required command means "configured but didn't run" (not_executed), NOT
+   *  "never configured" (not_configured → done). */
+  droppedCommands?: number;
 }
 
 const MAX_DIFF_SUMMARY_LENGTH = 500;
@@ -21,10 +25,22 @@ const MAX_DIFF_SUMMARY_LENGTH = 500;
  * Returns an EvidenceSummary with pass/fail/skipped status.
  */
 export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary {
-  const { commands, results, diffSummary, now, failOnOptional = false } = input;
+  const { commands, results, diffSummary, now, failOnOptional = false, droppedCommands = 0 } = input;
 
-  // No validation commands configured → skipped (not_configured: legitimate → done)
+  // No validation commands configured → skipped (not_configured: legitimate → done).
+  // BUT: commands dropped by the S1 allowlist at load are "configured but didn't
+  // run" → not_executed (fail-closed: the run must NOT complete unverified).
   if (commands.length === 0) {
+    if (droppedCommands > 0) {
+      return {
+        status: 'skipped',
+        diffSummary: summarizeDiff(diffSummary),
+        commands: [],
+        completedAt: now,
+        failureReason: `${droppedCommands} validation command(s) dropped by the binary allowlist`,
+        skipReason: 'not_executed',
+      };
+    }
     return {
       status: 'skipped',
       diffSummary: summarizeDiff(diffSummary),
@@ -44,19 +60,25 @@ export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary 
   // Track which required commands failed
   const failedRequiredIds: string[] = [];
   const failedOptionalIds: string[] = [];
+  // V1: required commands that never produced a real verdict (missing result /
+  // skipped / timeout) — "configured but didn't run" → evidence_missing
+  // (resumable), NOT a hard failure (per design §3.1: 命令缺失/超时 → blocked).
+  const notExecutedRequiredIds: string[] = [];
 
   for (const cmd of commands) {
     const result = resultsById.get(cmd.id);
 
-    if (!result || result.status === 'skipped') {
-      // Command was never run or was skipped
+    if (!result || result.status === 'skipped' || result.status === 'timeout') {
+      // Command was never run, was skipped, or timed out — no verdict. A
+      // timeout is not proof of failure; the operator may fix the command
+      // (or its timeout) and resume. Only a real exit-code failure is failed.
       if (cmd.required) {
-        failedRequiredIds.push(cmd.id);
+        notExecutedRequiredIds.push(cmd.id);
       }
       continue;
     }
 
-    if (result.status === 'failed' || result.status === 'timeout' || result.status === 'output_overflow') {
+    if (result.status === 'failed' || result.status === 'output_overflow') {
       if (cmd.required) {
         failedRequiredIds.push(cmd.id);
       } else {
@@ -73,6 +95,21 @@ export function evaluateEvidence(input: EvaluateEvidenceInput): EvidenceSummary 
       commands: results,
       completedAt: now,
       failureReason: `required command(s) failed: ${failedRequiredIds.join(', ')}`,
+    };
+  }
+
+  // V1: no real failures, but required commands never produced a verdict
+  // (missing / skipped / timed out / dropped at load) → not_executed →
+  // blocked evidence_missing (resumable). Real failures above win; this only
+  // fires when nothing actually failed.
+  if (notExecutedRequiredIds.length > 0) {
+    return {
+      status: 'skipped',
+      diffSummary: summarizeDiff(diffSummary),
+      commands: results,
+      completedAt: now,
+      failureReason: `required command(s) did not run: ${notExecutedRequiredIds.join(', ')}`,
+      skipReason: 'not_executed',
     };
   }
 

@@ -79,25 +79,6 @@ export function complete(state: AutopilotState): AutopilotState {
   return { ...next, status: deriveStatus(next) };
 }
 
-export function resume(state: AutopilotState): AutopilotState {
-  if (state.status !== 'paused') {
-    throw new Error(`Cannot resume from status "${state.status}", must be "paused"`);
-  }
-  const next: AutopilotState = {
-    ...state,
-    orchestrationState: 'claimed',
-    blockedReason: undefined,
-    enabled: true,
-    pauseReason: undefined,
-    toolErrorCount: 0,
-    lastToolError: undefined,
-    needsCrossTurnResume: false,
-    degraded: false,
-  };
-  return { ...next, status: deriveStatus(next) };
-}
-
-
 export function incrementTurn(state: AutopilotState): AutopilotState {
   return { ...state, turnAttempts: state.turnAttempts + 1 };
 }

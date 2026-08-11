@@ -265,6 +265,11 @@ export interface WorkflowConfig {
   };
   validation: {
     commands: ValidationCommand[];
+    /** V1: commands configured in WORKFLOW.md but dropped by the S1 binary
+     *  allowlist at load — evidence gate treats them as not_executed, not
+     *  not_configured (fail-closed: 'configured but didn't run' must not
+     *  complete unverified). */
+    droppedCommands?: number;
     failOnOptional: boolean;
   };
   destructiveGit: {
@@ -363,9 +368,11 @@ export interface AutopilotState {
    */
   inFlightToolStartedAt?: number;
   /**
-   * E4/P0-4: true when the run reached 'done' WITHOUT a passed evidence gate
-   * (skipped not_configured), or was blocked on evidence_missing (skipped
-   * not_executed). Observability marker — the completion was not verified.
+   * E4/P0-4: true ONLY when the run reached 'done' WITHOUT a passed evidence
+   * gate (skipped not_configured). A run blocked on evidence_missing is NOT
+   * a completion — blockedReason=evidence_missing carries that signal instead
+   * (a "should have verified, didn't" blocked run must not read as a
+   * completion to consumers of this field).
    */
   completionUnverified?: boolean;
   degraded: boolean;

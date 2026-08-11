@@ -341,7 +341,9 @@ describe('orchestrator reducer — state transition table', () => {
       });
       expect(next.orchestrationState).toBe('blocked');
       expect(next.blockedReason).toBe('evidence_missing');
-      expect(next.completionUnverified).toBe(true);
+      // Not a completion: blocked runs are not "completed unverified" — the
+      // blockedReason itself carries the "should have verified, didn't" signal.
+      expect(next.completionUnverified).toBe(false);
       // evidence_missing is resumable — the run can be retried after the operator fixes the validation.
       expect(next.status).toBe('paused');
     });
@@ -512,6 +514,7 @@ describe('orchestrator reducer — state transition table', () => {
       const state = makeState({
         orchestrationState: 'blocked',
         blockedReason: 'stalled',
+        pauseReason: 'no_progress',
         workspace: ws,
       });
       const next = orchestratorReducer(state, {
@@ -519,6 +522,8 @@ describe('orchestrator reducer — state transition table', () => {
       });
       expect(next.orchestrationState).toBe('claimed');
       expect(next.blockedReason).toBeUndefined();
+      // H1-class guard: a stale pauseReason must not leak onto the resumed run.
+      expect(next.pauseReason).toBeUndefined();
       expect(next.workspace).toEqual(ws);
     });
 

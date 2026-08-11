@@ -223,11 +223,19 @@ describe('M2 Projection extensions', () => {
     expect(proj.workflowSource).toBe('workflow_md');
   });
 
-  it('runtimeMs is computed from startedAt to now', () => {
+  it('runtimeMs is computed from startedAt to now while running', () => {
     const startedAt = Date.now() - 30000;
-    const state: AutopilotState = { ...createInitialState('s', 'r'), startedAt, lastActivityAt: Date.now() };
+    const state: AutopilotState = { ...createInitialState('s', 'r'), status: 'running', startedAt, lastActivityAt: Date.now() };
     const proj = projectState(state)!;
     expect(proj.runtimeMs).toBeGreaterThanOrEqual(25000);
     expect(proj.runtimeMs).toBeLessThanOrEqual(35000);
+  });
+
+  it('runtimeMs freezes at lastActivityAt for terminated runs (not wall-clock)', () => {
+    const startedAt = Date.now() - 60000;
+    const state: AutopilotState = { ...createInitialState('s', 'r'), status: 'paused', startedAt, lastActivityAt: Date.now() - 20000 };
+    const proj = projectState(state)!;
+    expect(proj.runtimeMs).toBeGreaterThanOrEqual(35000);
+    expect(proj.runtimeMs).toBeLessThanOrEqual(45000);
   });
 });

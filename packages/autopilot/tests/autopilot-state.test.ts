@@ -7,7 +7,6 @@ import {
   deactivate,
   pause,
   complete,
-  resume,
   incrementTurn,
   incrementTotal,
   resetTurnAttempts,
@@ -63,30 +62,6 @@ describe('autopilot-state', () => {
       const next = complete(state);
       expect(next.status).toBe('done');
       expect(next.enabled).toBe(false);
-    });
-
-    it('resume: paused → running', () => {
-      const state = { ...base(), status: 'paused' as const, enabled: true, pauseReason: 'tool_error_repeated' as const };
-      const next = resume(state);
-      expect(next.status).toBe('running');
-      expect(next.pauseReason).toBeUndefined();
-    });
-
-    it('resume: resets degraded flag', () => {
-      const state = { ...base(), status: 'paused' as const, enabled: false, degraded: true };
-      const next = resume(state);
-      expect(next.degraded).toBe(false);
-    });
-
-    it('resume() preserves totalTokensUsed when resuming paused session', () => {
-      const state = { ...base(), status: 'paused' as const, enabled: false, totalTokensUsed: 1500, pauseReason: 'token_budget_exceeded' as const };
-      const next = resume(state);
-      expect(next.totalTokensUsed).toBe(1500);
-    });
-
-    it('resume: throws if not paused', () => {
-      const state = { ...base(), status: 'idle' as const };
-      expect(() => resume(state)).toThrow();
     });
 
     // C1: pause() must validate status — only running → paused is valid

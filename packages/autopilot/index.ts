@@ -267,7 +267,9 @@ async function runMidRunValidation(runId: string, state: AutopilotState, turn: n
   setState(runId, { ...state, inFlightToolStartedAt: Date.now() });
   try {
     const results = await runValidationCommands(commands, state.workspace?.path);
-    const summary = evaluateEvidence({ commands, results, diffSummary: '', now: Date.now() });
+    // Same config as the final gate: fail_on_optional must apply to mid-run
+    // validation too, or the two gates disagree on the same command failure.
+    const summary = evaluateEvidence({ commands, results, diffSummary: '', now: Date.now(), failOnOptional: state.workflow?.validation.failOnOptional });
     // Reuses the shared formatFailedCommands (same truncation constants as the
     // finalize-path failure block — no divergent twin). Mid-run always returns a
     // block (status is 'failed' here); the ?? covers a detail-less summary.
@@ -780,9 +782,13 @@ export function register(api: OpenClawPluginApi): void {
             }
             // E12: fold the bare needsCrossTurnResume spread into cross_turn_enqueued
             // on the re-fetched state (race-safe vs a concurrent stop/pause/stall).
-            // `?? state` only fires if the run vanished during the await (evicted/
-            // cleaned) — the reducer guard (status!=='running') then no-ops.
-            const current = stateByRun.get(runId) ?? state;
+            // If the run vanished during the await (evicted/cleaned by
+            // session_end/LRU), do NOT resurrect it from the stale pre-await
+            // snapshot — `?? state` would re-insert a deleted run whose status
+            // is still 'running', and the patrol would keep driving the dead
+            // session. Skip the dispatch entirely instead.
+            const current = stateByRun.get(runId);
+            if (!current) return { action: 'finalize' };
             setState(runId, orchestratorReducer(current, { type: 'cross_turn_enqueued', runId, now: Date.now() }));
             return { action: 'finalize' };
           } catch (err) {
@@ -834,6 +840,17 @@ export function register(api: OpenClawPluginApi): void {
         }
         // Dispatch orchestrator events to advance orchState to 'done'.
         // Close the agent turn (running → released) so evidence events can fire.
+        // Same stale-snapshot guard as the cross_turn path: if the run vanished
+        // (or was stopped/ended) while validation awaited, do NOT dispatch the
+        // post-await chain on the stale pre-await `state` — that would clobber
+        // the concurrent stop/session_end transition (and double-release the
+        // audit refcount via the complete-path release below). Only terminal
+        // transitions abort: claimed/running/retry_queued continue normally.
+        const postAwait = stateByRun.get(runId);
+        if (!postAwait || postAwait.orchestrationState === 'blocked' || postAwait.orchestrationState === 'done' || postAwait.orchestrationState === 'unclaimed') {
+          warn(`[autopilot] evidence gate: run changed while validation ran (${postAwait ? 'stopped' : 'removed'}), preserving concurrent transition`);
+          return { action: 'finalize' };
+        }
         let updated = state;
         if (updated.orchestrationState === 'running') {
           updated = orchestratorReducer(updated, {
@@ -861,13 +878,16 @@ export function register(api: OpenClawPluginApi): void {
         // run is not `done` (reducer no-oped — orchState !== 'released', i.e. a
         // stop/stall/retry race), do NOT force done via complete(); warn and
         // preserve the pre-race orchState. The race is surfaced, not masked.
-        if (evidenceSummary.status !== 'failed' && updated.status !== 'done') {
+        if (evidenceSummary.status !== 'failed' && updated.status !== 'done' && evidenceSummary.skipReason !== 'not_executed') {
           warn(`[autopilot] evidence gate: evidence ${evidenceSummary.status} but run not in 'done' (orchState=${updated.orchestrationState ?? 'n-a'}, status=${updated.status}); preserving state, not completing (ADR-020 #2)`);
         }
         setState(runId, { ...updated, evidence: evidenceSummary });
         logWithContext('info', 'evidence gate result', { sessionKey, runId, evidenceStatus: evidenceSummary.status, failureReason: evidenceSummary.failureReason });
-        // Release audit monitor when task completes — session is done, no more tool calls needed.
-        setAuditMode('active');
+        // S8: release the audit monitor refcount only when the run actually
+        // terminates. Evidence failed → retry_queued keeps the run active
+        // (status derives 'running') and its refcount held — releasing here
+        // would over-release the shared refcount for a still-running run.
+        if (updated.status !== 'running') setAuditMode('active');
         return { action: 'finalize' };
       }
       default:
@@ -1307,7 +1327,12 @@ export function register(api: OpenClawPluginApi): void {
       // M-4: When at max continuations, pause directly instead of requesting cross-turn
       // (cross-turn would just hit max_total_reached again — wasted IPC round-trip)
       if (state.status === 'running' && state.totalContinuations >= state.maxTotalContinuations) {
-        setState(runId, orchestratorReducer(updated, { type: 'pause_requested', runId, reason: 'max_total_reached', now: Date.now() }));
+        const pausedState = orchestratorReducer(updated, { type: 'pause_requested', runId, reason: 'max_total_reached', now: Date.now() });
+        setState(runId, pausedState);
+        // S8: pause releases the audit monitor refcount (acquired at activate).
+        // Keyed on the reducer RESULT: pause_requested no-ops on retry_queued
+        // (TENSION 3) and a no-op must not release.
+        if (pausedState !== updated) setAuditMode('active');
         warn(`[autopilot] agent_end: degraded at max continuations, pausing session=${sessionKey}`);
         return;
       }
@@ -1396,6 +1421,17 @@ export function register(api: OpenClawPluginApi): void {
     // E5: ledger + progress headline were finalized at the top of agent_end and
     // ride `state` through the reducer chain above (every reducer spreads state).
     setState(runId, afterOrchestrator);
+    // S8: release the audit monitor refcount exactly when the reducer actually
+    // moved the run to a terminal/paused state — keyed on the reducer RESULT,
+    // not on the event (isBreaker / max_total), because pause_requested /
+    // agent_turn_finished no-op on retry_queued (TENSION 3) and a no-op must
+    // NOT release. Covers the loop_breaker, degraded max_total, AND the
+    // non-breaker-error→blocked paths (max_retries_reached / unrecoverable_error
+    // — agent_turn_finished lands blocked; API errors never reach the complete
+    // path's release since before_agent_finalize doesn't fire on them).
+    if (afterOrchestrator.orchestrationState === 'blocked' || afterOrchestrator.orchestrationState === 'done') {
+      setAuditMode('active');
+    }
     logWithContext('info', 'agent_end', { sessionKey, runId, success: event.success, isBreaker, orchState: afterOrchestrator.orchestrationState ?? 'n/a', ledgerEntries: afterOrchestrator.ledger?.entries.length ?? 0 });
   });
 
@@ -1422,6 +1458,7 @@ export function register(api: OpenClawPluginApi): void {
         maxConcurrentAutopilot: config.maxConcurrentAutopilot ?? 5,
         needsCrossTurnResume: false,
         canStop: false,
+        canResume: false,
         totalTokensUsed: 0,
         degraded: false,
       } as unknown as PluginJsonValue;
@@ -1631,6 +1668,15 @@ export function register(api: OpenClawPluginApi): void {
       const [runId, state] = entry;
       if (state.status !== 'paused') { respond(false, undefined, { code: 'INVALID_REQUEST', message: `cannot resume from status "${state.status}"` }); return; }
 
+      // E13/review: check the enqueue facade BEFORE mutating state (align with
+      // resume_run). A missing facade means the kick below would silently no-op
+      // — reporting INVALID_REQUEST after setState would leave the run claimed
+      // with no kick, stalled until the orphan sweep.
+      if (typeof enqueueInjectionFn !== 'function') {
+        respond(false, undefined, { code: 'INVALID_REQUEST', message: 'cannot resume: enqueueNextTurnInjection facade unavailable' });
+        return;
+      }
+
       // M2: Dispatch resume_requested through orchestrator reducer
       const orchestrated = orchestratorReducer(state, { type: 'resume_requested', runId, now: Date.now() });
       // T03/ADR-016: the reducer is the transition's sole writer. When it no-ops
@@ -1645,20 +1691,35 @@ export function register(api: OpenClawPluginApi): void {
         });
         return;
       }
-      // Reducer moved blocked → claimed. Clear coupled aux state only; keep
-      // needsCrossTurnResume=true (set by the reducer) so kickResumedTurn works.
+      // Reducer moved blocked → claimed (and cleared pauseReason per ADR-016 —
+      // sole writer). Clear coupled aux state only.
       const resumedBase = {
         ...orchestrated,
         enabled: true,
+        // V2b: clear the mid-cross-turn flag — this resume IS the explicit
+        // continuation (kickResumedTurn below enqueues the turn; the flag is
+        // only read by the host-driver resume_run RPC, which would otherwise
+        // accept a SECOND continuation on top of our kick). The already-
+        // enqueued injection survives a gateway restart (queued at the host),
+        // so the crash window loses no kick.
+        needsCrossTurnResume: false,
+        // Keep the retry chain: wiping it would re-arm the maxRetries budget
+        // (pause→resume cycling would grant unbounded stalled retries) and drop
+        // the escalation guidance (RETRY_ESCALATION_THRESHOLD). The legacy
+        // resume() setter never touched retry.
         toolErrorCount: 0,
         lastToolError: undefined,
         degraded: false,
-        retry: undefined,
+        // A pause can land mid-validation with the in-flight marker set (T03);
+        // clear it so the resumed turn falls back to stallTimeoutMs, not the
+        // 30-min INFLIGHT cap with nothing in flight.
+        inFlightToolStartedAt: undefined,
       };
       const resumed = { ...resumedBase, status: deriveStatus(resumedBase) };
       setState(runId, resumed);
       // LOGIC-4: a programmatic resume has no follow-up user message to trigger
       // agent_turn_prepare, so kick a cross-turn injection to actually continue.
+      // The facade was verified before the reducer dispatch above (E13/review).
       kickResumedTurn(runId, resumed);
       log(`[autopilot] resume: session=${sessionKey} paused→running, errors reset`);
       // Re-acquire audit monitor mode on resume.
@@ -1743,8 +1804,8 @@ export function register(api: OpenClawPluginApi): void {
       // Release audit monitor refcount when the run actually terminates here.
       // Only 'running' reaches this as its FIRST terminal transition — paused and
       // done already released at pause/complete. Releasing again would over-release
-      // the shared refcount (S8 design), which the old resume() force-resume used
-      // to mask by re-acquiring monitor.
+      // the shared refcount (S8 design), which the removed legacy resume()
+      // force-resume used to mask by re-acquiring monitor.
       if (state.status === 'running') setAuditMode('active');
       respond(true, { ok: true });
   });
@@ -1867,7 +1928,16 @@ export function register(api: OpenClawPluginApi): void {
           // so the resumed turn falls back to stallTimeoutMs instead of inheriting
           // the 30min INFLIGHT cap for a full turn.
           setState(runId, { ...updated, inFlightToolStartedAt: undefined });
+          // S8: stall-exhaustion (stall_timeout → blocked max_retries_reached)
+          // pauses the run; release the audit monitor refcount like pause paths do.
+          if (updated.orchestrationState === 'blocked') setAuditMode('active');
           warn(`[autopilot] stall detected: session=${state.sessionKey} run=${runId} lastActivity=${stallResult.stallDurationMs ?? 0}ms stall, orchState=${updated.orchestrationState}`);
+          // Same-tick clobber guard (mirrors the hard-cap block's `continue`):
+          // the no_progress block below re-reads the stale pre-stall `state`
+          // snapshot and would overwrite this terminal block with a resumable
+          // no_progress pause, re-arm the in-flight marker, and release a second
+          // time. Skip the rest of this iteration for the run.
+          continue;
         }
       }
 

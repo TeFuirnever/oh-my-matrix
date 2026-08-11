@@ -151,8 +151,11 @@ export function buildProgressHeadline(ledger: Ledger | undefined): string {
   const l = ledger ?? emptyLedger();
   const last = l.entries[l.entries.length - 1];
   const turn = last?.turn ?? 0;
-  const fileCount = l.folded.filesTouched.length + (last?.filesTouched.length ?? 0);
-  const cmdCount = l.folded.commandsRun.length + (last?.commandsRun.length ?? 0);
+  // Dedup across the fold boundary: the folded aggregate is internally deduped
+  // but a file/command present in both folded history and the latest turn was
+  // double-counted. Union both, then count distinct.
+  const fileCount = new Set([...l.folded.filesTouched, ...(last?.filesTouched ?? [])]).size;
+  const cmdCount = new Set([...l.folded.commandsRun, ...(last?.commandsRun ?? [])]).size;
   const foldedNote = l.folded.turns > 0 ? ` · ${l.folded.turns} earlier turn${l.folded.turns === 1 ? '' : 's'} folded` : '';
   return `Turn ${turn} · ${fileCount} file${fileCount === 1 ? '' : 's'} · ${cmdCount} command${cmdCount === 1 ? '' : 's'}${foldedNote}`;
 }

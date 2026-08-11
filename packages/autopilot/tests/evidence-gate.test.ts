@@ -11,7 +11,7 @@ import {
 
 
 } from '../src/evidence-gate';
-import type { _ValidationCommand, EvidenceCommandResult } from '../src/types';
+import type { EvidenceCommandResult } from '../src/types';
 
 describe('evidence-gate', () => {
   describe('evaluateEvidence', () => {
@@ -51,7 +51,7 @@ describe('evidence-gate', () => {
       expect(result.failureReason).toContain('typecheck');
     });
 
-    it('returns failed when a required command times out', () => {
+    it('returns skipped/not_executed when a required command times out', () => {
       const result = evaluateEvidence({
         commands: [
           { id: 'slow-test', command: 'pnpm test', timeoutMs: 5000, required: true },
@@ -62,7 +62,10 @@ describe('evidence-gate', () => {
         diffSummary: '',
         now: NOW,
       });
-      expect(result.status).toBe('failed');
+      // V1: timeout is "configured but didn't run" → not_executed (blocked
+      // evidence_missing, resumable), not a hard failure (design §3.1).
+      expect(result.status).toBe('skipped');
+      expect(result.skipReason).toBe('not_executed');
       expect(result.failureReason).toContain('slow-test');
     });
 
@@ -147,8 +150,10 @@ describe('evidence-gate', () => {
         diffSummary: '',
         now: NOW,
       });
-      // Required command missing → failed
-      expect(result.status).toBe('failed');
+      // V1: required command missing → not_executed (blocked evidence_missing,
+      // resumable), not a hard failure (design §3.1: 命令缺失 → blocked).
+      expect(result.status).toBe('skipped');
+      expect(result.skipReason).toBe('not_executed');
     });
 
     it('includes command results in output', () => {

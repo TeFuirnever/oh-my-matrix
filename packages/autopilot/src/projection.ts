@@ -53,8 +53,10 @@ export interface AutopilotProjection {
   /** E6 dir-1: timestamp a tool/validation is in flight (observability); undefined
    * when idle. While set the stall patrol uses the longer per-tool cap. */
   inFlightToolStartedAt?: number;
-  /** E4: completion reached without a passed evidence gate (observability). */
+  /** E4: true only when 'done' was reached without a passed evidence gate. */
   completionUnverified?: boolean;
+  /** E4/T05: why the evidence gate skipped ('not_configured' vs 'not_executed'). */
+  evidenceSkipReason?: 'not_configured' | 'not_executed';
   /** T03/§3.3: true when blocked with a resumable reason — host resume button gate. */
   canResume: boolean;
 }
@@ -109,10 +111,16 @@ export function projectState(
     blockedReason: state.blockedReason,
     startedAt: state.startedAt,
     lastActivityAt: state.lastActivityAt,
-    runtimeMs: state.startedAt != null ? now - state.startedAt : 0,
+    // Runtime freezes at termination: a paused/done/idle run's startedAt would
+    // otherwise keep growing with the wall clock, reading as "still running" to
+    // consumers (same semantic-pollution class as completionUnverified).
+    runtimeMs: state.startedAt != null
+      ? (state.status === 'running' ? now : (state.lastActivityAt ?? now)) - state.startedAt
+      : 0,
     inputTokensUsed: state.inputTokensUsed ?? 0,
     outputTokensUsed: state.outputTokensUsed ?? 0,
     evidenceStatus: state.evidence?.status,
+    evidenceSkipReason: state.evidence?.skipReason,
     evidenceSummary: state.evidence?.diffSummary,
     lastEvidenceCommands: state.evidence?.commands,
     workflowSource: state.workflow?.source,
@@ -124,7 +132,11 @@ export function projectState(
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,
     checkpointWriteFailures: getCheckpointWriteFailureCount(),
     inFlightToolStartedAt: state.inFlightToolStartedAt,
-    completionUnverified: state.completionUnverified,
+    // V9: completionUnverified is a COMPLETION signal — only surfaced on 'done'
+    // runs. A paused/running run (incl. a pre-change checkpoint restored with
+    // the old true value, or a resumed run) must never advertise "completed
+    // unverified" across the upgrade boundary.
+    completionUnverified: state.status === 'done' ? state.completionUnverified : undefined,
     // T03/§3.3: defensive — gate on the blocked state too, so a legacy checkpoint
     // with an inconsistent blockedReason/orchestrationState pair can't show a
     // resume button on a running run (the gateway + reducer still guard anyway).

@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { orchestratorReducer, deriveStatus } from '../src/orchestrator';
-import { activate, pause, complete, resume, deactivate } from '../src/autopilot-state';
+import { activate, pause, complete, deactivate } from '../src/autopilot-state';
 import type { AutopilotState, OrchestratorEvent, PauseReason } from '../src/types';
 import { DEFAULT_WORKFLOW_CONFIG } from '../src/workflow-config';
 
@@ -62,9 +62,13 @@ describe('W1 Phase 3 — status invariant (status === deriveStatus after every t
       expect(state.status).toBe(deriveStatus(state));
     });
 
-    it('resume: status === deriveStatus', () => {
+    it('resume (reducer): status === deriveStatus', () => {
+      // The legacy resume() setter was removed — resume goes through the
+      // reducer (ADR-016 sole writer). Invariant must hold on the reducer path.
       const paused = pause(makeState(), 'validation_failed');
-      const state = resume(paused);
+      const state = orchestratorReducer(paused, {
+        type: 'resume_requested', runId: 'r1', now: 2000,
+      });
       expect(state.status).toBe(deriveStatus(state));
     });
 

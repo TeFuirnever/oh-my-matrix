@@ -80,7 +80,9 @@ describe('Evidence Gate fail-open wiring (E4/E7 fail-closed)', () => {
     // Fail-closed: the run must NOT reach done — it blocks on evidence_missing (resumable).
     expect(projection.evidenceStatus).toBe('skipped');
     expect(projection.blockedReason).toBe('evidence_missing');
-    expect(projection.completionUnverified).toBe(true);
+    // Blocked ≠ completion: completionUnverified only surfaces on 'done' runs
+    // (V9) — a paused run projects undefined, never false or true.
+    expect(projection.completionUnverified).toBeUndefined();
     expect(projection.status).toBe('paused');
   });
 });
