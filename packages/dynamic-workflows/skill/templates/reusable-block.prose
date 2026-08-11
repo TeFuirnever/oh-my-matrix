@@ -1,0 +1,46 @@
+# Reusable block: parameterized sub-program with output + recursion
+# Customize: replace the block body with your domain logic
+#
+# A `block` is a named, parameterized sub-program you invoke with `do`. Use it
+# to factor repetition (a search loop, an improve-until-good cycle) out of the
+# main flow. `output` returns from the block; recursion is `do` with a smaller
+# argument. Blocks are the building material of loop-until-dry and duel-loop.
+
+input target: "The target to process"
+input max_depth: "Recursion depth cap (e.g. 3)"
+
+# Define a reusable block: parameters in parens, body indented, output returns.
+block refine(item, depth):
+  if depth <= 0:
+    output item
+
+  # critic 角色（标准角色）—— prompt 从 references/role-prompts/critic.md 拷贝（Step 1.5）
+  agent critic:
+    model: opus
+    prompt: "<Copy Prompt text from references/role-prompts/critic.md>"
+
+  let review = session: critic
+    prompt: "Find the single highest-priority issue with this item. Emit one issue or SURVIVES."
+    context: item
+
+  if **review is SURVIVES with no critical issue**:
+    output item
+
+  # executor 角色（标准角色）—— prompt 从 references/role-prompts/executor.md 拷贝（Step 1.5）
+  agent executor:
+    model: sonnet
+    prompt: "<Copy Prompt text from references/role-prompts/executor.md>"
+
+  let revised = session: executor
+    prompt: "Fix the issue identified in the review."
+    context: { item, review }
+
+  # Recurse: revised item goes through another review round until it survives
+  # or the depth budget runs out. The result is returned, not re-bound.
+  output do refine(revised, depth - 1)
+
+# Invoke the block once; its output is the final result.
+let settled = do refine(target, max_depth)
+
+session "Report the refined result and how many rounds it took"
+  context: settled
