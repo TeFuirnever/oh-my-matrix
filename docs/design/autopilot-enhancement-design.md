@@ -1,6 +1,7 @@
 # Autopilot 增强设计（verification-floor 落地 + LoopX 引入）
 
 > **Status**: Part A 已实施核验（2026-08-09/10）· Part B 引入评估（2026-08-10/11）· Part C 待办路线
+> ⚠️ **快照声明**：本文行号/测试数为 2026-08-10 快照；代码持续演进，实施以符号名为准（复核触发点：§5.12 host 落地时）。
 > **合一来源**：`autopilot-verification-floor-design.md`（已落地设计，被本文件取代）+ `loopx-intake-recommendation.md`（引入评估，被本文件取代）
 > **关联**：`docs/core/autopilot/long-horizon-autonomy.md` §5.4/§5.5/§5.6/§5.12 · `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/audits/openclaw-native-vs-autopilot-2026-08-05.md`（E4+E7/E5）· `ecc-intake-recommendation.md`（ECC 评估，参考）
 
@@ -10,9 +11,14 @@
 
 ## A1. 背景与裁决
 
-用户问：oh-my-matrix 是否缺「任务拆解/规划」与「验收/verify」两块能力。研究结论（5-agent 对抗 review + 3 轮外部逆向）：两块缺口真实但**不对称**，且**早有既有 ticket 与设计**（`long-horizon-autonomy.md` §5.4/§5.5）。
+用户问：oh-my-matrix 是否缺「任务拆解/规划」与「验收/verify」两块能力。研究结论（5-agent 对抗 review【§5.4/§5.5 裁决】+ 3 轮外部逆向【Part B LoopX 评估】）：两块缺口真实但**不对称**，且**早有既有 ticket 与设计**：
 
-**对抗 review 共识**：所有外部落地方案 FLAWED——Task Flow（路径错 `.flows` 只读/`managedFlows` deprecated/解决已解决/范畴错状态机≠planner）、PWF（4 行映射假/与 §5.5 冲突/注入面）、cwc evaluator（ADR-019 延迟/capability 不可行）、progress-only-text（冗余）、ralplan（enforcement 焊死 OMC）。host `goal_manager` 是 ADR-007/008 文档吹嘘（symlink 指向本仓自身）。
+| 缺口 | 真实程度 | 既有 ticket | 既有设计 |
+|---|---|---|---|
+| 验收/verify | 部分缺失（evidence-gate 在但 `skipped`≡`passed`→done） | E4+E7（P0-4） | §5.4 三步 |
+| 规划/进展 | 部分缺失（progress 仅计数串） | E5（P1-11） | §5.5 progress-ledger |
+
+**对抗 review 共识**：所有外部落地方案 FLAWED——Task Flow（路径错 `.flows` 只读/`managedFlows` deprecated/解决已解决/范畴错状态机≠planner）、PWF（4 行映射假/与 §5.5 冲突/注入面）、cwc evaluator（ADR-019 延迟/capability 不可行）、cwc verify-gate（unconference demo/3 commits/"教学示例非安全边界"+3 绕过路径——参考价值有，非可移植产品）、progress-only-text（冗余）、ralplan（enforcement 焊死 OMC）。host `goal_manager` 是 ADR-007/008 文档吹嘘（symlink 指向本仓自身——注意该断言基于当时 host 状态，MA host 已演进，使用前复核）。
 
 **裁决**：不引外部，直接实施既有 §5.4 + §5.5 最小子集。ponytail 最短路径，零新依赖/框架/hook。
 
@@ -32,17 +38,17 @@
 | **配置了没跑成**（`commands.length > 0` 无有效结果） | `blocked` + `evidence_missing` + `completionUnverified: false` | 真风险；blocked 非 completion，信号由 blockedReason 承担 |
 
 - 显式 `skipReason: 'not_configured' | 'not_executed'` 字段（不匹配字符串）。
-- fail-open 分支（evaluation error）归 not_executed 一侧（fail-closed for completion）。
+- evaluation-error 分支（fail-closed for completion，历史曾标 fail-open）归 not_executed 一侧。
 
 ### A3.2 evidence_missing 可达（✅ 已实现）
 
-`VALID_BLOCKED_REASONS` + `RESUMABLE_BLOCKED_REASONS`（state-persister:432）已含，无需改。resumable。
+`VALID_BLOCKED_REASONS` + `RESUMABLE_BLOCKED_REASONS`（`orchestrator.ts:28-34`，**`state-persister.ts:552` 有需同步的镜像副本**——改 allowlist 须两处同步）已含，无需改。resumable。
 
 ### A3.3 resume 守门（✅ 已实现 + 对抗 review 修复）
 
-- 设计要求：reducer no-op → gateway INVALID_REQUEST；setter 收缩为清副状态。
-- **修复**（2026-08-09，review 实证"门 INVERTED"）：gateway reducer 后检查 `orchestrationState !== 'claimed'` → INVALID_REQUEST；**reducer sole writer**（gateway 不调 `resume()` setter，构造 resumed 补 `enabled:true` + 清副状态 + deriveStatus）。附带：stop 对 paused/done 的 audit 双释放修复。
-- `projection.ts` 透出 `completionUnverified` + **`canResume`**（`RESUMABLE_BLOCKED_REASONS.has(blockedReason)` + `orchestrationState==='blocked'` guard）。
+- 设计要求（已作废）：reducer no-op → gateway INVALID_REQUEST；setter 收缩为清副状态。
+- **修复**（2026-08-09，review 实证"门 INVERTED"）：gateway reducer 后检查 `orchestrationState !== 'claimed'` → INVALID_REQUEST；**`resume()` setter 已删除**——gateway 直接构造 resumed state（`enabled:true` + 清副状态 toolErrorCount/lastToolError/degraded/**inFlightToolStartedAt** + **保留 retry**（清掉会重装 maxRetries 预算）+ deriveStatus）。附带：stop 对 paused/done 的 audit 双释放修复。
+- `projection.ts` 透出 `completionUnverified` + **`evidenceSkipReason`**（not_configured/not_executed 可观测）+ **`canResume`**（`RESUMABLE_BLOCKED_REASONS.has(blockedReason)` + `orchestrationState==='blocked'` guard）。
 - ⚠️ 行为破坏性变更：§5.12 按钮条件须同批（host 侧）。
 
 ### A3.4 测试
@@ -55,33 +61,37 @@
 - 消费点：`index.ts:1289`（agent_end）+ `continuation-engine.ts`（summarizeLedger 注入）。
 - 数据源纪律：filesTouched 只取写类工具（`commandClass` 过滤），只读不记（防分析任务误报活动）。
 - 瞬态不落盘：`inFlightToolStartedAt` 不入 checkpoint（重启即工具死）。
+- 持久化：ledger 随 AutopilotState 走统一 checkpoint 根（progress-ledger.ts 头注释明示），不另建机制。
+- ⚠️ **`openItems`/`decisions` 恒空**（buildEntry 硬编码 `[]`）——successor chaining 引入点（Part C）。
 
 ## A5. 在飞守卫 —— §5.6（✅ 已实现）
 
 `inFlightToolStartedAt` 置位（before_tool_call allow / validation 期）/ 清零（after_tool_call / agent_end / before_agent_finalize / **stall_timeout**——防恢复 turn 继承 30min cap）。E6 dir-2 `no_progress` 生产力检测也在（orchestrator.ts:33 + state-persister:561）。
 
-## A6. 对齐清单
+## A6. 对齐清单（落地必遵，否则静默降级）
 
-| # | 约束 | 状态 |
-|---|---|---|
-| 1 | PauseReason 映射 total（编译安全网） | ✅ 无需改 |
-| 2 | BlockedReason/VALID_BLOCKED_REASONS | ✅ evidence_missing 已在 |
-| 3 | RESUMABLE allowlist | ✅ 5 项 |
-| 4 | projection canResume/completionUnverified | ✅ 已实现 |
-| 5 | resume setter 收缩 + §5.12 同批 | ✅ setter 已绕开；§5.12 host 侧 |
-| 6 | §5.6 先于/同批 §5.4 | ✅ |
+> 本设计**不新增 PauseReason**（evidence_missing 是 BlockedReason 非 PauseReason；skipped→blocked 直接写 blockedReason，不经 pause）。
+
+| # | 约束 | 漏的后果 | 状态 |
+|---|---|---|---|
+| 1 | PauseReason 映射 total（编译安全网） | 新增 PauseReason 无映射 = 编译错误 | ✅ 无需改 |
+| 2 | BlockedReason/VALID_BLOCKED_REASONS | 漏一处 = 类型守卫静默回退 | ✅ evidence_missing 已在 |
+| 3 | RESUMABLE allowlist（orchestrator:28-34 + state-persister:552 镜像） | 两处不同步 = resume 行为漂移 | ✅ 5 项 |
+| 4 | projection canResume/completionUnverified/evidenceSkipReason | 漏 = host 按钮/面板死字段 | ✅ 已实现 |
+| 5 | **`resume()` setter 已删除**（勿复活）+ §5.12 同批 | setter 复活 = 非可恢复强制恢复（门 INVERTED 回归） | ✅ 已删除；§5.12 host 侧 |
+| 6 | §5.6 先于/同批 §5.4 | 收紧的门被坏掉的 stall 反噬（TOCTOU 覆写） | ✅ |
 
 ## A7. 实现状态核验（2026-08-09/10）
 
-| 改动 | 状态 | 证据 |
+| 改动 | 状态 | 证据（行号为快照，以符号名为准） |
 |---|---|---|
-| §5.6 在飞守卫 | ✅ 已实施 | index.ts:268/811/912/920/1293 |
-| §5.4a skipped 两因 | ✅ 已实施 | orchestrator.ts:257-295 + evidence-gate.ts:34 |
-| §5.4b resume 守门 | ✅ 已实施+修复 | orchestrator.ts:399-419 + gateway + resume-gateway.test.ts |
-| §5.5 progress ledger | ✅ 已实施（超预期） | progress-ledger.ts + index.ts:1289 |
-| canResume | ✅ 已实施 | projection.ts |
+| §5.6 在飞守卫 | ✅ 已实施 | index.ts（inFlightToolStartedAt 置位/清零闭环） |
+| §5.4a skipped 两因 | ✅ 已实施 | orchestrator.ts（evidence_finished 分支）+ evidence-gate.ts skipReason |
+| §5.4b resume 守门 | ✅ 已实施+修复 | orchestrator.ts（resume_requested 分支）+ gateway + resume-gateway.test.ts |
+| §5.5 progress ledger | ✅ 已实施（超预期） | progress-ledger.ts + agent_end 消费 |
+| canResume / evidenceSkipReason | ✅ 已实施 | projection.ts |
 
-验证：`pnpm verify` 全绿（966 测试 + lint + typecheck + docs:build）。
+验证：`pnpm verify` 全绿（**975 passed / 4 skipped，2026-08-11 复核** + lint + typecheck + docs:build）。
 
 ---
 
@@ -97,7 +107,7 @@
 
 | # | 吸纳点 | LoopX 机制 | OMM 缺口 | effort |
 |---|---|---|---|---|
-| 1 | **Fingerprint-bound diff 收据** | `loopx-change-quality`：prepare→fingerprint→至多一次 safe-fix→re-prepare（旧收据失效）→收据→canary premerge | agent_end 验证结果未绑定最终 diff | S |
+| 1 | **Fingerprint-bound diff 收据** | `skills/loopx-change-quality/SKILL.md:143-175` + `capabilities/change_quality/receipt.py`：prepare→fingerprint→至多一次 safe-fix→re-prepare（旧收据失效）→收据→canary premerge | agent_end 验证结果未绑定最终 diff | S |
 | 2 | **Ledger-output backstop on regex 完成** | completion=记录证据非措辞 | `isTaskComplete` 命中时要求最近 ledger 有实际产出 | S |
 | 3 | **Turn receipt algebra + 两段 fail-closed 验证** | `transaction.py:276-364`：validation 纯函数→commit_eligibility；material 需 completed validation；no-spend 永不 spend；validator 抛错→inconclusive→repair | evidence→quota 缺排序纪律 | S-M |
 | 4 | **Evidence-coupled 记账** | spend-only-after-validated-writeback | 每轮都计 continuation | S |
@@ -113,7 +123,7 @@
 
 | # | 吸纳点 | LoopX 机制 | OMM 缺口 | effort |
 |---|---|---|---|---|
-| 7 | **Checkpoint schema versioning** | `state_migration.py` | state-persister 无 schemaVersion | S |
+| 7 | **Checkpoint schema versioning** | `state_migration.py`（350 行） | state-persister 无 schemaVersion；**3.0.0 trustWorkspace flip 已示范失败类**（静默破坏旧 checkpoint） | S |
 | 8 | **Atomic journal + content-addressed 幂等** | mkstemp+os.replace + 内容派生 event_id + StateEventConflictError | checkpoint 缺原子替换 + 重跑去重 | S |
 | 9 | **exact-head cursor** | `pr_review_queue/core.py:280-351`：`handled_exact_heads` 键 `NUMBER@HEAD_OID`，硬拒未投影的"已处理" | agent_end evidence 去重/防伪造 | S |
 | 10 | **Dual-mode real-binary regression** | 默认纯契约 + opt-in 真 CLI（隔离 fixture+timeout+机器 JSON） | 无 plugin hook-dispatch 真实 smoke | S-M |
@@ -150,9 +160,14 @@ fingerprint receipt 最值（验证结果绑定最终 diff）。
 - **Quota（2026 共识）**：staged enforcement（advisory→soft→hard→actuals-only）、long-running 实践（dailyTokenBudget/kill switch/adaptive heartbeat/**cost-aware downgrade**——OMM 已有 resolveModelTier 可接）、state vs context 分离（O(N²) context 陷阱——OMM compaction+ledger 正是此实践）。
 - **验证**：proof of execution ≠ proof of correctness（outcome-based verification）。
 
-## B5. 不吸纳
+## B5. 不吸纳（诚实，含理由）
 
-capabilities 大多 domain-specific（content_ops/ml_experiment/value_connectors）；worker_bridge 容器机制；reward_memory runtime（设计纪律参考级）；dashboard UI（只借 freshness-check/loopback/preview-lock 纪律）；replan/dreaming（撞无规划决策）。ECC 整体 = 内容包非 runtime（reference-only，详见 `ecc-intake-recommendation.md`）。
+- **capabilities 大多 domain-specific**：content_ops（社交发布域）、ml_experiment（ML 平台适配）、value_connectors（外部调用规划——OMM 已有 permission model）、material_lifecycle / doc-registry / semantic_preference——OMM-autopilot 无关。
+- **worker_bridge 容器机制**：mounts/preflight/simulator——benchmark harness 机器；只借"writeback 契约预定义"思想（已被 action-packet 覆盖）。
+- **reward_memory runtime**：设计纪律参考级（"confidence 不升 authority"/"memory 不覆盖 gate"/append-only run overlay），非代码。
+- **dashboard UI**：只借 freshness-check/loopback-only/preview-lock 纪律。
+- **replan/dreaming**：撞"无规划阶段"决策。
+- **ECC 整体**：内容包非 runtime（reference-only，详见 `ecc-intake-recommendation.md`）。
 
 ---
 
@@ -165,6 +180,7 @@ capabilities 大多 domain-specific（content_ops/ml_experiment/value_connectors
 | 🟡 并进 evidence 流程 | 验证纪律组（#1-4） | fingerprint receipt 最值（agent_end 证据绑定最终 diff）；ledger backstop 一 guard；evidence-coupled 记账 |
 | 🟡 轻量 | **goal 验收标准字段** + **successor chaining/openItems** | T05 轻量版；`openItems` 用起来 |
 | 🟢 工程健壮 | #7-10 | schemaVersion / 原子幂等 / exact-head cursor / dual-mode regression（hook-dispatch smoke） |
+| ⏳ 遗留（旧 verification-floor） | **T05 AC-NNN**（选做）· **T06 size-classifier**（选做）· **§5.12 host 按钮**（canResume 消费，host 侧） | 见 `.scratch/autopilot-verification-floor/issues/05-ac-predicate.md` / `06-size-classifier.md`；§5.12 是 A3.3 破坏性变更的同批约束 |
 
 ---
 
