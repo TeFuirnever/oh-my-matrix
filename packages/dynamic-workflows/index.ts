@@ -63,6 +63,53 @@ export function _resetForTest(): void {
   // autopilot's test harness in case state is added later.
 }
 
+// ─── T02: task prescreen (fan-out signal detection) ─────────────────────────
+// Deterministic trigger layer for the dynamic-workflows skill. Model-self-
+// judged skill activation is probabilistic; weak models skip it. Signal words
+// + size threshold give a cheap deterministic nudge. Pure function — unit-
+// tested, no I/O.
+
+/** Fan-out signal words (EN + ZH). Substring match on the lowercased prompt. */
+const FAN_OUT_SIGNALS: readonly string[] = [
+  // parallelism / perspectives
+  'parallel', 'fan-out', 'multi-perspective', 'multi agent', 'mult-agent',
+  'independent perspective', 'independent subtask', 'cross-check', 'cross validate',
+  // scale
+  'multi-file', 'multiple files', 'many files', 'large-scale', 'whole codebase',
+  'all api', 'all endpoints', 'every service', '10+ files', '10+ endpoints',
+  // task classes with natural refute gates
+  'implement-then-review', 'generate-then-filter', 'select-via-judge',
+  'audit', 'migrate', 'migration', 'refactor', '重构', '迁移', '审计', '多视角',
+  '并行', '多文件', '交叉验证', '独立子任务', '审查', '批量',
+];
+/** Small-task suppressors — if any present, skip the nudge. */
+const SMALL_TASK_SUPPRESSORS: readonly string[] = [
+  'typo', 'rename a variable', 'fix the typo', 'quick fix', 'one-liner',
+  'small fix', '改个拼写', '重命名变量', '小修', '一行',
+];
+
+/** Minimum prompt length (chars) before size alone can trigger. */
+const MIN_SIZE_TRIGGER_CHARS = 400;
+
+/**
+ * Deterministic fan-out candidate test (ticket 02 / research three-test:
+ * independence + scale + natural parallelism).
+ * Returns true when the prompt shows fan-out signals AND is not a small task.
+ */
+export function isFanOutCandidate(prompt: string): boolean {
+  const text = prompt.trim();
+  if (!text) return false;
+  const lower = text.toLowerCase();
+
+  // Small-task suppressors win — a typo fix mentioning "audit" is still a
+  // typo fix (e.g. "fix the typo in audit.ts").
+  if (SMALL_TASK_SUPPRESSORS.some((s) => lower.includes(s))) return false;
+
+  const signalHit = FAN_OUT_SIGNALS.some((s) => lower.includes(s));
+  const sizeHit = text.length >= MIN_SIZE_TRIGGER_CHARS;
+  return signalHit || sizeHit;
+}
+
 interface GuardConfig {
   enabled?: boolean;
   highRiskTools?: string[];
@@ -89,6 +136,23 @@ export function register(api: OpenClawPluginApi): void {
     logWithContext('error', 'hook registration API unavailable (api.on and api.registerHook both missing) — dynamic-workflows guard disabled', {});
     return;
   }
+
+  on('agent_turn_prepare', (event: any, _ctx: any) => {
+    // T02 (ticket 02): deterministic task prescreen — the model-self-judged
+    // skill trigger is probabilistic and weak models miss it. When the user's
+    // task shows fan-out signals, inject a nudge so the agent CONSIDERS the
+    // dynamic-workflows orchestration skill. Non-blocking: no signal → no
+    // injection (zero overhead for small tasks). appendContext from multiple
+    // plugins is CONCATENATED by the host (hook-runner mergeAgentTurnPrepare),
+    // so this composes with autopilot's goal injection, never overwrites.
+    const prompt = typeof event?.prompt === 'string' ? event.prompt : '';
+    if (!prompt.trim()) return;
+    if (isFanOutCandidate(prompt)) {
+      return {
+        appendContext: '[task-prescreen] This task shows fan-out signals (parallel / multi-file / large-scope). If it genuinely exceeds a single agent — 3+ independent perspectives, 10+ files, or a natural refute gate (implement-then-review, generate-then-filter, select-via-judge) — use the dynamic-workflows orchestration skill. Otherwise proceed directly.',
+      };
+    }
+  }, { priority: 12 });
 
   on('before_tool_call', (event: any, ctx: any) => {
     const sessionKey = ctx?.sessionKey;

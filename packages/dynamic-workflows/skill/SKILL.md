@@ -1,12 +1,16 @@
 ---
 name: dynamic-workflows
 description: >
-  Multi-agent workflow orchestration for tasks that exceed a single agent:
-  fan out, then _refute_ to keep only what survives. Use when a task needs
-  3+ independent perspectives, 10+ files to audit/migrate/review, or a
-  productive task with a natural refute gate (implement-then-review,
-  generate-then-filter, select-via-judge). Falls back to bounded
-  direct-session plans for small tasks.
+  Multi-agent workflow orchestration for tasks that exceed a single agent —
+  use proactively for parallel, multi-perspective, or large-scope work in ANY
+  domain (development, review, task processing): fan out, then _refute_ to
+  keep only what survives. Use when a task needs 3+ independent perspectives,
+  10+ files to audit/migrate/review/refactor, or a productive task with a
+  natural refute gate (implement-then-review, generate-then-filter,
+  select-via-judge). Also trigger on: parallel agents, multi-file changes,
+  cross-module refactor, bulk migration, deep audit across many files,
+  independent subtasks, 并行 agent, 多视角, 审计, 迁移, 重构, 多文件.
+  Falls back to bounded direct-session plans for small tasks.
 metadata:
   prefers: open-prose
   fallback: direct-session-orchestration
