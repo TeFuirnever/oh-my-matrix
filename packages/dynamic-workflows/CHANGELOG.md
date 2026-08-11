@@ -1,5 +1,16 @@
 # @oh-my-matrix/dynamic-workflows
 
+## 1.2.0
+
+### Minor Changes
+
+- [`908cd10`](https://github.com/TeFuirnever/oh-my-matrix/commit/908cd106c45c9d3db5f2f0b9dd5b41805b48bedb) - Deterministic task prescreen: `agent_turn_prepare` hook (main sessions only)
+  flags fan-out candidates from the user prompt (signal words EN+ZH, size
+  threshold, small-task suppressors) and injects a non-blocking nudge toward the
+  dynamic-workflows orchestration skill. SKILL.md description adds
+  'use proactively' + general-scenario trigger words. appendContext composes
+  with autopilot's goal injection (host concatenates).
+
 ## 1.1.0
 
 ### Minor Changes

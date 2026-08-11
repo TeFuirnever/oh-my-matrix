@@ -1,5 +1,15 @@
 # @oh-my-matrix/autopilot
 
+## 4.2.0
+
+### Minor Changes
+
+- [`bdf4815`](https://github.com/TeFuirnever/oh-my-matrix/commit/bdf4815c55ec5652a00f250b259da8280dc0702e) - AC-NNN predicates: goal can carry an embedded acceptance-criteria block
+  (Scenario/Action/Expected/Must-not/Verification/Priority). Both injection
+  sites (agent_turn_prepare + retry instruction) render the intent + compact
+  AC list; MAX_GOAL_LENGTH raised 500→2000 to fit an AC block. Backward
+  compatible — a free-text goal parses to [] and behaves as before.
+
 ## 4.1.0
 
 ### Minor Changes
