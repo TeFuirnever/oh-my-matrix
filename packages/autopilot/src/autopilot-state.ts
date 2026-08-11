@@ -1,6 +1,7 @@
 import type { AutopilotState, PauseReason } from './types';
 import { pauseReasonToBlockedReason } from './types';
 import { deriveStatus } from './orchestrator';
+import { classifyTaskSize } from './size-classifier';
 
 const MAX_GOAL_LENGTH = 2000; // T05: goals may carry an embedded AC-NNN block
 
@@ -92,7 +93,8 @@ export function resetTurnAttempts(state: AutopilotState): AutopilotState {
 }
 
 export function setGoal(state: AutopilotState, goal: string): AutopilotState {
-  return { ...state, goal: goal.substring(0, MAX_GOAL_LENGTH) };
+  const truncated = goal.substring(0, MAX_GOAL_LENGTH);
+  return { ...state, goal: truncated, taskTier: classifyTaskSize(truncated) };
 }
 
 export function snapshotGoal(state: AutopilotState): AutopilotState {

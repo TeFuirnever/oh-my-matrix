@@ -126,7 +126,7 @@ export function projectState(
     workflowSource: state.workflow?.source,
     workflowConfigError: state.workflowConfigError,
     thinkingIntensity: state.status === 'running'
-      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status, config?.thinkingIntensity)
+      ? resolveThinkingIntensity(state.totalContinuations, state.evidence?.status, config?.thinkingIntensity, state.taskTier)
       : undefined,
     modelTier,
     recommendedModelId: modelTier ? resolveModelId(modelTier, modelRouting) : undefined,

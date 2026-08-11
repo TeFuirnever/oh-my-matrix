@@ -337,6 +337,8 @@ export interface AutopilotState {
   sessionKey: string;
   runId: string;
   goal?: string;
+  /** T06: task-size tier set when the goal is captured (trivial -> low effort). */
+  taskTier?: TaskTier;
   goalSnapshot?: string;
   progress?: string;
   progressSnapshot?: string;

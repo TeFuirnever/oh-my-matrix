@@ -1035,6 +1035,7 @@ export function register(api: OpenClawPluginApi): void {
       updated.totalContinuations,
       updated.evidence?.status,
       config.thinkingIntensity,
+      updated.taskTier,
     );
     const effortCtx = buildEffortInjection(updated.status, intensity);
     if (effortCtx) parts.push(effortCtx);

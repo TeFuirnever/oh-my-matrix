@@ -47,7 +47,12 @@ export function resolveThinkingIntensity(
   totalContinuations: number,
   evidenceStatus: EvidenceStatus | undefined,
   configIntensity: ThinkingIntensity = 'high',
+  taskTier?: TaskTier,
 ): ThinkingIntensity {
+  // T06: trivial tasks get low effort only early — if a 'trivial' goal is
+  // still running after 3 continuations, the classification was wrong and
+  // we escalate (avoid a low-effort death loop on a misjudged complex task).
+  if (taskTier === 'trivial' && totalContinuations <= 3) return 'low';
   if (evidenceStatus === 'running') return 'low';
   if (totalContinuations <= 1) return 'high';
   return configIntensity;
