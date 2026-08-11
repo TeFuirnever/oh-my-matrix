@@ -23,17 +23,22 @@
 
 **发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）+ **permission-policy 0.1.4**（共享 logger 提取）。**2026-08-09 已发布 npm**（tag：`autopilot-v4.0.0` / `dynamic-workflows-v1.0.0` / `permission-policy-v0.1.4`，release notes 见 GitHub Releases）。发布实操与坑（镜像 registry / 2FA / sync-plugin-versions）见 `docs/runbooks/npm-release.md` + memory `npm-publish-flow`。
 
-## 待发版（2026-08-10，五轮对抗 review 驱动，commit f96f561）
+## 已发版（2026-08-10/11，autopilot 4.1.0→4.2.0→4.3.0 / dynamic-workflows 1.1.0→1.2.0 / instinct 0.1.0 新包）
 
-| 变更 | 内容 |
-|---|---|
-| evidence gate fail-closed 完整化 | timeout/缺失/allowlist 丢弃的 required 命令 → `not_executed` → blocked `evidence_missing`（可恢复，设计 §3.1 承诺终于闭合）；`validation.droppedCommands` 记丢弃数；not_executed blocked 补 `enabled:false` |
-| resume 语义硬化 | reducer 清 `pauseReason`（H1 类 stale 泄漏）；gateway facade 前置检查；清 `needsCrossTurnResume`（防 resume_run 双 kick）；保留 retry 链（防预算重武装）；清 stale inFlight 标记 |
-| completionUnverified 语义 | 仅 done run 携带；projection 仅 done 透出（升级边界防护） |
-| S8 audit refcount 平衡 | 释放全部 reducer-result keyed（agent_end 四路径 / stall-exhaustion / complete 条件化 / patrol 同 tick 防双写） |
-| 杂项 | runtimeMs 终止冻结、evidenceSkipReason 透出、ledger fold 去重、legacy resume() setter 删除、eslint 忽略 worktree（`.claude/**`） |
+| 变更 | 内容 | 包/版本 |
+|---|---|---|
+| evidence gate fail-closed 完整化 | timeout/缺失/allowlist 丢弃的 required 命令 → `not_executed` → blocked `evidence_missing`（可恢复，设计 §3.1 闭合）；`validation.droppedCommands`；not_executed blocked 补 `enabled:false` | autopilot 4.1.0 |
+| resume 语义硬化 | reducer 清 `pauseReason`；gateway facade 前置检查；清 `needsCrossTurnResume`（防双 kick）；保留 retry 链；清 stale inFlight | autopilot 4.1.0 |
+| completionUnverified 语义 | 仅 done 携带；projection 仅 done 透出 | autopilot 4.1.0 |
+| S8 audit refcount 平衡 | 释放全部 reducer-result keyed（agent_end 四路径/stall/complete/patrol） | autopilot 4.1.0 |
+| AC-NNN goal 谓词 | goal 携带结构化验收标准（Scenario/Action/Expected/Must-not/Verification/Priority），AC 块内嵌 goal 字符串，零 schema 变更 | autopilot 4.2.0 |
+| task-size classifier | goal → trivial/small/standard/large（信号词+长度+AC 数）；trivial 前 3 轮 low effort 后自动升级 | autopilot 4.3.0 |
+| 确定性任务预筛 | `agent_turn_prepare` hook（priority 12，主会话）读 prompt → fan-out 信号 → appendContext 指引；跳过 subagent | dynamic-workflows 1.2.0 |
+| skill 触发词 | description "use proactively" + 通用场景触发词（EN+ZH） | dynamic-workflows 1.2.0 |
+| validate-prose 脚本 | OpenProse 不可用时的独立 5-check 验证（node，8 单测） | dynamic-workflows 1.2.0 |
+| **instinct 新包** | 跨会话 context 记忆：after_tool_call 观测（脱敏）→ `.instinct/observations.jsonl`；session_start 回忆。闭合第三缺口 | instinct 0.1.0 |
 
-发版时走 changeset（建议 autopilot minor）。
+杂项：runtimeMs 终止冻结、evidenceSkipReason 透出、ledger fold 去重、legacy resume() setter 删除、eslint 忽略 worktree。
 
 **发布后补强（2026-08-09）**：
 - **E13 双花闭环**：resume_run RPC 成功即经 reducer 消费 `needsCrossTurnResume`（第二次调用拒绝）+ `shouldCheckpoint` 持久化 flag 翻转（重启腿不重开 P3-29）。

@@ -39,9 +39,10 @@ omm 把这三件事拆成可验证的 OpenClaw 模块，而不是做一个黑盒
 | 模块 | 做什么 | 当前状态 | 路径 |
 |---|---|---:|---|
 | `@oh-my-matrix/autopilot` | 连续执行插件。管理目标、状态机、重试队列、stall 检测、token 预算、证据门、projection、`WORKFLOW.md` 配置和 11 个 OpenClaw hooks | ✅ source hosted, tests present | [`packages/autopilot/`](packages/autopilot/) |
-| `@oh-my-matrix/dynamic-workflows` | Workflow subagent 运行时守卫。注册 `before_tool_call` priority 11，对 `:subagent:` 会话 fail-closed 拦截危险操作 | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
+| `@oh-my-matrix/dynamic-workflows` | Workflow subagent 运行时守卫。注册 `before_tool_call` priority 11（对 `:subagent:` 会话 fail-closed 拦截危险操作）+ `agent_turn_prepare` priority 12（主会话任务预筛，命中 fan-out 信号注入指引） | ✅ shipped source | [`packages/dynamic-workflows/`](packages/dynamic-workflows/) |
 | `@oh-my-matrix/permission-policy` | 共享权限原语。提供 `classifyCommand`、`decidePermission`、`decidePermissionForEvent`、audit persistence | ✅ shipped source | [`packages/permission-policy/`](packages/permission-policy/) |
-| `dynamic-workflows` skill | 教 agent 何时生成 `.prose`，如何选择 8 种编排模式，如何验证与汇总结果 | ✅ shipped skill | [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/) |
+| `@oh-my-matrix/instinct` | 跨会话 context 记忆。`after_tool_call` 观测（脱敏）写入 `.instinct/observations.jsonl`，`session_start` 回忆上一会话的观测 | ✅ shipped source | [`packages/instinct/`](packages/instinct/) |
+| `dynamic-workflows` skill | 教 agent 何时生成 `.prose`，如何选择 11 种编排模式 + 19 标准角色库，如何验证与汇总结果 | ✅ shipped skill | [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/) |
 | 历史 v0.x team/MCP 实现 | 早期设计与实现记录，已移除，不再作为当前运行面 | 📦 archived | [`docs/archive/`](docs/archive/) |
 
 ## 架构
@@ -79,7 +80,7 @@ pnpm --filter @oh-my-matrix/autopilot test
 
 ### Dynamic Workflows: 多 agent 编排
 
-`packages/dynamic-workflows/skill/SKILL.md` 让 agent 根据任务生成 `.prose` 程序，并优先交给 OpenProse 执行。它覆盖 8 种模式：
+`packages/dynamic-workflows/skill/SKILL.md` 让 agent 根据任务生成 `.prose` 程序，并优先交给 OpenProse 执行。它覆盖 11 种模式：
 
 - fan-out-reduce
 - pipeline

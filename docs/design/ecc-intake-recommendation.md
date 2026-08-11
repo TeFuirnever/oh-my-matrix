@@ -46,7 +46,7 @@
 | **verification-loop** | 冗余——6 bash 相位 = OMM `runValidationCommands` + `workflow-config.ts` 已通用做（duplicate §5.4） |
 | **Ralphinho RFC-DAG** | 冲突 §4（OpenProse sole runtime + no controller/scheduler）；纯 prompt 无码，credited 外部 @enitrat；decompose+DAG+tier-pipeline = 第二 workflow runtime |
 | **plan-orchestrate** | blocked——硬依赖 ECC `/orchestrate` + agent catalogue（planner/architect/tdd-guide/code-reviewer）OMM 无 |
-| **delivery-gate** | orthogonal——`Stop` hook 无 openclaw 干净对等（最近 `before_agent_finalize` 但 per-run 非 per-session）；查 session 卫生（learning-lib mtime/disk/rationalization regex）非 goal 完成；rationalization regex 自承 warning-only 易误报 |
+| **delivery-gate** | orthogonal——`Stop` hook 无 openclaw 干净对等（最接近的 `before_agent_finalize` 但 per-run 非 per-session）；查 session 卫生（learning-lib mtime/disk/rationalization regex）非 goal 完成；rationalization regex 自承 warning-only 易误报 |
 | **recursive-decision-ledger** | weak fit——trading/rollout/stochastic-search 问题；OMM 已有 3 state 机制（status-sole-writer ADR-016 / evidence-gate / continuation-engine），移植 = 第四个 |
 
 ---
@@ -75,8 +75,8 @@
 - **§5.5 最小子集：progress 结构化**（`index.ts:1128`）—— "结构化追踪"的 OMM 版。一行起：`files: <写类文件> | <尾摘要>`。
 
 ### 🟡 选做（业界推崇 + 轻量 + 不撞决策，放大必做项价值）
-- **AC-NNN 谓词格式**（ECC intent-driven，S 拷）—— 给 `goal:string` 结构化谓词，让 §5.4 有物可判。
-- **size-classifier**（ECC orch-pipeline，S 拷 4-row 表）—— 按任务形状路由 effort，喂 `resolveThinkingIntensity`。
+- **AC-NNN 谓词格式**（ECC intent-driven，S 拷）✅ 已实施（2026-08-11，commit bdf4815）—— 给 `goal:string` 结构化谓词，让 §5.4 有物可判。AC 块内嵌 goal 字符串，零 schema 变更。
+- **size-classifier**（ECC orch-pipeline，S 拷 4-row 表）✅ 已实施（2026-08-11，commit 22c9e23）—— 按任务形状路由 effort，喂 `resolveThinkingIntensity`。确定性精简版（信号词+goal 长度+AC 数 → 4 tier），trivial 降 effort。
 - 二者是 §5.4/§5.5 的**输入侧增强**——不加也成立，加了判得更准。
 
 ### 🟢 不做（业界推崇但 OMM 有理由 / 撞边界 / 新缺口）
@@ -104,7 +104,7 @@
 
 1. **§5.6 在飞守卫**（前置，防 TOCTOU）—— 若未实施。
 2. **§5.4 + §5.5 最小子集**（🔴 必做）—— 详见 `autopilot-verification-floor-design.md`。
-3. **AC-NNN + size-classifier**（🟡 选做）—— 输入侧增强，可与 §5.4 同批或之后。
+3. ~~AC-NNN + size-classifier~~（✅ 已实施 2026-08-11，autopilot 4.2.0/4.3.0）。
 4. **continuous-learning instinct**（若立项第三缺口）—— 独立 spike：新包 `@oh-my-matrix/instinct`，先 observer + turn-boundary extractor，验证 openclaw hook 对等 + 是否做子系统。
 
 ---
