@@ -75,8 +75,13 @@ export function summarizeForRecall(obs: Observation[]): string {
   return lines.join('\n');
 }
 
+type HookRegistration = {
+  on?: (name: string, handler: (...args: unknown[]) => unknown, opts?: { priority?: number }) => void;
+  registerHook?: (name: string, handler: (...args: unknown[]) => unknown, opts?: { priority?: number }) => void;
+};
+
 export function register(api: any): void {
-  const registerHook = api as { on?: Function; registerHook?: Function };
+  const registerHook = api as HookRegistration;
   const on = registerHook.on?.bind(api) ?? registerHook.registerHook?.bind(api);
   if (!on) {
     try { console.error('[instinct] hook registration API unavailable — disabled'); } catch { /* noop */ }

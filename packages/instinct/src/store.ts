@@ -30,9 +30,9 @@ export interface Observation {
 // over-redaction (a false redaction is cheap; a leaked secret is not).
 const SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // API keys / tokens (long hex/base64 after a key name)
-  [/(api[_-]?key|token|secret|password|passwd|auth|bearer)["'\s:=]+[A-Za-z0-9_\-]{16,}/gi, '$1=REDACTED'],
+  [/(api[_-]?key|token|secret|password|passwd|auth|bearer)["'\s:=]+[A-Za-z0-9_-]{16,}/gi, '$1=REDACTED'],
   // Inline -k / --header "Authorization: Bearer ..."
-  [/(bearer|basic)\s+[A-Za-z0-9_\-\.=]{16,}/gi, '$1 REDACTED'],
+  [/(bearer|basic)\s+[A-Za-z0-9_.=]{16,}/gi, '$1 REDACTED'],
   // Private key blocks
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, 'REDACTED_PRIVATE_KEY'],
   // AWS keys
@@ -126,7 +126,7 @@ export function loadRecentObservations(
   project?: string,
 ): Observation[] {
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
-  let files: string[] = [];
+  let files: string[];
   try {
     files = fs.readdirSync(dir).filter((f) => f.startsWith('observations') && f.endsWith('.jsonl'));
   } catch {
