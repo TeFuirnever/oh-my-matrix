@@ -23,6 +23,18 @@
 
 **发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）+ **permission-policy 0.1.4**（共享 logger 提取）。**2026-08-09 已发布 npm**（tag：`autopilot-v4.0.0` / `dynamic-workflows-v1.0.0` / `permission-policy-v0.1.4`，release notes 见 GitHub Releases）。发布实操与坑（镜像 registry / 2FA / sync-plugin-versions）见 `docs/runbooks/npm-release.md` + memory `npm-publish-flow`。
 
+## 待发版（2026-08-10，五轮对抗 review 驱动，commit f96f561）
+
+| 变更 | 内容 |
+|---|---|
+| evidence gate fail-closed 完整化 | timeout/缺失/allowlist 丢弃的 required 命令 → `not_executed` → blocked `evidence_missing`（可恢复，设计 §3.1 承诺终于闭合）；`validation.droppedCommands` 记丢弃数；not_executed blocked 补 `enabled:false` |
+| resume 语义硬化 | reducer 清 `pauseReason`（H1 类 stale 泄漏）；gateway facade 前置检查；清 `needsCrossTurnResume`（防 resume_run 双 kick）；保留 retry 链（防预算重武装）；清 stale inFlight 标记 |
+| completionUnverified 语义 | 仅 done run 携带；projection 仅 done 透出（升级边界防护） |
+| S8 audit refcount 平衡 | 释放全部 reducer-result keyed（agent_end 四路径 / stall-exhaustion / complete 条件化 / patrol 同 tick 防双写） |
+| 杂项 | runtimeMs 终止冻结、evidenceSkipReason 透出、ledger fold 去重、legacy resume() setter 删除、eslint 忽略 worktree（`.claude/**`） |
+
+发版时走 changeset（建议 autopilot minor）。
+
 **发布后补强（2026-08-09）**：
 - **E13 双花闭环**：resume_run RPC 成功即经 reducer 消费 `needsCrossTurnResume`（第二次调用拒绝）+ `shouldCheckpoint` 持久化 flag 翻转（重启腿不重开 P3-29）。
 - **覆盖率门禁生效**：3 包 vitest coverage 阈值 + CI/`pnpm verify` 强制执行（autopilot 93.5/85.8/96.3/93.5、dw 89/75/100/89、pp 80/92/94/80 实测）。

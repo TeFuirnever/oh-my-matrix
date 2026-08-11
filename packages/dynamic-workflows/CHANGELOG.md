@@ -1,5 +1,19 @@
 # @oh-my-matrix/dynamic-workflows
 
+## 1.1.0
+
+### Minor Changes
+
+- Replace the 14 hand-adapted role prompts with 19 agent prompts ported verbatim
+  from oh-my-claudecode (`references/role-prompts/`, commit `314cdcc`). The
+  bundled skill now ships the full role library: analyst, architect,
+  code-reviewer, code-simplifier, critic, debugger, designer,
+  document-specialist, executor, explore, git-master, planner, qa-tester,
+  scientist, security-reviewer, test-engineer, tracer, verifier, writer.
+  OMC-only references/tools/`.omc/` paths stripped; read-only posture
+  declarations added; patterns/templates/test-prompts updated to the new role
+  set (REFUTED/SURVIVES vocabulary unified).
+
 ## 1.0.0
 
 ### Major Changes

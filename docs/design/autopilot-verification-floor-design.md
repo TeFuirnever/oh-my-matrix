@@ -217,9 +217,10 @@ progress: `[Turn ${n}/${max}] files: ${filesTouched.join(',') || 'none'} | ${tai
 | AC-NNN 谓词（T05，选做） | ❌ 待办 | `types.ts:334` goal 仍 free-text |
 | size-classifier（T06，选做） | ❌ 待办 | effort-injection/model-routing 无 |
 
-**记录的两点**：
+**记录的三点（2026-08-11 增补）**：
 1. **T03 实现偏差 → 已修复（2026-08-09，对抗 review 实证）**：初始实现未显式检查 reducer no-op，靠 `status==='paused'` 前置——对抗 review（opus×2）实证发现**门 INVERTED**：非可恢复 blocked（含 max_total/token_budget/loop_breaker）因 deriveStatus 映射 `'paused'` 过前置 → `resume()` setter 强制复活（预算/上限绕过）；可恢复路径反而因 reducer 转 claimed 后 `resume()` 抛错。修复：gateway reducer 后检查 `orchestrationState !== 'claimed'` → INVALID_REQUEST；**reducer sole writer**（gateway 不再调 `resume()` setter，构造 resumed 时补 `enabled:true` + 清副状态 + deriveStatus）。附带修复：`stop` 对 paused/done 的 audit 双释放（S8 语义，旧 resume 掩盖）。新增 `tests/resume-gateway.test.ts`（非可恢复拒绝 + no_progress 可恢复成功）；lifecycle T10 改 terminal 拒绝语义。966 测试绿。
 2. **E6 dir-2 生产力检测（no_progress）也在代码中**（`orchestrator.ts:33` + `state-persister.ts:561` 同步）——超出本设计 §5 范围，属 E6 完整实施。
+3. **五轮对抗 review 修复（2026-08-10/11，commit f96f561）**：(a) `not_executed` 语义扩展——timeout/缺失/allowlist 丢弃的 required 命令全部归 `not_executed`（§3.1 表格"命令缺失/超时/被 allowlist 丢弃"承诺终于闭合，`droppedCommands` 计数 + evaluateEvidence 归类）；(b) `completionUnverified` 仅 done 携带（blocked ≠ completion，§3.1 表格已改）；(c) resume 硬化——reducer 清 pauseReason、facade 前置检查、清 needsCrossTurnResume（防 resume_run 双 kick）、保留 retry 链；(d) S8 refcount 平衡（agent_end 四路径/stall/complete 释放全部 reducer-result keyed）。
 
 **结论**：本设计必做部分 = 已实施工作的事后文档化（对照核验一致）；真正待办 = T05（AC-NNN）/ T06（size-classifier）选做。
 
