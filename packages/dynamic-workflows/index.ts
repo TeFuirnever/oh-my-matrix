@@ -72,13 +72,15 @@ export function _resetForTest(): void {
 /** Fan-out signal words (EN + ZH). Substring match on the lowercased prompt. */
 const FAN_OUT_SIGNALS: readonly string[] = [
   // parallelism / perspectives
-  'parallel', 'fan-out', 'multi-perspective', 'multi agent', 'mult-agent',
+  'parallel', 'fan-out', 'multi-perspective', 'multi agent', 'multi-agent',
   'independent perspective', 'independent subtask', 'cross-check', 'cross validate',
   // scale
   'multi-file', 'multiple files', 'many files', 'large-scale', 'whole codebase',
   'all api', 'all endpoints', 'every service', '10+ files', '10+ endpoints',
   // task classes with natural refute gates
   'implement-then-review', 'generate-then-filter', 'select-via-judge',
+  // review is the skill's core scenario (SKILL.md '10+ files to audit/migrate/review')
+  'review', 'code review', 'review all', 'review these',
   'audit', 'migrate', 'migration', 'refactor', '重构', '迁移', '审计', '多视角',
   '并行', '多文件', '交叉验证', '独立子任务', '审查', '批量',
 ];
@@ -137,7 +139,7 @@ export function register(api: OpenClawPluginApi): void {
     return;
   }
 
-  on('agent_turn_prepare', (event: any, _ctx: any) => {
+  on('agent_turn_prepare', (event: any, ctx: any) => {
     // T02 (ticket 02): deterministic task prescreen — the model-self-judged
     // skill trigger is probabilistic and weak models miss it. When the user's
     // task shows fan-out signals, inject a nudge so the agent CONSIDERS the
@@ -145,11 +147,16 @@ export function register(api: OpenClawPluginApi): void {
     // injection (zero overhead for small tasks). appendContext from multiple
     // plugins is CONCATENATED by the host (hook-runner mergeAgentTurnPrepare),
     // so this composes with autopilot's goal injection, never overwrites.
+    // Main sessions only: :subagent: workflow branches carry role prompts
+    // containing 'audit'/'review' — prescreening them would pollute every
+    // branch with an irrelevant nudge (branches cannot spawn workflows).
+    const sessionKey = ctx?.sessionKey;
+    if (!sessionKey || isSubagentSessionKey(sessionKey)) return;
     const prompt = typeof event?.prompt === 'string' ? event.prompt : '';
     if (!prompt.trim()) return;
     if (isFanOutCandidate(prompt)) {
       return {
-        appendContext: '[task-prescreen] This task shows fan-out signals (parallel / multi-file / large-scope). If it genuinely exceeds a single agent — 3+ independent perspectives, 10+ files, or a natural refute gate (implement-then-review, generate-then-filter, select-via-judge) — use the dynamic-workflows orchestration skill. Otherwise proceed directly.',
+        appendContext: '[task-prescreen] This task may benefit from multi-agent orchestration if it exceeds a single agent — 3+ independent perspectives, 10+ files to audit/migrate/review/refactor, or a natural refute gate (implement-then-review, generate-then-filter, select-via-judge). If so, use the dynamic-workflows orchestration skill. Otherwise proceed directly.',
       };
     }
   }, { priority: 12 });

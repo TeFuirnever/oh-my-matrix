@@ -24,7 +24,8 @@
     ],
     "plugin": true,
     "hooks": [
-      "before_tool_call"
+      "before_tool_call",
+      "agent_turn_prepare"
     ]
   },
   "scripts": {
