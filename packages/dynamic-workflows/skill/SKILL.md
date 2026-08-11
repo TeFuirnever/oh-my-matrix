@@ -73,10 +73,10 @@ patterns supply one, mapping onto the standard `REFUTED` / `SURVIVES` vocabulary
 
 | Intent class | Patterns | What the refute gate IS |
 |---|---|---|
-| Verify | adversarial-verify, multi-lens-sweep, completeness-critic, fan-out-reduce | a skeptic tries to refute each finding |
+| Verify | adversarial-verify, multi-lens-sweep, completeness-critic, fan-out-reduce | a critic tries to refute each finding |
 | Generate-then-filter | generate-and-filter, pipeline | the filter/rubric step refutes candidates that don't pass |
 | Implement-then-review | duel-loop | the reviewer tries to break the implementation (FAIL = refuted) |
-| Select-via-judge | tournament, judge-panel | the judge refutes (eliminates) weaker entries |
+| Select-via-judge | tournament, judge-panel | the critic refutes (eliminates) weaker entries |
 
 `loop-until-dry` (terminates on exhaustion) and `routing` (dispatch by type, no verdict)
 have no refute gate of their own; they compose _with_ one of the patterns above rather
@@ -215,9 +215,13 @@ no runtime semantics — only the copied `prompt:` text does). For each sub-task
    role's purpose match the sub-task?
 2. **Match found** → use that role's prompt text verbatim in
    `agent <role>: prompt: "..."`. Copy the prompt body from the role-prompts
-   file into the .prose. The 14 standard roles: explorer, analyst, planner,
-   architect, implementer, verifier, reviewer, security-auditor, skeptic,
-   judge, test-author, debugger, tracer, synthesizer.
+   file into the .prose. The 19 standard roles (ported from
+   oh-my-claudecode; prompt bodies unchanged except OMC-only references,
+   tools, and `.omc/` paths stripped, and read-only posture declarations
+   added): analyst, architect,
+   code-reviewer, code-simplifier, critic, debugger, designer,
+   document-specialist, executor, explore, git-master, planner, qa-tester,
+   scientist, security-reviewer, test-engineer, tracer, verifier, writer.
 3. **No match** → define a custom agent with a `custom_` name prefix
    (e.g., `agent custom_migration_validator:`) and a fresh prompt.
 
@@ -241,11 +245,13 @@ Start from this skeleton:
 # [What this workflow does — one line]
 input target: "The target to process"
 
-agent specialist:
+# 标准角色：prompt 从 references/role-prompts/<role>.md 拷贝（Step 1.5），
+# 例如 scientist / explore / code-reviewer。无匹配时用 custom_ 前缀。
+agent scientist:
   model: sonnet
-  prompt: "You are a specialist. [role description]"
+  prompt: "<Copy Prompt text from references/role-prompts/scientist.md>"
 
-let result = session: specialist
+let result = session: scientist
   prompt: "Analyze the target provided in context."
   context: target
 
@@ -290,6 +296,12 @@ has a matching `input:` declaration; (3) every `agent name` reference matches an
 `agent name:` block; (4) all variable names are unique across the program;
 (5) the program ends with a synthesis session. Record `manual_validation` in
 the report.
+
+**Placeholder check (mandatory, applies to both paths):** no `prompt:` value
+may still read `"<Copy Prompt text from references/role-prompts/...>"` — every
+agent prompt must have been substituted with the actual role prompt body from
+Step 1.5 before validation. A placeholder that survives to validation means
+Step 1.5 was skipped; fix it before proceeding.
 
 **Step 3 completion criterion (checkable)**: `prose compile` exits clean, OR
 manual validation passes all 5 checks listed above. On failure, enter the repair loop (max 3
@@ -362,11 +374,11 @@ role-prompt output and final synthesis; do not introduce `discarded`/
 `accepted`/`passed` variants.
 
 1. **Authoring ≠ review.** The agent that produces output cannot approve it.
-   Use a different role-prompt (verifier, reviewer, security-auditor, judge)
-   for the review pass.
+   Use a different role-prompt (verifier, security-reviewer, critic, code-
+   reviewer) for the review pass.
 2. **Read-only roles are a prompt convention, NOT runtime-enforced.** The
    subagent guard is role-blind — it cannot tell a verifier from an
-   implementer. `write_file`/`apply_patch` remain technically allowed for all
+   executor. `write_file`/`apply_patch` remain technically allowed for all
    subagent sessions. The prompt text is the only gate keeping verifiers
    honest; do not rely on the runtime to enforce read-only posture. (Destructive
    git IS runtime-blocked for all subagents — see Step 0 preflight.)
@@ -376,10 +388,15 @@ role-prompt output and final synthesis; do not introduce `discarded`/
    tests before synthesis — approval is a reporting moment, not a completion
    gate.
 
-For read-only role-prompt text (verifier / reviewer / security-auditor / judge /
-skeptic / tracer / explorer / planner), see `references/role-prompts/`. For
-write-capable roles (implementer / test-author / debugger), the same directory
-applies — those may use `workspace_write` (runtime-allowed for subagents).
+For read-only role-prompt text (verifier / security-reviewer / code-reviewer /
+critic / document-specialist / explore / analyst / architect), see
+`references/role-prompts/`. For write-capable roles (executor / debugger /
+test-engineer / designer / writer / git-master / qa-tester / code-simplifier /
+planner / tracer / scientist), the same directory applies — those may use
+`workspace_write` (runtime-allowed for subagents). Note: scientist's OMC source
+frontmatter disables Write/Edit tools; its prompt writes reports via Bash —
+write capability here means file output is expected, not that Write/Edit are
+required.
 
 ## Resource limits
 
@@ -407,7 +424,8 @@ Local (relative to this skill):
 - **.prose grammar**: `references/syntax.md`
 - **Core patterns 1-3 + compositions**: `references/patterns-core.md`
 - **Advanced patterns 4-11**: `references/patterns-advanced.md`
-- **Standard role-prompt templates**: `references/role-prompts/` (14 roles)
+- **Standard role-prompt templates**: `references/role-prompts/` (19 roles,
+  ported from oh-my-claudecode; OMC-only references/tools/paths stripped)
 - **Resource limits (branch/session/recursion caps, model routing)**: `references/resource-limits.md`
 - **Safety and data hygiene (injection defense, redaction, checkpoint policy)**: `references/safety.md`
 - **Failure diagnosis, generate-validate-repair, compile errors**:

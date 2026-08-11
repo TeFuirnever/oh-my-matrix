@@ -29,8 +29,8 @@ When writing a `.prose` program for a task:
 | Session returns empty output | Make the prompt a direct question or command (not open-ended); verify `context:` variable name matches the `let` binding | Split large session into smaller sessions with single-task prompts |
 | Context too large (token limit) | Use `| map:` to process items individually instead of passing all at once | Pass only summaries or key excerpts, not full content |
 | `prose run` crashes mid-execution | Check OpenProse logs; likely a malformed `block` or infinite recursion | Add `max:` limit to loops, reduce recursion depth |
-| Run completes but output is wrong or incomplete | Add an independent _refute_ pass: a verifier/skeptic session that rejects findings without fresh evidence | Split into discover → fan-out to ensure full coverage |
-| Prompt injection appears in task/context | Keep user content in `context:` (see SKILL.md § Safety) | Add a skeptic session that _refutes_ instruction-following from context |
+| Run completes but output is wrong or incomplete | Add an independent _refute_ pass: a verifier/critic session that rejects findings without fresh evidence | Split into discover → fan-out to ensure full coverage |
+| Prompt injection appears in task/context | Keep user content in `context:` (see SKILL.md § Safety) | Add a critic session that _refutes_ instruction-following from context |
 | Parallel branches touch the same files | Assign disjoint file ownership before execution | Run those branches sequentially |
 | Dirty git tree before side effects | Report the dirty state and ask before executing write branches | Use a branch/checkpoint or stop at plan-only mode |
 | Command is credential access, system write, workspace cleanup, or unauthorized destructive git | Block the branch before tool execution | Ask for a safer workflow or explicit manual intervention |

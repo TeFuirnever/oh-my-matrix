@@ -3,14 +3,14 @@
     "id": 1,
     "scenario": "fan-out-reduce happy path",
     "prompt": "I have 3 competing design proposals for the new auth module. Give me 3 independent perspectives on each, then synthesize the safest one to ship.",
-    "expected": "Skill activates; chooses fan-out-reduce; Step 1.5 maps to drafter + synthesizer roles; pre-compile checkpoint lists agents; output separates synthesized answer from individual drafts",
+    "expected": "Skill activates; chooses fan-out-reduce; Step 1.5 maps to writer role (draft lanes); pre-compile checkpoint lists agents; output separates synthesized answer from individual drafts",
     "tier": "happy"
   },
   {
     "id": 2,
     "scenario": "adversarial-verify — false positive filtering",
     "prompt": "Audit these 12 files for security issues, but I only want findings you're confident about — filter out false positives.",
-    "expected": "Skill activates; chooses adversarial-verify; uses finder + skeptic role pair; skeptic defaults to refuted; final synthesis labels findings verified (survived refute) vs discarded; no fabricated findings for blocked branches",
+    "expected": "Skill activates; chooses adversarial-verify; uses tracer + critic role pair; critic defaults to refuted; final synthesis labels findings verified (survived refute) vs discarded; no fabricated findings for blocked branches",
     "tier": "happy"
   },
   {
@@ -38,28 +38,28 @@
     "id": 6,
     "scenario": "custom-role checkpoint fires",
     "prompt": "Audit these 8 API handlers for GDPR compliance — I need a specialist that knows EU data-protection law, not just a generic security reviewer.",
-    "expected": "Skill activates; Step 1.5 finds no standard role matches GDPR-law → declares agent custom_gdpr_auditor with ⚠ marker; Step 2 checkpoint surfaces the custom_* agent for explicit approval; does NOT proceed past checkpoint without user OK; standard roles (security-auditor, reviewer) marked ✓ where reused",
+    "expected": "Skill activates; Step 1.5 finds no standard role matches GDPR-law → declares agent custom_gdpr_auditor with ⚠ marker; Step 2 checkpoint surfaces the custom_* agent for explicit approval; does NOT proceed past checkpoint without user OK; standard roles (security-reviewer, code-reviewer) marked ✓ where reused",
     "tier": "happy"
   },
   {
     "id": 7,
     "scenario": "implement-review-duel — productive task with natural refute gate",
     "prompt": "Implement the retry-backoff change across the 4 service files, then have a reviewer try to break it — keep revising until it survives review.",
-    "expected": "Skill activates; chooses duel-loop (implement-then-review class); Step 1.5 maps to implementer (✓, write-capable, owns a DISJOINT file set per branch) + reviewer (✓, refute side); reviewer FAIL = REFUTED, PASS = SURVIVES; bounded max 3 rounds (one-shot DAG, NOT an autonomous loop); synthesis reports SURVIVED or REFUTED with standard verified/partial/blocked labels; parallel builders never share a file set",
+    "expected": "Skill activates; chooses duel-loop (implement-then-review class); Step 1.5 maps to executor (✓, write-capable, owns a DISJOINT file set per branch) + code-reviewer (✓, refute side); reviewer FAIL = REFUTED, PASS = SURVIVES; bounded max 3 rounds (one-shot DAG, NOT an autonomous loop); synthesis reports SURVIVED or REFUTED with standard verified/partial/blocked labels; parallel builders never share a file set",
     "tier": "happy"
   },
   {
     "id": 8,
     "scenario": "test-generation-filter — productive generate-then-filter",
     "prompt": "Generate candidate test cases for the auth module — overproduce ideas, then filter to the ones that cover real edges, and write those.",
-    "expected": "Skill activates; chooses generate-and-filter (generate-then-filter class); Step 1.5 maps to test-author (✓ generation+author side) + skeptic/judge (✓ filter = refute gate); candidates that fail the rubric are REFUTED; survivors written with fresh test output; synthesis reports surviving tests + REFUTED ideas + coverage gaps",
+    "expected": "Skill activates; chooses generate-and-filter (generate-then-filter class); Step 1.5 maps to test-engineer (✓ generation+author side) + critic (✓ filter = refute gate); candidates that fail the rubric are REFUTED; survivors written with fresh test output; synthesis reports surviving tests + REFUTED ideas + coverage gaps",
     "tier": "happy"
   },
   {
     "id": 9,
     "scenario": "candidate-tournament — productive select-via-judge",
     "prompt": "I have 3 candidate implementations for the cache layer — produce a 4th from a different angle, then have a judge pick the strongest via pairwise comparison.",
-    "expected": "Skill activates; chooses tournament (select-via-judge class); Step 1.5 maps to contestant (✓ or custom_ if distinct approach needs one) + judge (✓ refute side, eliminates weaker entries); each pairwise round REFUTES the loser; winner SURVIVES all rounds; if contestants write files each owns a DISJOINT set; ≤5 parallel branches respected",
+    "expected": "Skill activates; chooses tournament (select-via-judge class); Step 1.5 maps to executor (✓ or custom_ if distinct approach needs one) + critic (✓ refute side, eliminates weaker entries); each pairwise round REFUTES the loser; winner SURVIVES all rounds; if contestants write files each owns a DISJOINT set; ≤5 parallel branches respected",
     "tier": "happy"
   },
   {

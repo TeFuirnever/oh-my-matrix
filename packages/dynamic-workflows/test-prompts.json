@@ -2,7 +2,7 @@
   {
     "id": 1,
     "prompt": "审计这个项目所有 API 端点的错误处理，fan-out 多个 agent 各审一部分，交叉验证后汇总",
-    "expected": "Use workflow: yes. Expected shape: discover API endpoints -> pmap/fan-out auditors -> skeptic verification -> synthesis. Must show pre-compile and pre-run CHECKPOINTS, validate with prose compile or manual checklist, and keep user/project data in context rather than interpolated prompt text. Baseline should be weaker because it would likely audit sequentially with less cross-checking."
+    "expected": "Use workflow: yes. Expected shape: discover API endpoints -> pmap/fan-out code-reviewer/tracer lanes -> critic verification -> synthesis. Must show pre-compile and pre-run CHECKPOINTS, validate with prose compile or manual checklist, and keep user/project data in context rather than interpolated prompt text. Baseline should be weaker because it would likely audit sequentially with less cross-checking."
   },
   {
     "id": 2,

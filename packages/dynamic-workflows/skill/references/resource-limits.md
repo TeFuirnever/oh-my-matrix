@@ -23,7 +23,7 @@ rationale).
 - **Default tier**: screening/lookup = haiku, drafting/implementation = sonnet,
   judgment/architecture/security-review = opus.
 - **A tournament with 4 opus contestants + 3 opus judges = 7 opus calls** — use
-  sonnet contestants + opus judge instead (1 opus call).
+  sonnet executors + opus critic instead (1 opus call).
 - **Raise to opus ONLY for**: judgment, multi-system architecture, security
   review, root-cause after 2+ failed fixes, adversarial _refutation_.
 - **Lower to haiku for**: relevance screening, file enumeration, simple yes/no
