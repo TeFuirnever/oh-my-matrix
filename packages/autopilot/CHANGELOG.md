@@ -1,5 +1,13 @@
 # @oh-my-matrix/autopilot
 
+## 4.3.0
+
+### Minor Changes
+
+- task-size classifier: goal classified into trivial/small/standard/large at
+  capture time; trivial tasks get low thinking effort for the first 3
+  continuuations (auto-escalate after). Conservative — only downgrades trivial.
+
 ## 4.2.0
 
 ### Minor Changes

@@ -25,7 +25,7 @@ set -euo pipefail
 # has configured (e.g. a mirror). All npm invocations below inherit this.
 export npm_config_registry=https://registry.npmjs.org/
 
-ALL_PACKAGES=("permission-policy" "dynamic-workflows" "autopilot")
+ALL_PACKAGES=("permission-policy" "instinct" "dynamic-workflows" "autopilot")
 DRY_RUN=""
 ONLY=""
 
