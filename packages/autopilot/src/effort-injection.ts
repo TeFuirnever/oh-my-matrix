@@ -6,6 +6,7 @@
  * This prevents cross-turn effort degradation (TD-1).
  */
 import type { ThinkingIntensity, EvidenceStatus } from './types';
+import type { TaskTier } from './size-classifier';
 
 /**
  * Build the effort-injection context line for the current turn.
