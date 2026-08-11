@@ -4,17 +4,15 @@
 
 ### Minor Changes
 
-- Replace the 14 hand-adapted role prompts with 19 agent prompts ported verbatim
-  from oh-my-claudecode (`references/role-prompts/`, commit `314cdcc`). The
-  bundled skill now ships the full role library: analyst, architect,
-  code-reviewer, code-simplifier, critic, debugger, designer,
-  document-specialist, executor, explore, git-master, planner, qa-tester,
-  scientist, security-reviewer, test-engineer, tracer, verifier, writer.
-  OMC-only references/tools/`.omc/` paths stripped; read-only posture
-  declarations added; patterns/templates/test-prompts updated to the new role
-  set (REFUTED/SURVIVES vocabulary unified).
+- autopilot: evidence gate fail-closed completion (timeout/missing/dropped
+  required commands → blocked evidence_missing, resumable), resume hardening
+  (pauseReason cleared, facade pre-check, no resume_run double-kick, retry chain
+  preserved), completionUnverified only on done runs, S8 audit refcount balanced
+  across all terminal paths.
 
-## 1.0.0
+  dynamic-workflows: replace the 14 hand-adapted role prompts with 19 agent
+  prompts ported verbatim from oh-my-claudecode (OMC-only references stripped);
+  patterns/templates/test-prompts updated to the new role set.
 
 ### Major Changes
 

@@ -1,5 +1,19 @@
 # @oh-my-matrix/autopilot
 
+## 4.1.0
+
+### Minor Changes
+
+- autopilot: evidence gate fail-closed completion (timeout/missing/dropped
+  required commands → blocked evidence_missing, resumable), resume hardening
+  (pauseReason cleared, facade pre-check, no resume_run double-kick, retry chain
+  preserved), completionUnverified only on done runs, S8 audit refcount balanced
+  across all terminal paths.
+
+  dynamic-workflows: replace the 14 hand-adapted role prompts with 19 agent
+  prompts ported verbatim from oh-my-claudecode (OMC-only references stripped);
+  patterns/templates/test-prompts updated to the new role set.
+
 ## 4.0.0
 
 ### Major Changes
