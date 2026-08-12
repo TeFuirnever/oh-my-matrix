@@ -8,8 +8,13 @@ import {
   recordTurn,
   summarizeLedger,
   buildProgressHeadline,
+  lastProgressTurn,
+  countsAsProgress,
+  hasMigrationGrace,
+  consumeMigrationGrace,
   LEDGER_MAX_DETAIL,
 } from '../src/progress-ledger';
+import type { Ledger } from '../src/progress-ledger';
 
 describe('E5: progress-ledger', () => {
   describe('buildEntry', () => {
@@ -148,6 +153,135 @@ describe('E5: progress-ledger', () => {
         l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`]));
       }
       expect(buildProgressHeadline(l)).toContain('3 earlier turns folded');
+    });
+  });
+
+  describe('lastProgressTurn (E2 evidence-coupled accounting)', () => {
+    it('empty ledger → 0', () => {
+      expect(lastProgressTurn(emptyLedger())).toBe(0);
+    });
+
+    it('all non-failed entries → last entry turn', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c']));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c']));
+      expect(lastProgressTurn(l)).toBe(2);
+    });
+
+    it('trailing failed entry skipped → previous turn', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'failed'));
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('all failed entries → 0 (no validated progress)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'failed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'failed'));
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+
+    it('undefined evidenceStatus counts as progress (mid-run turn without validation)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'])); // no evidenceStatus
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('all detail failed but folded has validated turn → folded turn (not 0)', () => {
+      // Turn 1 passes, then enough failed turns to push turn 1 into folded.
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      for (let i = 2; i <= LEDGER_MAX_DETAIL + 2; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`], 'failed'));
+      }
+      // Detail window is all-failed now; turn 1 (passed) is in folded.
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('skipped+not_configured counts as progress (legitimate: no validation configured)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped', 'not_configured'));
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('skipped+not_executed does NOT count as progress (F6: configured but dropped → fail-closed)', () => {
+      let l = emptyLedger();
+      // Turn 1 passed, turn 2 was skipped+not_executed (validation dropped).
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'skipped', 'not_executed'));
+      // lastProgressTurn must ignore turn 2 and fall back to turn 1.
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('only skipped+not_executed entries → 0 (no validated progress, F6)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped', 'not_executed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'skipped', 'not_executed'));
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+
+    it('skipped+not_executed pushed into folded does not carry validated turn (F6 fold path)', () => {
+      // All skipped+not_executed; after folding, folded.lastValidatedTurn stays 0.
+      let l = emptyLedger();
+      for (let i = 1; i <= LEDGER_MAX_DETAIL + 2; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`], 'skipped', 'not_executed'));
+      }
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+  });
+
+  describe('countsAsProgress (F6 evidence semantics helper)', () => {
+    it('undefined (mid-run, no validation) → true', () => {
+      expect(countsAsProgress(undefined)).toBe(true);
+    });
+    it('passed → true', () => {
+      expect(countsAsProgress('passed')).toBe(true);
+    });
+    it('failed → false', () => {
+      expect(countsAsProgress('failed')).toBe(false);
+    });
+    it('skipped + not_configured → true', () => {
+      expect(countsAsProgress('skipped', 'not_configured')).toBe(true);
+    });
+    it('skipped + not_executed → false', () => {
+      expect(countsAsProgress('skipped', 'not_executed')).toBe(false);
+    });
+    it('skipped without skipReason → true (treat unknown as legitimate)', () => {
+      expect(countsAsProgress('skipped')).toBe(true);
+    });
+    it('running → false (transient, not a completed verdict)', () => {
+      expect(countsAsProgress('running')).toBe(false);
+    });
+    it('not_started → false', () => {
+      expect(countsAsProgress('not_started')).toBe(false);
+    });
+  });
+
+  describe('hasMigrationGrace / consumeMigrationGrace (F3 real fix)', () => {
+    it('fresh ledger has no grace', () => {
+      expect(hasMigrationGrace(emptyLedger())).toBe(false);
+      expect(hasMigrationGrace(undefined)).toBe(false);
+    });
+
+    it('ledger with progressGrace flag → hasMigrationGrace true', () => {
+      const l: Ledger = { ...emptyLedger(), progressGrace: true };
+      expect(hasMigrationGrace(l)).toBe(true);
+    });
+
+    it('consumeMigrationGrace clears the flag and returns a new ledger (immutable)', () => {
+      const l: Ledger = { ...emptyLedger(), progressGrace: true };
+      const consumed = consumeMigrationGrace(l);
+      expect(hasMigrationGrace(consumed)).toBe(false);
+      // input not mutated
+      expect(hasMigrationGrace(l)).toBe(true);
+    });
+
+    it('consumeMigrationGrace on a ledger without grace is a no-op (same shape)', () => {
+      const l = emptyLedger();
+      const consumed = consumeMigrationGrace(l);
+      expect(hasMigrationGrace(consumed)).toBe(false);
+      expect(consumed.entries).toEqual(l.entries);
     });
   });
 });

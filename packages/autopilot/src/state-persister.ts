@@ -27,7 +27,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import type { AutopilotState } from './types';
-import type { WorkspaceRecord, RetryEntry, WorkflowConfig } from './types';
+import type { WorkspaceRecord, RetryEntry, WorkflowConfig, EvidenceSummary } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { deriveStatus } from './orchestrator';
 import type { Ledger } from './progress-ledger';
@@ -35,6 +35,16 @@ import type { Ledger } from './progress-ledger';
 const CHECKPOINT_SUBDIR = path.join('.autopilot', 'checkpoints');
 const SESSION_INDEX_FILE = 'session-index.json';
 const TERMINAL_CHECKPOINT_TTL_MS = 24 * 60 * 60 * 1000; // sweep terminal checkpoints older than 24h
+
+/**
+ * Checkpoint schema version (ticket 08). Bumped on every breaking change to the
+ * persisted shape. v1 = pre-02 (no ledger / no lastValidatedTurn / evidenceStatus
+ * string only). v2 = 02 + 08 (ledger with lastValidatedTurn + full EvidenceSummary).
+ * loadCheckpoint runs migrateCheckpoint() to bring older disks up to v2; a
+ * schemaVersion NEWER than this (from a downgraded build) is refused, not
+ * silently misinterpreted — see F3 / ticket 08.
+ */
+const CHECKPOINT_SCHEMA_VERSION = 2;
 
 let _writeFailureCount = 0;
 export function getCheckpointWriteFailureCount(): number { return _writeFailureCount; }
@@ -102,6 +112,8 @@ function getSessionIndexPath(workspaceRoot: string): string {
  * session-scoped and never persisted.
  */
 export interface AutopilotCheckpoint {
+  /** ticket 08: schema version for migration. Absent on v1 (pre-02) checkpoints. */
+  schemaVersion?: number;
   runId: string;
   sessionKey: string;
   orchestrationState?: AutopilotState['orchestrationState'];
@@ -129,6 +141,11 @@ export interface AutopilotCheckpoint {
   completionUnverified?: boolean;
   inputTokensUsed?: number;
   outputTokensUsed?: number;
+  /** ticket 08: full evidence summary, restored on load so crash recovery does
+   * not blank projection/continuation-engine (which read state.evidence). */
+  evidence?: EvidenceSummary;
+  /** Legacy (v1) field: just the status string. Kept for backward-compat reads
+   * of pre-08 checkpoints; new writes populate `evidence` instead. */
   evidenceStatus?: AutopilotState['evidence'] extends infer E ? (E extends { status: infer S } ? S : undefined) : undefined;
   startedAt?: number;
   lastActivityAt?: number;
@@ -162,6 +179,7 @@ export interface AutopilotCheckpoint {
  */
 export function buildCheckpoint(state: AutopilotState, runId: string, workspaceRoot: string): AutopilotCheckpoint {
   return {
+    schemaVersion: CHECKPOINT_SCHEMA_VERSION,
     runId,
     sessionKey: state.sessionKey,
     orchestrationState: state.orchestrationState,
@@ -186,6 +204,7 @@ export function buildCheckpoint(state: AutopilotState, runId: string, workspaceR
     completionUnverified: state.completionUnverified,
     inputTokensUsed: state.inputTokensUsed,
     outputTokensUsed: state.outputTokensUsed,
+    evidence: state.evidence,
     evidenceStatus: state.evidence?.status,
     startedAt: state.startedAt,
     lastActivityAt: state.lastActivityAt,
@@ -278,6 +297,77 @@ function updateSessionIndex(workspaceRoot: string, sessionKey: string, runId: st
 }
 
 /**
+ * ticket 08: bring a deserialized checkpoint up to CHECKPOINT_SCHEMA_VERSION.
+ * Pure (no I/O). Returns the migrated checkpoint, or null if the schema is a
+ * NEWER version than this build understands (refuse — don't silently
+ * misinterpret fields written by a future build).
+ *
+ * v1 → v2 normalizes:
+ *   - ledger.folded.lastValidatedTurn: absent on pre-02 checkpoints. The folded
+ *     aggregate has already merged per-turn evidence away, so the historical
+ *     validated turn cannot be re-derived — default to 0 (conservative; does not
+ *     worsen the F3 regression since detail entries still carry their own
+ *     evidenceStatus and lastProgressTurn reads those first).
+ *   - evidence: pre-08 stored only the evidenceStatus string. Reconstruct a
+ *     minimal EvidenceSummary { status, commands: [] } so state.evidence is
+ *     non-undefined after load (projection / continuation-engine degrade
+ *     gracefully rather than reading undefined).
+ */
+function migrateCheckpoint(cp: AutopilotCheckpoint): AutopilotCheckpoint | null {
+  // Future schema → refuse. A downgraded build must not misread a newer shape.
+  if (cp.schemaVersion !== undefined && cp.schemaVersion > CHECKPOINT_SCHEMA_VERSION) {
+    try {
+      console.error(
+        `[autopilot] checkpoint schemaVersion ${cp.schemaVersion} newer than supported ` +
+        `${CHECKPOINT_SCHEMA_VERSION} (run ${cp.runId}) — refusing to load`,
+      );
+    } catch { /* noop */ }
+    return null;
+  }
+
+  const migrated: AutopilotCheckpoint = { ...cp };
+
+  // v1 → v2: a checkpoint written before schemaVersion existed predates 02's
+  // evidence-coupled accounting. Its folded aggregate cannot be reconstructed
+  // (per-turn evidence was merged away), so lastProgressTurn may read 0 even
+  // though the run was productive. Set a one-shot progressGrace so the host's
+  // no_progress detector suppresses the first patrol tick (hasMigrationGrace),
+  // giving the resumed run a chance to log a fresh progress turn. This is the
+  // real F3 fix — normalizing lastValidatedTurn alone is a no-op when the detail
+  // window is all-failed (gap stays 10 ≥ threshold → false pause).
+  const isLegacyV1 = cp.schemaVersion === undefined;
+  let didNormalizeLedger = false;
+
+  if (migrated.ledger && migrated.ledger.folded && migrated.ledger.folded.lastValidatedTurn === undefined) {
+    migrated.ledger = {
+      ...migrated.ledger,
+      folded: { ...migrated.ledger.folded, lastValidatedTurn: 0 },
+    };
+    didNormalizeLedger = true;
+  }
+
+  if (isLegacyV1 && migrated.ledger) {
+    // Attach grace to the (possibly just-normalized) ledger. One-shot: the host
+    // clears it via consumeMigrationGrace after the first patrol tick.
+    if (!didNormalizeLedger) {
+      // ledger existed + already had lastValidatedTurn, but still a v1 shape —
+      // history trustworthiness is uncertain; grant grace.
+      migrated.ledger = { ...migrated.ledger };
+    }
+    migrated.ledger = { ...migrated.ledger, progressGrace: true };
+  }
+
+  // v1 → v2: reconstruct minimal evidence from the legacy status string so
+  // state.evidence is non-undefined after load (projection/continuation-engine
+  // get a degraded-but-present summary rather than undefined).
+  if (migrated.evidence === undefined && migrated.evidenceStatus !== undefined) {
+    migrated.evidence = { status: migrated.evidenceStatus, commands: [] };
+  }
+
+  return migrated;
+}
+
+/**
  * Load a checkpoint and rebuild an AutopilotState. ADR-016 BLOCKER #1 fix:
  * `status` is NEVER trusted from the persisted field — always re-derived.
  *
@@ -297,6 +387,12 @@ export function loadCheckpoint(
   } catch {
     return null; // missing or corrupt — nothing to resume
   }
+
+  // ticket 08: migrate to the current schema. A future-version checkpoint
+  // (newer than this build supports) → null (refuse, don't misinterpret).
+  const migrated = migrateCheckpoint(cp);
+  if (migrated === null) return null;
+  cp = migrated;
 
   // Review #4 #4: stale-run guard. If the workspace path recorded at checkpoint
   // time no longer exists (deleted between crash and restart), refuse to resume
@@ -335,6 +431,10 @@ export function loadCheckpoint(
     maxCostUsd: cp.maxCostUsd,
     ledger: cp.ledger,
     completionUnverified: cp.completionUnverified,
+    // ticket 08 / F3-related: restore the full evidence summary (was lost — only
+    // the status string was persisted pre-08). migrateCheckpoint reconstructs a
+    // minimal summary from the legacy string when cp.evidence is absent.
+    evidence: cp.evidence,
     inputTokensUsed: cp.inputTokensUsed,
     outputTokensUsed: cp.outputTokensUsed,
     startedAt: cp.startedAt,

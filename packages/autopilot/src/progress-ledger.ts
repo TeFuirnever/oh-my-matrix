@@ -18,10 +18,36 @@ export interface LedgerEntry {
   filesTouched: string[];
   commandsRun: string[];
   evidenceStatus?: EvidenceStatus;
+  /**
+   * WHY an evidenceStatus of 'skipped' was skipped. Mirrors EvidenceSummary's
+   * skipReason so the ledger — and thus lastProgressTurn — can distinguish
+   * 'not_configured' (legitimate: no validation configured → counts as progress)
+   * from 'not_executed' (configured but dropped/errored → fail-closed, NOT progress).
+   * F6 (ticket 12 §C1): 'skipped'+'not_executed' must not read as forward progress.
+   */
+  skipReason?: 'not_configured' | 'not_executed';
   /** Model-declared decisions (optional — left empty for now). */
   decisions: string[];
   /** Known incomplete items the model surfaced (optional). */
   openItems: string[];
+}
+
+/**
+ * F6: does this evidence outcome count as forward progress for the no_progress
+ * detector? A turn counts when its evidence was validated ('passed') OR no
+ * validation ran this turn (undefined — mid-run turn) OR validation was
+ * legitimately absent ('skipped'+'not_configured'). It does NOT count when
+ * evidence failed, OR when configured validation was dropped/errored
+ * ('skipped'+'not_executed' — fail-closed per evidence-gate.ts).
+ */
+export function countsAsProgress(
+  evidenceStatus: EvidenceStatus | undefined,
+  skipReason?: 'not_configured' | 'not_executed',
+): boolean {
+  if (evidenceStatus === undefined) return true; // mid-run turn, no validation
+  if (evidenceStatus === 'passed') return true;
+  if (evidenceStatus === 'skipped') return skipReason !== 'not_executed';
+  return false; // 'failed' | 'running' | 'not_started'
 }
 
 /**
@@ -35,12 +61,26 @@ export interface FoldedAggregate {
   turns: number;
   filesTouched: string[];
   commandsRun: string[];
+  /** E2: the turn number of the most recent folded entry whose evidence was
+   * not 'failed' — so lastProgressTurn can see validated progress that aged
+   * out of the detail window. 0 when no folded turn qualified. */
+  lastValidatedTurn: number;
 }
 
 export interface Ledger {
   folded: FoldedAggregate;
   /** Most recent N turns (detail), newest last. Bounded by LEDGER_MAX_DETAIL. */
   entries: LedgerEntry[];
+  /**
+   * F3 (ticket 08): transient grace flag set by migrateCheckpoint when a legacy
+   * checkpoint is normalized on load. A run whose progress history could not be
+   * reconstructed (all-failed detail + pre-02 folded aggregate) would otherwise
+   * trip no_progress on the first patrol tick. The host's no_progress detector
+   * MUST consult hasMigrationGrace() and, if true, suppress the pause for one
+   * tick, then call consumeMigrationGrace() to clear it. Not set on fresh ledgers
+   * or v2+ checkpoints; buildCheckpoint does not rely on it (one-shot).
+   */
+  progressGrace?: boolean;
 }
 
 /** Detail window: keep this many recent turns verbatim, fold older into `folded`. */
@@ -52,7 +92,7 @@ const MAX_SUMMARY_CMDS = 8;
 const MAX_ITEM_LEN = 120;
 
 export function emptyLedger(): Ledger {
-  return { folded: { turns: 0, filesTouched: [], commandsRun: [] }, entries: [] };
+  return { folded: { turns: 0, filesTouched: [], commandsRun: [], lastValidatedTurn: 0 }, entries: [] };
 }
 
 /** Clamp/clean a single item (path or command) for storage. */
@@ -69,10 +109,11 @@ export function buildEntry(
   filesTouched: string[],
   commandsRun: string[],
   evidenceStatus?: EvidenceStatus,
+  skipReason?: 'not_configured' | 'not_executed',
 ): LedgerEntry {
   const files = dedup(filesTouched.map(cleanItem).filter(Boolean) as string[]).slice(0, MAX_FILES_PER_ENTRY);
   const cmds = dedup(commandsRun.map(cleanItem).filter(Boolean) as string[]).slice(0, MAX_CMDS_PER_ENTRY);
-  return { turn, filesTouched: files, commandsRun: cmds, evidenceStatus, decisions: [], openItems: [] };
+  return { turn, filesTouched: files, commandsRun: cmds, evidenceStatus, skipReason, decisions: [], openItems: [] };
 }
 
 function dedup(arr: string[]): string[] {
@@ -91,11 +132,17 @@ function dedup(arr: string[]): string[] {
 function foldOldest(ledger: Ledger): Ledger {
   if (ledger.entries.length === 0) return ledger;
   const [oldest, ...rest] = ledger.entries;
+  // E2: carry the most recent validated turn into the aggregate. If the folded
+  // aggregate already saw a validated turn, keep it (it's newer than anything
+  // folding in now, since detail is newest-last and we fold oldest-first).
+  const carryValidated = countsAsProgress(oldest.evidenceStatus, oldest.skipReason) ? oldest.turn : 0;
+  const lastValidatedTurn = Math.max(ledger.folded.lastValidatedTurn ?? 0, carryValidated);
   return {
     folded: {
       turns: ledger.folded.turns + 1,
       filesTouched: dedup([...ledger.folded.filesTouched, ...oldest.filesTouched]).slice(-MAX_SUMMARY_FILES),
       commandsRun: dedup([...ledger.folded.commandsRun, ...oldest.commandsRun]).slice(-MAX_SUMMARY_CMDS),
+      lastValidatedTurn,
     },
     entries: rest,
   };
@@ -139,6 +186,50 @@ export function summarizeLedger(ledger: Ledger | undefined): string {
     openItems: open,
   };
   return JSON.stringify(summary);
+}
+
+/**
+ * E2 evidence-coupled accounting: the turn of the last ledger entry that counts
+ * as forward progress (see countsAsProgress). A failed-evidence turn produced
+ * output but the output was not validated — it does not count. Nor does
+ * 'skipped'+'not_executed' (configured validation dropped/errored — fail-closed,
+ * F6). Entries with undefined evidenceStatus (mid-run turns) and
+ * 'skipped'+'not_configured' (legitimate absence of validation) DO count. Falls
+ * back to the folded aggregate's lastValidatedTurn when no detail entry
+ * qualifies. Returns 0 if no qualifying turn exists (detail or folded).
+ */
+export function lastProgressTurn(ledger: Ledger | undefined): number {
+  const l = ledger ?? emptyLedger();
+  for (let i = l.entries.length - 1; i >= 0; i--) {
+    const e = l.entries[i];
+    if (countsAsProgress(e.evidenceStatus, e.skipReason)) {
+      return e.turn;
+    }
+  }
+  return l.folded.lastValidatedTurn ?? 0;
+}
+
+/**
+ * F3 (ticket 08): true when the host's no_progress detector should SUPPRESS the
+ * pause for this patrol tick. Set by migrateCheckpoint on a freshly-loaded legacy
+ * ledger whose progress history could not be reconstructed. The host calls this
+ * before deciding to pause; if true, it skips the pause AND calls
+ * consumeMigrationGrace() to clear the one-shot flag. Pure.
+ */
+export function hasMigrationGrace(ledger: Ledger | undefined): boolean {
+  return ledger?.progressGrace === true;
+}
+
+/**
+ * F3 (ticket 08): clear the one-shot migration grace flag. Returns a new Ledger
+ * (immutable — does not mutate the input). The host calls this after honoring a
+ * grace suppression so the flag does not persist into the next patrol tick.
+ */
+export function consumeMigrationGrace(ledger: Ledger | undefined): Ledger {
+  const l = ledger ?? emptyLedger();
+  if (!l.progressGrace) return l;
+  const { progressGrace: _drop, ...rest } = l;
+  return rest as Ledger;
 }
 
 /**
