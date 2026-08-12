@@ -3,7 +3,7 @@
 > **Status**: Proposed · 2026-08-08
 > **目的**：评估 `/Users/guanxueliang/Desktop/Matrix/ContextEngineering/ECC`（affaan-m/ECC v2.0.0，"harness-native operator system"）哪些特性值得引入 oh-my-matrix（OMM，openclaw 插件），并给业界最佳实践映射下的落地优先级。
 > **方法**：3 轮 Explore agent 逆向（整体可行性 + 能力地图 + 3 组特性深挖），用 grilling 建立的"接入/移植/依赖 + 不引理由"框架裁决。
-> **关联**：`autopilot-verification-floor-design.md`（§5.4/§5.5 落地）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/core/autopilot/long-horizon-autonomy.md` §5
+> **关联**：`autopilot-enhancement-design.md`（Part A = 前 verification-floor §5.4/§5.5 落地，已合一）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/core/autopilot/long-horizon-autonomy.md` §5
 
 ---
 
@@ -71,7 +71,7 @@
 ## 5. 三档建议
 
 ### 🔴 必做（业界共识 #1 + OMM 真 defect + 零框架）
-- **§5.4 `skipped≠passed`** —— "prove-don't-assert" 在 OMM 的落地。性价比最高。详见 `autopilot-verification-floor-design.md` §3（三步：skipReason 区分 + evidence_missing 可达 + resume 守门）。
+- **§5.4 `skipped≠passed`** —— "prove-don't-assert" 在 OMM 的落地。性价比最高。详见 `autopilot-enhancement-design.md` Part A §3（三步：skipReason 区分 + evidence_missing 可达 + resume 守门）。
 - **§5.5 最小子集：progress 结构化**（`index.ts:1128`）—— "结构化追踪"的 OMM 版。一行起：`files: <写类文件> | <尾摘要>`。
 
 ### 🟡 选做（业界推崇 + 轻量 + 不撞决策，放大必做项价值）
@@ -103,7 +103,7 @@
 ## 7. 落地顺序
 
 1. **§5.6 在飞守卫**（前置，防 TOCTOU）—— 若未实施。
-2. **§5.4 + §5.5 最小子集**（🔴 必做）—— 详见 `autopilot-verification-floor-design.md`。
+2. **§5.4 + §5.5 最小子集**（🔴 必做）—— 详见 `autopilot-enhancement-design.md` Part A。
 3. ~~AC-NNN + size-classifier~~（✅ 已实施 2026-08-11，autopilot 4.2.0/4.3.0）。
 4. **continuous-learning instinct**（若立项第三缺口）—— 独立 spike：新包 `@oh-my-matrix/instinct`，先 observer + turn-boundary extractor，验证 openclaw hook 对等 + 是否做子系统。
 
@@ -112,5 +112,5 @@
 ## 8. 引用
 
 - **ECC 源**（reference-only）：`ContextEngineering/ECC/` `.openclaw/README.md`（570B stub）· `package.json`（ecc-universal, 3 runtime deps）· `skills/continuous-learning-v2/` + `scripts/hooks/observe-runner.js` + `observe.sh` + `observer-loop.sh` + `instinct-cli.py` · `skills/eval-harness/SKILL.md` · `skills/intent-driven-development/SKILL.md` · `skills/orch-pipeline/SKILL.md` · `skills/autonomous-loops/SKILL.md` §6 · `skills/delivery-gate/` + `hooks/quality-gate.py` · `skills/verification-loop/SKILL.md` · `skills/plan-orchestrate/SKILL.md` · `skills/recursive-decision-ledger/SKILL.md`
-- **OMM 内部**：`autopilot-verification-floor-design.md` · `docs/adr/019-conditional-evidence-judging-boundary.md` · `long-horizon-autonomy.md` §5.4/§5.5/§5.6 · `dynamic-workflows-projection-design.md` §4 · `effort-injection.ts:43-54` · `evidence-gate.ts:23-95` · `index.ts:1128`(progress)/`:528`(before_agent_finalize) · `permission-policy/audit-persister.ts` · `dynamic-workflows/index.ts:57`(isSubagentSessionKey)
+- **OMM 内部**：`autopilot-enhancement-design.md`（Part A = 前 verification-floor，已合一）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `long-horizon-autonomy.md` §5.4/§5.5/§5.6 · `dynamic-workflows-projection-design.md` §4 · `effort-injection.ts:43-54` · `evidence-gate.ts:23-95` · `index.ts:1128`(progress)/`:528`(before_agent_finalize) · `permission-policy/audit-persister.ts` · `dynamic-workflows/index.ts:57`(isSubagentSessionKey)
 - **业界**：[Anthropic effective-harnesses](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) · [cwc-long-running-agents](https://github.com/anthropics/cwc-long-running-agents)（demo）· [loop-engineering](https://github.com/cobusgreyling/loop-engineering) · [zcode /goal](https://zcode.z.ai/en/docs/goal)
