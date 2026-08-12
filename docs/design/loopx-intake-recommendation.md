@@ -1,9 +1,10 @@
 # LoopX 引入 OMM 评估与建议
 
-> **Status**: Proposed · 2026-08-10
+> **Status**: 部分实施 · 2026-08-10 评估 / 2026-08-12 更新进展
 > **目的**：评估 `/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/loopx`（huangruiteng/loopx，"open, provider-neutral, stateful control plane for long-running agents"）哪些设计值得引入/吸纳进 oh-my-matrix（OMM）autopilot，并按 `autopilot-verification-floor-design.md` 的三个环节（需求规划/任务拆解/验证）对照补漏。
 > **方法**：3 轮 Explore agent 逆向（能力地图 + OMM 对比裁决 + 增量角落深挖）+ 业界最佳实践 Web 对照（human-in-the-loop gate / quota 控制）。
 > **关联**：`autopilot-verification-floor-design.md`（§3 验收基线/§4 进展/§1 非目标）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `ecc-intake-recommendation.md`
+> **进展跟踪**：实施状态见本文 §7（落地建议表"进展"列）+ §9（实施进展汇总）。详细 ticket / 回归跟踪见 `autopilot-enhancement-design.md` §C1 与 `.scratch/autopilot-enhancement/issues/`
 
 ---
 
@@ -105,17 +106,55 @@
 
 ## 7. 落地建议
 
-| 优先级 | 项 | 关联 ticket/设计 |
-|---|---|---|
-| 🔴 立项 | **Human gate**（#5） | 新 `waiting_human` blocked reason（resumable）+ `humanQuestion` 投影字段 + `human_gate_decided` OrchestratorEvent；业界渐进自治定位（真决策点才 gate） |
-| 🔴 立项 | **Windowed slot quota**（#6） | E2 落地；`maxContinuationsPerWindow` + 证据失败退款 + throttle（resumable）非 terminal；staged：advisory→downgrade（接 resolveModelTier）→hard |
-| 🟡 并进 evidence 流程 | 验证纪律组（#1-4） | fingerprint receipt 最值（agent_end 证据绑定最终 diff）；ledger backstop 一 guard（continuation-engine）；evidence-coupled 记账 |
-| 🟡 轻量 | **goal 验收标准字段**（§4.1）+ **successor chaining/openItems**（§4.2） | T05 轻量版；`openItems` 用起来（progress-ledger 恒空字段） |
-| 🟢 工程健壮 | #7-10 | schemaVersion/原子幂等/exact-head cursor/dual-mode regression（hook-dispatch smoke） |
+| 优先级 | 项 | 关联 ticket/设计 | 进展（2026-08-12） |
+|---|---|---|---|
+| 🔴 立项 | **Human gate**（#5） | 新 `waiting_human` blocked reason（resumable）+ `humanQuestion` 投影字段 + `human_gate_decided` OrchestratorEvent；业界渐进自治定位（真决策点才 gate） | ⏳ ticket 01 ready-for-agent（跨 host） |
+| 🔴 立项 | **Windowed slot quota**（#6） | E2 落地；`maxContinuationsPerWindow` + 证据失败退款 + throttle（resumable）非 terminal；staged：advisory→downgrade（接 resolveModelTier）→hard | ⏳ ticket 03 ready-for-agent（blocked by 02 回归清理） |
+| 🟡 并进 evidence 流程 | 验证纪律组（#1-4） | fingerprint receipt 最值（agent_end 证据绑定最终 diff）；ledger backstop 一 guard（continuation-engine）；evidence-coupled 记账 | ⚠️ 混合：#4 evidence-coupled ✅（ticket 02，但有回归→12）；#1 fingerprint ⏳（ticket 04）；#2 ledger backstop 🚫 blocked（ticket 05，记账模型限制）；详见 §9 |
+| 🟡 轻量 | **goal 验收标准字段**（§4.1）+ **successor chaining/openItems**（§4.2） | T05 轻量版；`openItems` 用起来（progress-ledger 恒空字段） | 🟡 goal 字段 ✅（ticket 06，master bdf4815）；successor chaining ⏳（ticket 07，跨 host） |
+| 🟢 工程健壮 | #7-10 | schemaVersion/原子幂等/exact-head cursor/dual-mode regression（hook-dispatch smoke） | 🟡 #7 schemaVersion ✅（ticket 08，含 F3 真修复）；#8 原子幂等 ✅（复用既有）；#9 exact-head ⏳（ticket 09，跨 host）；#10 regression ⏳（ticket 10，跨 host） |
 
 ---
 
-## 8. 引用
+## 8. 实施进展（2026-08-12）
+
+本评估催生 13 个 ticket（`.scratch/autopilot-enhancement/issues/01-13`）。实施情况：
+
+### ✅ 已实施（4 项）
+
+| ticket | 吸纳点 | commit | 说明 |
+|---|---|---|---|
+| **06** goal 验收字段 | §4.1 | master `bdf4815` | goal AC-NNN 轻量版（零 schema 变更） |
+| **11** size-classifier | 工程健壮 | master `22c9e23` | task-size 分类（autopilot 4.3.0 发布） |
+| **02** evidence-coupled 记账 | #4 / §3.1 | `feacd81`（loopx worktree） | `lastProgressTurn` 读 evidence，churn-but-never-pass 仍 trip no_progress。**但有 3 CONFIRMED 回归 → ticket 12** |
+| **08** checkpoint schemaVersion + F3 | #7 / 工程健壮 | `5a56f46` + `438bcf9`（loopx worktree） | schemaVersion + migration + evidence 恢复 + **F3 真修复**（migration grace flag） |
+
+### ⚠️ 部分完成（1 项）
+
+| ticket | 吸纳点 | 说明 |
+|---|---|---|
+| **12** 02 回归修复 | 验证纪律组后续 | **F6 ✅**（`skipped`+`not_executed` 不算 progress，`d74fcf4`）；**F3 ✅**（package 侧 grace 机制）；**F1/F2/F7-算术/F8 🏠 host-runtime-blocked**（agent_end/patrol/setAuditMode 不在本 package） |
+
+### 🏠 host-runtime-blocked（需 host repo）
+
+F1（stale `'failed'` stamping）/ F2（audit refcount over-release）/ F8（wiring 测试）/ F7 gap 算术 —— 在 host gateway `index.ts`，不在 `@oh-my-matrix/autopilot` npm package。
+
+### ⏳ ready-for-agent / blocked（7 项）
+
+- **01** human gate / **04** fingerprint receipt / **07** successor chaining / **09** exact-head cursor / **10** regression smoke —— ready-for-agent，但核心 enforcement 跨 host
+- **03** windowed slot quota —— ready-for-agent，blocked by 02 回归清理
+- **05** ledger-output backstop —— 🚫 blocked（02 记账模型根本限制）
+- **13** mid-run validation writeback —— ready-for-agent，blocked by 12 的 F1
+
+### 关键决策（surface per AGENTS.md "Invisible Decision"）
+
+1. **worktree 边界**：F1/F2/F8 留 host，不硬写手建假测试（F8 要求非手建 agent_end→patrol wiring）
+2. **F6 语义**：未盲从 ticket"只有 passed/undefined 算"的一刀切——按 `evidence-gate.ts` 实际语义区分 `skipReason`，`not_configured`（项目没配验证）仍算 progress，只 `not_executed`（配了被丢弃）不算
+3. **F3 两轮**：首轮 migration normalize（`undefined→0`）被 code-review 抓出是 no-op（= 旧 bug 行为），二轮加 `progressGrace` transient + 谓词真修
+
+---
+
+## 9. 引用
 
 - **LoopX 源**：`/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/loopx` `control_plane/`（turn_driver/transaction.py、operator_gate.py、quota.py、event_sourced_state.py、todos/、goals/goal_vision.py）· `capabilities/`（pr_review_queue/core.py、change_quality、reward_memory/architecture.py）· `skills/loopx-change-quality/SKILL.md` · `regression/` · `apps/presentation/dashboard` · `worker_bridge.py` · `docs/quota-allocation.md` · `docs/architecture.md`
 - **OMM 内部**：`autopilot-verification-floor-design.md` · `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/core/autopilot/long-horizon-autonomy.md`（§5.4/§5.5/§5.6、E2）· `effort-injection.ts:43-44`（无规划阶段）· `progress-ledger.ts`（openItems 恒空）· `projection.ts`（canResume）· `state-persister.ts`（无 schemaVersion）
