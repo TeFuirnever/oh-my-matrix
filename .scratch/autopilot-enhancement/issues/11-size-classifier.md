@@ -4,9 +4,14 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** ✅ 已实施（master commit 22c9e23 `feat(autopilot): task-size classifier routes effort by goal shape`）— autopilot 4.3.0 发布
 
-- [ ] 首轮完成一次任务形状分类，存为状态
-- [ ] 四档映射到既有思考强度路径（trivial→低 … large→高）
-- [ ] 用户可覆盖分类结果
-- [ ] 无分类信息时回退现有默认（fail-open）
+## 已交付（22c9e23，主 session）
+- 任务形状分类（trivial/small/standard/large）路由思考强度
+- 四档映射既有 effort/model 路径
+- autopilot 4.3.0 changeset + 发布
+
+- [x] 首轮完成一次任务形状分类，存为状态
+- [x] 四档映射到既有思考强度路径（trivial→低 … large→高）
+- [x] 用户可覆盖分类结果
+- [x] 无分类信息时回退现有默认（fail-open）

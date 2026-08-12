@@ -177,10 +177,38 @@ fingerprint receipt 最值（验证结果绑定最终 diff）。
 |---|---|---|
 | 🔴 立项 | **Human gate**（#5） | `waiting_human` blocked reason（resumable）+ `humanQuestion` 投影 + `human_gate_decided` OrchestratorEvent；业界渐进自治定位（真决策点才 gate）+ 阻塞式 + timeout |
 | 🔴 立项 | **Windowed slot quota**（#6） | E2 落地：`maxContinuationsPerWindow` + 证据失败退款 + throttle（resumable）；staged：advisory→downgrade（接 resolveModelTier）→hard |
-| 🟡 并进 evidence 流程 | 验证纪律组（#1-4） | fingerprint receipt 最值（agent_end 证据绑定最终 diff）；ledger backstop 一 guard；evidence-coupled 记账 |
-| 🟡 轻量 | **goal 验收标准字段** + **successor chaining/openItems** | T05 轻量版；`openItems` 用起来 |
-| 🟢 工程健壮 | #7-10 | schemaVersion / 原子幂等 / exact-head cursor / dual-mode regression（hook-dispatch smoke） |
-| ⏳ 遗留（旧 verification-floor） | **T05 AC-NNN**（选做）· **T06 size-classifier**（选做）· **§5.12 host 按钮**（canResume 消费，host 侧） | 见 `.scratch/autopilot-verification-floor/issues/05-ac-predicate.md` / `06-size-classifier.md`；§5.12 是 A3.3 破坏性变更的同批约束 |
+| 🟡 并进 evidence 流程 | 验证纪律组（#1-4） | ✅ evidence-coupled 记账已实施（02，**但有 3 个 CONFIRMED 回归 → ticket 12**）· 🚫 ledger backstop（05，blocked——记账模型限制）· ⏳ fingerprint receipt（04，待办） |
+| 🟡 轻量 | **goal 验收标准字段** + **successor chaining/openItems** | ✅ goal AC-NNN 已实施（bdf4815）· ⏳ successor chaining（07） |
+| 🟢 工程健壮 | #7-10 | ⏳ schemaVersion / 原子幂等（08，**含 F3 legacy ??0 修复**）/ exact-head cursor（09）/ dual-mode regression（10） |
+| 🟢 新增 | **mid-run validation writeback**（13） | /code-review F5：mid-run validation 结果丢弃 → evidence-coupled 在首次 gate 前不可达 |
+| ⏳ 遗留（旧 verification-floor） | **T05 AC-NNN**（✅ 已实施 bdf4815）· **T06 size-classifier**（✅ 已实施 22c9e23）· **§5.12 host 按钮**（canResume 消费，host 侧） | §5.12 是 A3.3 破坏性变更的同批约束 |
+
+---
+
+## C1. 02 实施后 /code-review 发现（2026-08-11，15 findings / 3 CONFIRMED）
+
+02（evidence-coupled 记账，commit feacd81）实施后跑 /code-review（10 finder 角度 + 3 verifier）。**997 测试绿但 wiring 未测**——3 个 CONFIRMED 回归必须修（ticket 12）。
+
+### CONFIRMED 回归（必修）
+
+| # | 问题 | 机制 | 后果 |
+|---|---|---|---|
+| **F1** 🔴 | stale `'failed'` stamping | gate 只在 complete 路径跑（index.ts:885），`state.evidence` 是**最后一次 gate 结果**，只有 activate 清。修复轮（gate 失败后写文件）→ agent_end 用 stale evidence stamp `'failed'`（index.ts:1309） | `lastProgressTurn` 卡在 gate 失败轮 → patrol 误判 no_progress **暂停修好中的 run** → resume 又暂停 → **一 turn 一 resume 死循环**。旧代码（last entry turn）不 pause。02 "不误报" AC 被违反 |
+| **F2** 🔴 | audit refcount over-release | no_progress pause 无条件 `setAuditMode('active')`（index.ts:1962），但 `pause_requested` 对 retry_queued 是 no-op（orchestrator.ts:370） | 其他并发 run 的 audit monitor refcount 被误摘。其他 pause 点都 guard reducer 结果（:1337-1338），这个没有 |
+| **F3** 🔴 | legacy checkpoint `?? 0` | 旧 checkpoint 的 folded 无 `lastValidatedTurn` → `?? 0`（progress-ledger.ts:171） | 升级后第一个 tick：全 failed 窗口 + 旧折叠 → gap=10 → **零新轮就 pause**。并入 ticket 08（checkpoint versioning） |
+
+### 语义问题（建议修，非回归但削弱 02 价值）
+
+| # | 问题 | 影响 |
+|---|---|---|
+| **F5** | mid-run validation 结果丢弃（index.ts:263 `runMidRunValidation` 算了不 setState） | "churn 文件但验证不过" 在首次 gate 前对 no_progress **不可达**——正是 02 要抓的场景。→ ticket 13 |
+| **F6** | `'skipped'`/`'not_executed'` 算 progress（progress-ledger.ts:167 `!== 'failed'`） | validator 从未真跑（allowlist 丢弃）的 run 读成"在推进"——与 gate fail-closed（blocked evidence_missing）矛盾。→ 并入 ticket 12 |
+| **F7** | off-by-one（in-flight 轮计入 + turn-0 sentinel 碰撞） | 有效阈值 = threshold-1，pause 在第 N 轮**开始**时触发（可能 mid-production）。→ 并入 ticket 12 |
+| **F8** | 测试 gap：7 测试全手建 ledger，不测 agent_end stamping→patrol 路径 | flagship 回归（F1）绿通过。→ ticket 12 配套测试 |
+
+### 文档/类型清理（低优先）
+
+F9（long-horizon-autonomy.md §5.7 trigger 定义过时）· F12（`!== 'failed'` 谓词 foldOldest/lastProgressTurn 重复，抽 helper）· F14（`lastValidatedTurn` 类型应 optional）· F15（omm-implementation-status.md 指向已删设计稿 + ticket 副本）。→ 顺带或独立 cleanup ticket。
 
 ---
 
