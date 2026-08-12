@@ -33,7 +33,7 @@ import {
   _setCheckpointRootForTest,
 } from '../src/state-persister';
 import type { AutopilotState } from '../src/types';
-import { lastProgressTurn } from '../src/progress-ledger';
+import { lastProgressTurn, hasMigrationGrace } from '../src/progress-ledger';
 
 let tmpRoot: string;
 
@@ -659,5 +659,44 @@ describe('ticket 08 — schemaVersion + migration (F3)', () => {
     expect(loaded).toBeNull(); // refuse — not silently misinterpret
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  // F3 real fix (code-review catch): normalizing lastValidatedTurn→0 is a no-op
+  // when detail is all-failed (gap stays 10 ≥ threshold → false pause). The real
+  // fix is a one-shot progressGrace the host's no_progress detector consumes.
+  it('F3 real fix: migrated legacy ledger carries one-shot progressGrace', () => {
+    writeRawCheckpoint('run-grace', {
+      runId: 'run-grace', sessionKey: 'sess-1', // no schemaVersion → v1 legacy
+      turnAttempts: 1, totalContinuations: 10, maxAttemptsPerTurn: 5,
+      maxTotalContinuations: 200, toolErrorThreshold: 3, maxConcurrentAutopilot: 5,
+      needsCrossTurnResume: false, enabled: true, totalTokensUsed: 100,
+      orchestrationState: 'running', workspacePath: tmpRoot,
+      ledger: {
+        folded: { turns: 4, filesTouched: ['a.ts'], commandsRun: ['c'] }, // no lastValidatedTurn
+        entries: [
+          { turn: 9, filesTouched: ['f9.ts'], commandsRun: ['c'], evidenceStatus: 'failed', decisions: [], openItems: [] },
+          { turn: 10, filesTouched: ['f10.ts'], commandsRun: ['c'], evidenceStatus: 'failed', decisions: [], openItems: [] },
+        ],
+      },
+    });
+
+    const loaded = loadCheckpoint('run-grace', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    // The host's no_progress detector reads this and suppresses the first pause.
+    expect(hasMigrationGrace(loaded!.ledger)).toBe(true);
+    // lastProgressTurn is still 0 here (all-failed detail + folded history lost),
+    // but the grace flag is what prevents the false pause — not the turn number.
+    expect(lastProgressTurn(loaded!.ledger)).toBe(0);
+  });
+
+  it('F3: a v2 checkpoint (already schemaVersion 2) does NOT get grace', async () => {
+    // Fresh v2 checkpoints have reconstructable history — no grace needed.
+    const state = makeState({ totalContinuations: 3 });
+    saveCheckpoint(state, 'run-v2', tmpRoot);
+    await flushWrites();
+
+    const loaded = loadCheckpoint('run-v2', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    expect(hasMigrationGrace(loaded!.ledger)).toBe(false);
   });
 });

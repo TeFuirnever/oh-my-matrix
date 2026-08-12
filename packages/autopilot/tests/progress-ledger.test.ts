@@ -10,8 +10,11 @@ import {
   buildProgressHeadline,
   lastProgressTurn,
   countsAsProgress,
+  hasMigrationGrace,
+  consumeMigrationGrace,
   LEDGER_MAX_DETAIL,
 } from '../src/progress-ledger';
+import type { Ledger } from '../src/progress-ledger';
 
 describe('E5: progress-ledger', () => {
   describe('buildEntry', () => {
@@ -252,6 +255,33 @@ describe('E5: progress-ledger', () => {
     });
     it('not_started → false', () => {
       expect(countsAsProgress('not_started')).toBe(false);
+    });
+  });
+
+  describe('hasMigrationGrace / consumeMigrationGrace (F3 real fix)', () => {
+    it('fresh ledger has no grace', () => {
+      expect(hasMigrationGrace(emptyLedger())).toBe(false);
+      expect(hasMigrationGrace(undefined)).toBe(false);
+    });
+
+    it('ledger with progressGrace flag → hasMigrationGrace true', () => {
+      const l: Ledger = { ...emptyLedger(), progressGrace: true };
+      expect(hasMigrationGrace(l)).toBe(true);
+    });
+
+    it('consumeMigrationGrace clears the flag and returns a new ledger (immutable)', () => {
+      const l: Ledger = { ...emptyLedger(), progressGrace: true };
+      const consumed = consumeMigrationGrace(l);
+      expect(hasMigrationGrace(consumed)).toBe(false);
+      // input not mutated
+      expect(hasMigrationGrace(l)).toBe(true);
+    });
+
+    it('consumeMigrationGrace on a ledger without grace is a no-op (same shape)', () => {
+      const l = emptyLedger();
+      const consumed = consumeMigrationGrace(l);
+      expect(hasMigrationGrace(consumed)).toBe(false);
+      expect(consumed.entries).toEqual(l.entries);
     });
   });
 });

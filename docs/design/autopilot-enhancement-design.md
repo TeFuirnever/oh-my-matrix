@@ -195,7 +195,7 @@ fingerprint receipt 最值（验证结果绑定最终 diff）。
 |---|---|---|---|
 | **F1** 🔴 | stale `'failed'` stamping | gate 只在 complete 路径跑（index.ts:885），`state.evidence` 是**最后一次 gate 结果**，只有 activate 清。修复轮（gate 失败后写文件）→ agent_end 用 stale evidence stamp `'failed'`（index.ts:1309） | `lastProgressTurn` 卡在 gate 失败轮 → patrol 误判 no_progress **暂停修好中的 run** → resume 又暂停 → **一 turn 一 resume 死循环**。旧代码（last entry turn）不 pause。02 "不误报" AC 被违反 |
 | **F2** 🔴 | audit refcount over-release | no_progress pause 无条件 `setAuditMode('active')`（index.ts:1962），但 `pause_requested` 对 retry_queued 是 no-op（orchestrator.ts:370） | 其他并发 run 的 audit monitor refcount 被误摘。其他 pause 点都 guard reducer 结果（:1337-1338），这个没有 |
-| **F3** 🔴 ✅ | legacy checkpoint `?? 0` | 旧 checkpoint 的 folded 无 `lastValidatedTurn` → `?? 0`（progress-ledger.ts:171） | 升级后第一个 tick：全 failed 窗口 + 旧折叠 → gap=10 → **零新轮就 pause**。✅ 已修（ticket 08 migration normalize，本 worktree） |
+| **F3** 🔴 ✅(package) | legacy checkpoint `?? 0` | 旧 checkpoint 的 folded 无 `lastValidatedTurn` → `?? 0`（progress-ledger.ts:171） | 升级后第一个 tick：全 failed 窗口 + 旧折叠 → gap=10 → **零新轮就 pause**。✅ package 侧真修复（ticket 08 progressGrace：migration 设一次性 grace flag + `hasMigrationGrace`/`consumeMigrationGrace` 谓词）；host patrol 需消费 grace（待接入） |
 
 ### 语义问题（建议修，非回归但削弱 02 价值）
 

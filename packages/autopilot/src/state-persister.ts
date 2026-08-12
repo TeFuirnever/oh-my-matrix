@@ -327,12 +327,34 @@ function migrateCheckpoint(cp: AutopilotCheckpoint): AutopilotCheckpoint | null 
 
   const migrated: AutopilotCheckpoint = { ...cp };
 
-  // v1 → v2: backfill folded.lastValidatedTurn if the ledger predates 02.
+  // v1 → v2: a checkpoint written before schemaVersion existed predates 02's
+  // evidence-coupled accounting. Its folded aggregate cannot be reconstructed
+  // (per-turn evidence was merged away), so lastProgressTurn may read 0 even
+  // though the run was productive. Set a one-shot progressGrace so the host's
+  // no_progress detector suppresses the first patrol tick (hasMigrationGrace),
+  // giving the resumed run a chance to log a fresh progress turn. This is the
+  // real F3 fix — normalizing lastValidatedTurn alone is a no-op when the detail
+  // window is all-failed (gap stays 10 ≥ threshold → false pause).
+  const isLegacyV1 = cp.schemaVersion === undefined;
+  let didNormalizeLedger = false;
+
   if (migrated.ledger && migrated.ledger.folded && migrated.ledger.folded.lastValidatedTurn === undefined) {
     migrated.ledger = {
       ...migrated.ledger,
       folded: { ...migrated.ledger.folded, lastValidatedTurn: 0 },
     };
+    didNormalizeLedger = true;
+  }
+
+  if (isLegacyV1 && migrated.ledger) {
+    // Attach grace to the (possibly just-normalized) ledger. One-shot: the host
+    // clears it via consumeMigrationGrace after the first patrol tick.
+    if (!didNormalizeLedger) {
+      // ledger existed + already had lastValidatedTurn, but still a v1 shape —
+      // history trustworthiness is uncertain; grant grace.
+      migrated.ledger = { ...migrated.ledger };
+    }
+    migrated.ledger = { ...migrated.ledger, progressGrace: true };
   }
 
   // v1 → v2: reconstruct minimal evidence from the legacy status string so

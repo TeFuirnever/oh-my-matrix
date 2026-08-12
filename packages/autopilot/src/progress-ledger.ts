@@ -71,6 +71,16 @@ export interface Ledger {
   folded: FoldedAggregate;
   /** Most recent N turns (detail), newest last. Bounded by LEDGER_MAX_DETAIL. */
   entries: LedgerEntry[];
+  /**
+   * F3 (ticket 08): transient grace flag set by migrateCheckpoint when a legacy
+   * checkpoint is normalized on load. A run whose progress history could not be
+   * reconstructed (all-failed detail + pre-02 folded aggregate) would otherwise
+   * trip no_progress on the first patrol tick. The host's no_progress detector
+   * MUST consult hasMigrationGrace() and, if true, suppress the pause for one
+   * tick, then call consumeMigrationGrace() to clear it. Not set on fresh ledgers
+   * or v2+ checkpoints; buildCheckpoint does not rely on it (one-shot).
+   */
+  progressGrace?: boolean;
 }
 
 /** Detail window: keep this many recent turns verbatim, fold older into `folded`. */
@@ -197,6 +207,29 @@ export function lastProgressTurn(ledger: Ledger | undefined): number {
     }
   }
   return l.folded.lastValidatedTurn ?? 0;
+}
+
+/**
+ * F3 (ticket 08): true when the host's no_progress detector should SUPPRESS the
+ * pause for this patrol tick. Set by migrateCheckpoint on a freshly-loaded legacy
+ * ledger whose progress history could not be reconstructed. The host calls this
+ * before deciding to pause; if true, it skips the pause AND calls
+ * consumeMigrationGrace() to clear the one-shot flag. Pure.
+ */
+export function hasMigrationGrace(ledger: Ledger | undefined): boolean {
+  return ledger?.progressGrace === true;
+}
+
+/**
+ * F3 (ticket 08): clear the one-shot migration grace flag. Returns a new Ledger
+ * (immutable — does not mutate the input). The host calls this after honoring a
+ * grace suppression so the flag does not persist into the next patrol tick.
+ */
+export function consumeMigrationGrace(ledger: Ledger | undefined): Ledger {
+  const l = ledger ?? emptyLedger();
+  if (!l.progressGrace) return l;
+  const { progressGrace: _drop, ...rest } = l;
+  return rest as Ledger;
 }
 
 /**
