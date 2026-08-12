@@ -23,7 +23,7 @@
 
 **发版**: `changeset version` 已消费全部 pending changesets → **autopilot 4.0.0**（major：E9/E13）+ **dynamic-workflows 1.0.0**（openclaw 基线 2026.7.1-2）+ **permission-policy 0.1.4**（共享 logger 提取）。**2026-08-09 已发布 npm**（tag：`autopilot-v4.0.0` / `dynamic-workflows-v1.0.0` / `permission-policy-v0.1.4`，release notes 见 GitHub Releases）。发布实操与坑（镜像 registry / 2FA / sync-plugin-versions）见 `docs/runbooks/npm-release.md` + memory `npm-publish-flow`。
 
-## 已发版（2026-08-10/11，autopilot 4.1.0→4.2.0→4.3.0 / dynamic-workflows 1.1.0→1.2.0 / instinct 0.1.0 新包）
+## 已发版（2026-08-10/12，autopilot 4.1.0→4.2.0→4.3.0→4.4.0 / dynamic-workflows 1.1.0→1.2.0 / instinct 0.1.0 新包）
 
 | 变更 | 内容 | 包/版本 |
 |---|---|---|
@@ -36,6 +36,10 @@
 | 确定性任务预筛 | `agent_turn_prepare` hook（priority 12，主会话）读 prompt → fan-out 信号 → appendContext 指引；跳过 subagent | dynamic-workflows 1.2.0 |
 | skill 触发词 | description "use proactively" + 通用场景触发词（EN+ZH） | dynamic-workflows 1.2.0 |
 | validate-prose 脚本 | OpenProse 不可用时的独立 5-check 验证（node，8 单测） | dynamic-workflows 1.2.0 |
+| evidence-coupled no_progress | `lastProgressTurn` 记账——churn 不通过验证仍 trip no_progress；`skipped`+`not_executed` 不算 progress（F6） | autopilot 4.4.0 |
+| checkpoint schemaVersion | `schemaVersion` + `migrateCheckpoint` v1→v2（legacy `lastValidatedTurn` normalize + 完整 `EvidenceSummary` 恢复）；未来高版本拒绝；migration `progressGrace` 一次性豁免（F3 package 侧，host patrol 待 consume） | autopilot 4.4.0 |
+
+> ⚠️ **4.4.0 host 接入前置**：02 的 evidence-coupled 回归（F1 stale stamping / F2 audit-refcount / F3 host grace wiring）在 host gateway `index.ts`，不在本 package。升级 4.4.0 安全（08 立即受益），但 **接入 evidence-coupled no_progress 前必须修 F1/F2 + consume `hasMigrationGrace`**。详见 `docs/design/autopilot-enhancement-design.md` §C1。
 | **instinct 新包** | 跨会话 context 记忆：after_tool_call 观测（脱敏）→ `.instinct/observations.jsonl`；session_start 回忆。闭合第三缺口 | instinct 0.1.0 |
 
 杂项：runtimeMs 终止冻结、evidenceSkipReason 透出、ledger fold 去重、legacy resume() setter 删除、eslint 忽略 worktree。
