@@ -18,10 +18,36 @@ export interface LedgerEntry {
   filesTouched: string[];
   commandsRun: string[];
   evidenceStatus?: EvidenceStatus;
+  /**
+   * WHY an evidenceStatus of 'skipped' was skipped. Mirrors EvidenceSummary's
+   * skipReason so the ledger — and thus lastProgressTurn — can distinguish
+   * 'not_configured' (legitimate: no validation configured → counts as progress)
+   * from 'not_executed' (configured but dropped/errored → fail-closed, NOT progress).
+   * F6 (ticket 12 §C1): 'skipped'+'not_executed' must not read as forward progress.
+   */
+  skipReason?: 'not_configured' | 'not_executed';
   /** Model-declared decisions (optional — left empty for now). */
   decisions: string[];
   /** Known incomplete items the model surfaced (optional). */
   openItems: string[];
+}
+
+/**
+ * F6: does this evidence outcome count as forward progress for the no_progress
+ * detector? A turn counts when its evidence was validated ('passed') OR no
+ * validation ran this turn (undefined — mid-run turn) OR validation was
+ * legitimately absent ('skipped'+'not_configured'). It does NOT count when
+ * evidence failed, OR when configured validation was dropped/errored
+ * ('skipped'+'not_executed' — fail-closed per evidence-gate.ts).
+ */
+export function countsAsProgress(
+  evidenceStatus: EvidenceStatus | undefined,
+  skipReason?: 'not_configured' | 'not_executed',
+): boolean {
+  if (evidenceStatus === undefined) return true; // mid-run turn, no validation
+  if (evidenceStatus === 'passed') return true;
+  if (evidenceStatus === 'skipped') return skipReason !== 'not_executed';
+  return false; // 'failed' | 'running' | 'not_started'
 }
 
 /**
@@ -73,10 +99,11 @@ export function buildEntry(
   filesTouched: string[],
   commandsRun: string[],
   evidenceStatus?: EvidenceStatus,
+  skipReason?: 'not_configured' | 'not_executed',
 ): LedgerEntry {
   const files = dedup(filesTouched.map(cleanItem).filter(Boolean) as string[]).slice(0, MAX_FILES_PER_ENTRY);
   const cmds = dedup(commandsRun.map(cleanItem).filter(Boolean) as string[]).slice(0, MAX_CMDS_PER_ENTRY);
-  return { turn, filesTouched: files, commandsRun: cmds, evidenceStatus, decisions: [], openItems: [] };
+  return { turn, filesTouched: files, commandsRun: cmds, evidenceStatus, skipReason, decisions: [], openItems: [] };
 }
 
 function dedup(arr: string[]): string[] {
@@ -98,7 +125,7 @@ function foldOldest(ledger: Ledger): Ledger {
   // E2: carry the most recent validated turn into the aggregate. If the folded
   // aggregate already saw a validated turn, keep it (it's newer than anything
   // folding in now, since detail is newest-last and we fold oldest-first).
-  const carryValidated = oldest.evidenceStatus !== 'failed' ? oldest.turn : 0;
+  const carryValidated = countsAsProgress(oldest.evidenceStatus, oldest.skipReason) ? oldest.turn : 0;
   const lastValidatedTurn = Math.max(ledger.folded.lastValidatedTurn ?? 0, carryValidated);
   return {
     folded: {
@@ -152,20 +179,21 @@ export function summarizeLedger(ledger: Ledger | undefined): string {
 }
 
 /**
- * E2 evidence-coupled accounting: the turn of the last ledger entry whose
- * evidence was NOT 'failed'. A failed-evidence turn produced output but the
- * output was not validated — it does not count as forward progress for the
- * no_progress detector (so a run churning files that never pass validation
- * still trips no_progress). Entries with undefined evidenceStatus (mid-run
- * turns that did not run validation) count as progress. Falls back to the
- * folded aggregate's lastValidatedTurn when all detail entries failed. Returns
- * 0 if no qualifying turn exists (detail or folded).
+ * E2 evidence-coupled accounting: the turn of the last ledger entry that counts
+ * as forward progress (see countsAsProgress). A failed-evidence turn produced
+ * output but the output was not validated — it does not count. Nor does
+ * 'skipped'+'not_executed' (configured validation dropped/errored — fail-closed,
+ * F6). Entries with undefined evidenceStatus (mid-run turns) and
+ * 'skipped'+'not_configured' (legitimate absence of validation) DO count. Falls
+ * back to the folded aggregate's lastValidatedTurn when no detail entry
+ * qualifies. Returns 0 if no qualifying turn exists (detail or folded).
  */
 export function lastProgressTurn(ledger: Ledger | undefined): number {
   const l = ledger ?? emptyLedger();
   for (let i = l.entries.length - 1; i >= 0; i--) {
-    if (l.entries[i].evidenceStatus !== 'failed') {
-      return l.entries[i].turn;
+    const e = l.entries[i];
+    if (countsAsProgress(e.evidenceStatus, e.skipReason)) {
+      return e.turn;
     }
   }
   return l.folded.lastValidatedTurn ?? 0;

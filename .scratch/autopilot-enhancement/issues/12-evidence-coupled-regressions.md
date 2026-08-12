@@ -4,7 +4,22 @@
 
 **Blocked by:** 02（已实施）
 
-**Status:** ready-for-agent（仅记录，未开发）
+**Status:** 部分完成 — F6 已修（本 worktree）；F1/F2/F7/F8 需 host runtime（host-runtime-blocked）
+
+## Worktree 边界（2026-08-12 接手确认）
+
+本 worktree = `@oh-my-matrix/autopilot` npm package 源（reducer/projection/ledger 纯函数）。**不含** `index.ts` / `agent_end` handler / `setAuditMode` / `patrol` tick——那些在 host 消费侧（gateway `index.ts`，ADR-010 的 host-deploy 目标）。因此：
+
+| Finding | 修复点 | 本 worktree 可修? |
+|---|---|---|
+| **F1** stale evidence stamping | host `index.ts` agent_end（:1309） | ❌ host-runtime |
+| **F2** audit refcount over-release | host `index.ts` no_progress pause（:1962） | ❌ host-runtime |
+| **F3** legacy `?? 0` | `progress-ledger.ts:171`（本 worktree）但根因是 checkpoint schema，并入 08 | ⚠️ 随 08 |
+| **F6** skipped/not_executed 语义 | `progress-ledger.ts`（本 worktree） | ✅ **已修** |
+| **F7** off-by-one gap 算术 | gap 计算在 host patrol；`lastProgressTurn` 基准在本 worktree | ⚠️ 部分（基准已对齐 F6，算术待 host） |
+| **F8** wiring 测试（agent_end stamp → patrol） | 需 host runtime harness | ❌ host-runtime |
+
+F1/F2/F8 的非手建 wiring 测试在本 worktree **无法写**——本 package 不持有 agent_end/patrol 路径。这三项 + F7 的算术部分留给 host 仓库（见 ADR-010 host-deploy step）。
 
 ## CONFIRMED 回归（必修）
 
@@ -25,10 +40,11 @@
 
 ## 语义收紧（建议同批）
 
-### F6 `'skipped'`/`'not_executed'` 算 progress
+### F6 `'skipped'`/`'not_executed'` 算 progress — ✅ 已修（本 worktree，2026-08-12）
 - **机制**：`progress-ledger.ts:167` `evidenceStatus !== 'failed'` 让 `'skipped'`（含 fail-closed 的 `'not_executed'`——allowlist 丢弃的 required 命令，`index.ts:840`）算 progress
 - **后果**：validator 从未真跑的 run 读成"在推进"——与 gate fail-closed（blocked evidence_missing）矛盾
-- **修法**：抽 `countsAsProgress(status)` helper，明确只有 `passed`/`undefined` 算 progress（`'skipped'`/`'not_executed'`/`'failed'` 不算）。同步 `foldOldest:101`（F12 重复谓词）
+- **修法（实施）**：抽 `countsAsProgress(status, skipReason)` helper，`lastProgressTurn` + `foldOldest` 共用（F12 重复谓词消除）。`LedgerEntry`/`buildEntry` 透传 `skipReason`。
+- **⚠️ 语义决策（surface per AGENTS.md）**：ticket 原文说"只有 `passed`/`undefined` 算"——**未采纳此一刀切**。按 `evidence-gate.ts:30-51` 的实际语义区分：`'skipped'+'not_configured'`（项目没配验证）**仍算 progress**，否则绝大多数无验证配置的项目会永远 no_progress 误暂停；只有 `'skipped'+'not_executed'`（配了被丢弃/errored）不算。即 fail-closed 边界对齐 gate 自身的 `skipReason` 判断，而非 status 字符串。测试覆盖两种 skipReason 分支。
 
 ### F7 off-by-one
 - **机制**：gap 算术计 in-flight 轮（`totalContinuations` 在 `before_agent_finalize` revise 时增，`index.ts:748`，早于本轮 entry stamp）+ turn-0 sentinel 碰撞
@@ -44,8 +60,9 @@
 - [ ] F7：threshold 边界精确
 
 ## 验收
-- [ ] F1：修复 run（gate 失败后 productive revise 轮）不被 no_progress 暂停
-- [ ] F2：retry_queued no-op 不释放 audit refcount
-- [ ] F6：validator 未跑的 run 仍 trip no_progress
-- [ ] F8：stale-stamping 回归有 wiring 测试守护
-- [ ] 全量测试绿 + typecheck
+- [ ] F1：修复 run（gate 失败后 productive revise 轮）不被 no_progress 暂停 — **host-runtime-blocked**
+- [ ] F2：retry_queued no-op 不释放 audit refcount — **host-runtime-blocked**
+- [x] F6：validator 未跑的 run（`skipped`+`not_executed`）不算 progress（本 worktree 已修，8 测试覆盖）
+- [ ] F7：threshold 边界精确 — 部分（基准已对齐 F6，gap 算术待 host patrol）
+- [ ] F8：stale-stamping 回归有 wiring 测试守护 — **host-runtime-blocked**（本 worktree 无 agent_end/patrol）
+- [x] 全量测试绿 + typecheck（本 worktree：1008 passed / 4 skipped，tsc 干净）

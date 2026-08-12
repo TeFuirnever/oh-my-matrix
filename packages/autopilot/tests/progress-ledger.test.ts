@@ -9,6 +9,7 @@ import {
   summarizeLedger,
   buildProgressHeadline,
   lastProgressTurn,
+  countsAsProgress,
   LEDGER_MAX_DETAIL,
 } from '../src/progress-ledger';
 
@@ -195,10 +196,62 @@ describe('E5: progress-ledger', () => {
       expect(lastProgressTurn(l)).toBe(1);
     });
 
-    it('skipped/not_started evidence counts as progress', () => {
+    it('skipped+not_configured counts as progress (legitimate: no validation configured)', () => {
       let l = emptyLedger();
-      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped' as any));
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped', 'not_configured'));
       expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('skipped+not_executed does NOT count as progress (F6: configured but dropped → fail-closed)', () => {
+      let l = emptyLedger();
+      // Turn 1 passed, turn 2 was skipped+not_executed (validation dropped).
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'passed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'skipped', 'not_executed'));
+      // lastProgressTurn must ignore turn 2 and fall back to turn 1.
+      expect(lastProgressTurn(l)).toBe(1);
+    });
+
+    it('only skipped+not_executed entries → 0 (no validated progress, F6)', () => {
+      let l = emptyLedger();
+      l = recordTurn(l, buildEntry(1, ['a.ts'], ['c'], 'skipped', 'not_executed'));
+      l = recordTurn(l, buildEntry(2, ['b.ts'], ['c'], 'skipped', 'not_executed'));
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+
+    it('skipped+not_executed pushed into folded does not carry validated turn (F6 fold path)', () => {
+      // All skipped+not_executed; after folding, folded.lastValidatedTurn stays 0.
+      let l = emptyLedger();
+      for (let i = 1; i <= LEDGER_MAX_DETAIL + 2; i++) {
+        l = recordTurn(l, buildEntry(i, [`f${i}.ts`], [`c${i}`], 'skipped', 'not_executed'));
+      }
+      expect(lastProgressTurn(l)).toBe(0);
+    });
+  });
+
+  describe('countsAsProgress (F6 evidence semantics helper)', () => {
+    it('undefined (mid-run, no validation) → true', () => {
+      expect(countsAsProgress(undefined)).toBe(true);
+    });
+    it('passed → true', () => {
+      expect(countsAsProgress('passed')).toBe(true);
+    });
+    it('failed → false', () => {
+      expect(countsAsProgress('failed')).toBe(false);
+    });
+    it('skipped + not_configured → true', () => {
+      expect(countsAsProgress('skipped', 'not_configured')).toBe(true);
+    });
+    it('skipped + not_executed → false', () => {
+      expect(countsAsProgress('skipped', 'not_executed')).toBe(false);
+    });
+    it('skipped without skipReason → true (treat unknown as legitimate)', () => {
+      expect(countsAsProgress('skipped')).toBe(true);
+    });
+    it('running → false (transient, not a completed verdict)', () => {
+      expect(countsAsProgress('running')).toBe(false);
+    });
+    it('not_started → false', () => {
+      expect(countsAsProgress('not_started')).toBe(false);
     });
   });
 });
