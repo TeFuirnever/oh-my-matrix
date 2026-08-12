@@ -12,7 +12,7 @@
  * mocking fs here would repeat the runtime-guard incident's "green test against
  * an invented shape" failure mode. See docs/fixes/runtime-guard-event-shape.md.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -33,6 +33,7 @@ import {
   _setCheckpointRootForTest,
 } from '../src/state-persister';
 import type { AutopilotState } from '../src/types';
+import { lastProgressTurn } from '../src/progress-ledger';
 
 let tmpRoot: string;
 
@@ -508,5 +509,155 @@ describe('E1 — migrateLegacyCheckpoints', () => {
     listResumableCheckpoints(tmpRoot);
 
     expect(fs.existsSync(orphan)).toBe(false);
+  });
+});
+
+// ─── ticket 08: checkpoint schemaVersion + migration + F3 ──────────────
+// F3 (/code-review CONFIRMED): 02 introduced FoldedAggregate.lastValidatedTurn,
+// but legacy checkpoints lack it → lastProgressTurn fallback ?? 0 → a resumed
+// run with an all-failed detail window + legacy fold trips no_progress on the
+// very first tick (zero new turns). Also: buildCheckpoint only stored the
+// evidenceStatus string, not the full EvidenceSummary, so crash recovery lost
+// state.evidence entirely (projection/continuation-engine read undefined).
+describe('ticket 08 — schemaVersion + migration (F3)', () => {
+  function cpPath(runId: string): string {
+    return path.join(tmpRoot, '.autopilot', 'checkpoints', `${runId}.json`);
+  }
+  function writeRawCheckpoint(runId: string, raw: Record<string, unknown>): void {
+    fs.mkdirSync(path.dirname(cpPath(runId)), { recursive: true });
+    fs.writeFileSync(cpPath(runId), JSON.stringify(raw), 'utf-8');
+  }
+
+  it('buildCheckpoint stamps schemaVersion + persists full evidence (not just status)', async () => {
+    const evidence = { status: 'passed' as const, diffSummary: 's', commands: [], completedAt: 9 };
+    const state = makeState({ evidence });
+    saveCheckpoint(state, 'run-ev', tmpRoot);
+    await flushWrites();
+
+    const raw = JSON.parse(fs.readFileSync(cpPath('run-ev'), 'utf-8'));
+    expect(raw.schemaVersion).toBe(2);
+    // Full evidence object persisted (not just the legacy evidenceStatus string).
+    expect(raw.evidence).toMatchObject({ status: 'passed', diffSummary: 's', completedAt: 9 });
+  });
+
+  it('F3: legacy checkpoint without folded.lastValidatedTurn gets normalized on load', () => {
+    // A v1 checkpoint: no schemaVersion, folded aggregate lacks lastValidatedTurn.
+    // Detail window has a non-failed turn 3 → migration must derive 3, not ?? 0.
+    writeRawCheckpoint('run-legacy', {
+      runId: 'run-legacy',
+      sessionKey: 'sess-1',
+      turnAttempts: 1,
+      totalContinuations: 5,
+      maxAttemptsPerTurn: 5,
+      maxTotalContinuations: 200,
+      toolErrorThreshold: 3,
+      maxConcurrentAutopilot: 5,
+      needsCrossTurnResume: false,
+      enabled: true,
+      totalTokensUsed: 100,
+      orchestrationState: 'running',
+      workspacePath: tmpRoot,
+      ledger: {
+        // legacy folded: NO lastValidatedTurn field.
+        folded: { turns: 2, filesTouched: ['a.ts'], commandsRun: ['c'] },
+        entries: [
+          { turn: 4, filesTouched: ['f4.ts'], commandsRun: ['c'], evidenceStatus: 'failed', decisions: [], openItems: [] },
+          { turn: 5, filesTouched: ['f5.ts'], commandsRun: ['c'], evidenceStatus: 'failed', decisions: [], openItems: [] },
+        ],
+      },
+    });
+
+    const loaded = loadCheckpoint('run-legacy', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    // Migration must backfill lastValidatedTurn (0 here — no folded validated
+    // turn existed and detail is all-failed; the point is it's explicitly set,
+    // not silently undefined). The guard is that load succeeds + ledger intact.
+    expect(loaded!.ledger).toBeDefined();
+    expect(loaded!.ledger!.folded.lastValidatedTurn).toBe(0);
+  });
+
+  it('F3: legacy checkpoint derives lastValidatedTurn from folded history when present', () => {
+    // v1 checkpoint whose folded DOES carry progress info via a non-failed
+    // detail entry (turn 2 passed). Migration must surface it so lastProgressTurn
+    // is not zeroed → no false no_progress pause on resume.
+    writeRawCheckpoint('run-prog', {
+      runId: 'run-prog',
+      sessionKey: 'sess-1',
+      turnAttempts: 1, totalContinuations: 6, maxAttemptsPerTurn: 5,
+      maxTotalContinuations: 200, toolErrorThreshold: 3, maxConcurrentAutopilot: 5,
+      needsCrossTurnResume: false, enabled: true, totalTokensUsed: 100,
+      orchestrationState: 'running', workspacePath: tmpRoot,
+      ledger: {
+        folded: { turns: 1, filesTouched: ['old.ts'], commandsRun: ['c'] }, // no lastValidatedTurn
+        entries: [
+          { turn: 5, filesTouched: ['f5.ts'], commandsRun: ['c'], evidenceStatus: 'passed', decisions: [], openItems: [] },
+          { turn: 6, filesTouched: ['f6.ts'], commandsRun: ['c'], evidenceStatus: 'failed', decisions: [], openItems: [] },
+        ],
+      },
+    });
+
+    const loaded = loadCheckpoint('run-prog', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    // Turn 5 passed → lastProgressTurn must be 5, NOT 0 (the F3 regression).
+    expect(lastProgressTurn(loaded!.ledger)).toBe(5);
+  });
+
+  it('F3-related: crash recovery restores state.evidence (was lost — only status string persisted)', async () => {
+    const evidence = {
+      status: 'failed' as const,
+      diffSummary: 'no tests',
+      commands: [{ id: 'c1', command: 'npm test', required: true, status: 'failed', exitCode: 1 }],
+      failureReason: '1 failed',
+      completedAt: 99,
+    };
+    const state = makeState({ evidence });
+    saveCheckpoint(state, 'run-ev2', tmpRoot);
+    await flushWrites();
+
+    const loaded = loadCheckpoint('run-ev2', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.evidence).toMatchObject({
+      status: 'failed',
+      diffSummary: 'no tests',
+      failureReason: '1 failed',
+      completedAt: 99,
+    });
+    expect(loaded!.evidence!.commands).toHaveLength(1);
+  });
+
+  it('backward compat: legacy checkpoint with only evidenceStatus string degrades evidence gracefully', () => {
+    // Pre-08 checkpoint stored evidenceStatus (string) but not the full evidence
+    // object. Load must reconstruct a minimal EvidenceSummary so state.evidence
+    // is non-undefined (projection/continuation-engine get *something*).
+    writeRawCheckpoint('run-oldev', {
+      runId: 'run-oldev', sessionKey: 'sess-1',
+      turnAttempts: 1, totalContinuations: 3, maxAttemptsPerTurn: 5,
+      maxTotalContinuations: 200, toolErrorThreshold: 3, maxConcurrentAutopilot: 5,
+      needsCrossTurnResume: false, enabled: true, totalTokensUsed: 50,
+      orchestrationState: 'running', workspacePath: tmpRoot,
+      evidenceStatus: 'passed', // legacy: only the string, no evidence object
+    });
+
+    const loaded = loadCheckpoint('run-oldev', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.evidence).toBeDefined();
+    expect(loaded!.evidence!.status).toBe('passed');
+    expect(loaded!.evidence!.commands).toEqual([]); // degraded — commands not in legacy shape
+  });
+
+  it('unknown future schemaVersion (> current) fails safe with a forensic log', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    writeRawCheckpoint('run-future', {
+      runId: 'run-future', sessionKey: 'sess-1', schemaVersion: 99, // from a newer build
+      turnAttempts: 1, totalContinuations: 1, maxAttemptsPerTurn: 5,
+      maxTotalContinuations: 200, toolErrorThreshold: 3, maxConcurrentAutopilot: 5,
+      needsCrossTurnResume: false, enabled: true, totalTokensUsed: 1,
+      orchestrationState: 'running', workspacePath: tmpRoot,
+    });
+
+    const loaded = loadCheckpoint('run-future', tmpRoot, { validateWorkspace: false });
+    expect(loaded).toBeNull(); // refuse — not silently misinterpret
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
