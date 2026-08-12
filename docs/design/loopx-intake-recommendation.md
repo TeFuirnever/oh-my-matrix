@@ -1,9 +1,9 @@
 # LoopX 引入 OMM 评估与建议
 
 > **Status**: 部分实施 · 2026-08-10 评估 / 2026-08-12 更新进展
-> **目的**：评估 `/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/loopx`（huangruiteng/loopx，"open, provider-neutral, stateful control plane for long-running agents"）哪些设计值得引入/吸纳进 oh-my-matrix（OMM）autopilot，并按 `autopilot-verification-floor-design.md` 的三个环节（需求规划/任务拆解/验证）对照补漏。
+> **目的**：评估 `/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/loopx`（huangruiteng/loopx，"open, provider-neutral, stateful control plane for long-running agents"）哪些设计值得引入/吸纳进 oh-my-matrix（OMM）autopilot，并按 `autopilot-enhancement-design.md` Part A（前 verification-floor，已合一）的三个环节（需求规划/任务拆解/验证）对照补漏。
 > **方法**：3 轮 Explore agent 逆向（能力地图 + OMM 对比裁决 + 增量角落深挖）+ 业界最佳实践 Web 对照（human-in-the-loop gate / quota 控制）。
-> **关联**：`autopilot-verification-floor-design.md`（§3 验收基线/§4 进展/§1 非目标）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `ecc-intake-recommendation.md`
+> **关联**：`autopilot-enhancement-design.md`（Part A = verification-floor §3 验收基线/§4 进展/§1 非目标，已合一）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `ecc-intake-recommendation.md`
 > **进展跟踪**：实施状态见本文 §7（落地建议表"进展"列）+ §9（实施进展汇总）。详细 ticket / 回归跟踪见 `autopilot-enhancement-design.md` §C1 与 `.scratch/autopilot-enhancement/issues/`
 
 ---
@@ -56,7 +56,7 @@
 
 ---
 
-## 4. 三环节对照（`autopilot-verification-floor-design.md`）
+## 4. 三环节对照（`autopilot-enhancement-design.md` Part A，前 verification-floor）
 
 ### 4.1 需求规划（goal 侧）——设计文档未覆盖，本轮增量
 
@@ -157,5 +157,5 @@ F1（stale `'failed'` stamping）/ F2（audit refcount over-release）/ F8（wir
 ## 9. 引用
 
 - **LoopX 源**：`/Users/guanxueliang/Desktop/Matrix/DynamicWorkflow/loopx` `control_plane/`（turn_driver/transaction.py、operator_gate.py、quota.py、event_sourced_state.py、todos/、goals/goal_vision.py）· `capabilities/`（pr_review_queue/core.py、change_quality、reward_memory/architecture.py）· `skills/loopx-change-quality/SKILL.md` · `regression/` · `apps/presentation/dashboard` · `worker_bridge.py` · `docs/quota-allocation.md` · `docs/architecture.md`
-- **OMM 内部**：`autopilot-verification-floor-design.md` · `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/core/autopilot/long-horizon-autonomy.md`（§5.4/§5.5/§5.6、E2）· `effort-injection.ts:43-44`（无规划阶段）· `progress-ledger.ts`（openItems 恒空）· `projection.ts`（canResume）· `state-persister.ts`（无 schemaVersion）
+- **OMM 内部**：`autopilot-enhancement-design.md`（Part A = 前 verification-floor，已合一）· `docs/adr/019-conditional-evidence-judging-boundary.md` · `docs/core/autopilot/long-horizon-autonomy.md`（§5.4/§5.5/§5.6、E2）· `effort-injection.ts:43-44`（无规划阶段）· `progress-ledger.ts`（openItems 恒空）· `projection.ts`（canResume）· `state-persister.ts`（schemaVersion 已加，ticket 08）
 - **业界**：[3-Checkpoint human gate](https://dev.to/sahil_kat/where-to-gate-your-ai-coding-agent-a-3-checkpoint-framework-1ob0#comments) · [渐进自治](https://productleadersdayindia.org/blogs/managing-ai-coding-agents/human-in-the-loop-approval-gates.html) · [nonce-bound approvals](https://github.com/Optim-Agent/optim-plans) · [tokencap staged enforcement](https://github.com/pykul/tokencap) · [agent-budget-controller downgrade](https://github.com/reaatech/agent-budget-controller) · [O(N²) context trap](https://machinelearningmastery.com/identifying-token-costs-hiding-in-your-agentic-loop/) · [outcome-based verification](https://dev.to/moonrunnerkc/ai-coding-agents-lie-about-their-work-outcome-based-verification-catches-it-12b4)

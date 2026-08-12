@@ -72,5 +72,5 @@
 - 设计权威份（MA v2.2，勿改本份）：`MatrixAssistant/docs/core/autopilot/long-horizon-autonomy.md`
 - OMM 份（**弃用**）：`docs/core/autopilot/long-horizon-autonomy.md`
 - 审计：`docs/audits/autopilot-deep-review-2026-07-31.md`
-- 设计稿：`docs/design/autopilot-verification-floor-design.md`（方案已全部落地）
+- 设计稿：`docs/design/autopilot-enhancement-design.md`（Part A = verification-floor 落地，已并入此合一设计稿）
 - ticket 索引：`.scratch/README.md`
