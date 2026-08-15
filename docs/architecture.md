@@ -1,10 +1,11 @@
 # omm Architecture Overview
 
-oh-my-matrix (omm) 是 OpenClaw 宿主的 autonomous agent runtime stack。当前架构由三个一等模块组成：
+oh-my-matrix (omm) 是 OpenClaw 宿主的 autonomous agent runtime stack。当前架构由四个一等模块组成：
 
 1. `@oh-my-matrix/autopilot`: 长程连续执行。
 2. `dynamic-workflows` skill + `@oh-my-matrix/dynamic-workflows`: 多 agent `.prose` 编排与 subagent guard。
 3. `@oh-my-matrix/permission-policy`: 共享运行时权限原语。
+4. `@oh-my-matrix/instinct`: 跨会话上下文记忆。
 
 v0.x 的 team / MCP / plugin 实现已经移除，历史记录在 [`archive/`](archive/)。本文件只描述当前方向。
 
@@ -16,6 +17,7 @@ flowchart TB
 
   G --> A[@oh-my-matrix/autopilot]
   G --> S[dynamic-workflows skill]
+  G --> I[@oh-my-matrix/instinct]
 
   S --> P[OpenProse .prose runtime]
   P --> W[parallel workflow subagents]
@@ -54,7 +56,7 @@ The plugin registers 12 OpenClaw hooks declared in `packages/autopilot/package.j
 
 `packages/dynamic-workflows/skill/SKILL.md` teaches the agent to generate `.prose` programs and execute them through OpenProse. The runtime goal is high-scale parallelism with low user-context pollution: branch work happens inside workflow state, final synthesis returns to the user.
 
-`packages/dynamic-workflows/` is the runtime guard plugin for workflow subagents. It registers `before_tool_call` at priority 11, before autopilot and audit handlers, so dangerous subagent calls are stopped at the gateway.
+`packages/dynamic-workflows/` is the runtime guard plugin for workflow subagents. It registers `before_tool_call` at priority 11, before autopilot and audit handlers, so dangerous subagent calls are stopped at the gateway. It also registers `agent_turn_prepare`, a deterministic task prescreen that nudges main sessions toward workflow fan-out.
 
 It also exports a read-only **projection contract** (`buildDynamicWorkflowProjection`, `normalizeOpenProseRun`, `normalizePermissionAuditEntries`) that derives `DynamicWorkflowProjection` from real data sources — OpenProse filesystem run snapshots and guard audit entries. See [`docs/design/dynamic-workflows-projection-design.md`](design/dynamic-workflows-projection-design.md) and [ADR-014](adr/014-dynamic-workflows-product-boundary.md).
 
@@ -63,6 +65,10 @@ It also exports a read-only **projection contract** (`buildDynamicWorkflowProjec
 `packages/permission-policy/` is a pure library. It exists because autopilot and dynamic-workflows need the same command classification, permission decisions, real event extraction, and audit persistence.
 
 The split prevents duplicated safety logic and lets future OpenClaw plugins reuse the same primitives.
+
+### Instinct
+
+`packages/instinct/` hosts `@oh-my-matrix/instinct`, a cross-session context memory plugin. Two hooks close the minimal loop: `after_tool_call` appends scrubbed `{tool, input, output}` summaries to `.instinct/observations.jsonl` (rotated, secret-scrubbed), and `session_start` injects the most recent observations for the project so a new session resumes with what the last one did. Promoting raw observations into reusable patterns (LLM distillation) is a later phase.
 
 ## Runtime Flow
 
