@@ -47,7 +47,7 @@
 **发布后补强（2026-08-09）**：
 - **E13 双花闭环**：resume_run RPC 成功即经 reducer 消费 `needsCrossTurnResume`（第二次调用拒绝）+ `shouldCheckpoint` 持久化 flag 翻转（重启腿不重开 P3-29）。
 - **覆盖率门禁生效**：3 包 vitest coverage 阈值 + CI/`pnpm verify` 强制执行（autopilot 93.5/85.8/96.3/93.5、dw 89/75/100/89、pp 80/92/94/80 实测）。
-- **host smoke 补跑通过**：MA 宿主升级 4.0.0 + `scripts/smoke-plugin-runtime.mjs`（真实 SDK：12 hooks + 7 RPC + destructive blocked / safe allowed）——host-deploy §5 兑现。
+- **host smoke 补跑通过**：MA 宿主升级 4.0.0 + `scripts/smoke-plugin-runtime.mjs`（真实 SDK：12 hooks + 7 RPC + destructive blocked / safe allowed）——host-deploy §5 兑现。**（2026-08-18 核实修正：脚本仅存在于 MA 悬空 commit `ddb6246e`，未合入任何分支，当前 dev 工作区不可用；恢复/重建由 issue #171 跟进。）**
 
 ## OMM frontier 剩余（0 张可立即开）
 

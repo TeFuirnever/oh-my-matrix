@@ -69,7 +69,7 @@ host 通过 npm 依赖 OMM 包。publish 后 host 侧:
 - 真实 event shape smoke,确认:
   - `destructive` / `cd <ws> && git reset --hard` / `rm -rf` → **blocked**
   - `git status` / main-session → **allowed**
-- **MA host 已实现**:`scripts/smoke-plugin-runtime.mjs`(加载 node_modules 的插件 dist → register → 12 hooks + 7 RPC 表面 → activate 后 destructive git blocked / safe allowed)。2026-08-09 对 autopilot 4.0.0 跑通。
+- **MA host 曾实现但当前不可用**：`scripts/smoke-plugin-runtime.mjs`(加载 node_modules 的插件 dist → register → 12 hooks + 7 RPC 表面 → activate 后 destructive git blocked / safe allowed)。2026-08-09 对 autopilot 4.0.0 跑通。**注意(2026-08-18 核实)**：该脚本提交在 MA 仓悬空 commit `ddb6246e` 上,未合入任何分支,当前 dev 工作区无此文件;恢复/重建由 issue #171(T16)跟进。
 - 注意:插件 dist 运行时**零 openclaw import**(类型擦除),但 SDK 路径是 `openclaw/plugin-sdk/plugin-runtime`(exports 暴露),不是 `openclaw/dist/...`。
 - **插件版本升级**:MA 侧改 `package.json` 三包版本 + `pnpm install` 即生效(dev 路径);打包发布走 `bundle:openclaw` 重构建。升级后旧 checkpoint 会被真实恢复(幂等 activate 拒绝) —— smoke 用唯一 sessionKey 规避。
 - **autopilot model-routing / thinking-intensity 变更**:另跑 [model-routing-smoke.md](model-routing-smoke.md)(分级 effort + tier override + subagent 覆盖 e2e + 不干预)—— subagent 覆盖目前只有源码推断,smoke 是唯一运行时证据。
