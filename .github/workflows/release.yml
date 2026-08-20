@@ -42,7 +42,7 @@ jobs:
 
       - name: Create or Update Version Packages Pull Request
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           # version only — NO publish (npm publish is manual via ./scripts/publish.sh)
           version: pnpm version-packages
