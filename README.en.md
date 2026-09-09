@@ -46,7 +46,7 @@ omm breaks these three into verifiable OpenClaw modules rather than a black-box 
 
 ## Architecture
 
-![oh-my-matrix architecture](docs/assets/architecture.svg)
+![oh-my-matrix architecture](docs/assets/omm-system-architecture.svg)
 
 ```mermaid
 flowchart LR

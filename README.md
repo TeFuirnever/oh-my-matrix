@@ -47,7 +47,7 @@ omm 把这三件事拆成可验证的 OpenClaw 模块，而不是做一个黑盒
 
 ## 架构
 
-![oh-my-matrix architecture](docs/assets/architecture.svg)
+![oh-my-matrix architecture](docs/assets/omm-system-architecture.svg)
 
 ```mermaid
 flowchart LR
