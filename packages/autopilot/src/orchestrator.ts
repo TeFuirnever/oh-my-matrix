@@ -330,10 +330,16 @@ function reducerCore(state: AutopilotState, event: OrchestratorEvent): Autopilot
       };
     }
 
-    // ─── running/claimed/retry_queued/released/unclaimed + stop → blocked
+    // ─── running/claimed/retry_queued/released/unclaimed/blocked + stop → blocked
     case 'stop_requested': {
-      const stoppable: OrchestrationState[] = ['running', 'claimed', 'retry_queued', 'released', 'unclaimed'];
+      // 'blocked' must be stoppable: a paused run (blocked + non-user_stopped
+      // reason) is otherwise a dead end — resume rejects non-resumable reasons
+      // and activate rejects paused, so stop is the only escape. Mirrors the
+      // design doc transition `blocked --> idle: stop_requested`.
+      const stoppable: OrchestrationState[] = ['running', 'claimed', 'retry_queued', 'released', 'unclaimed', 'blocked'];
       if (!stoppable.includes(state.orchestrationState as OrchestrationState)) return state;
+      // Idempotent on an already-stopped run (same exemption as hard_stop_requested).
+      if (state.orchestrationState === 'blocked' && state.blockedReason === 'user_stopped') return state;
       // ADR-020 step 5: coupled aux resets ride in — replaces the imperative
       // deactivate() setter. A stopped run is disabled and has its pause /
       // cross-turn handshake / degradation cleared.

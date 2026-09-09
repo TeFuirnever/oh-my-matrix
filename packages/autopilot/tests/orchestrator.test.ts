@@ -441,6 +441,47 @@ describe('orchestrator reducer — state transition table', () => {
       expect(next.orchestrationState).toBe('blocked');
       expect(next.blockedReason).toBe('user_stopped');
     });
+
+    // Regression: a paused run (blocked + non-user_stopped reason) must be
+    // stoppable. The stoppable list used to omit 'blocked', so stop_requested
+    // no-op'd on paused runs while the RPC handler still reported ok:true —
+    // the session stayed paused forever (docs/2026-09-05-autopilot-paused-stop-noop-startup-failure-fix.md).
+    it('from blocked (paused, non-user_stopped) → user_stopped, status derives to idle', () => {
+      const state = makeState({
+        orchestrationState: 'blocked',
+        blockedReason: 'max_retries_reached',
+        enabled: false,
+        pauseReason: 'tool_error_repeated',
+        needsCrossTurnResume: true,
+        degraded: true,
+        status: 'paused',
+      });
+      const next = orchestratorReducer(state, {
+        type: 'stop_requested', runId: 'run-1', now: NOW,
+      });
+      expect(next).not.toBe(state);
+      expect(next.orchestrationState).toBe('blocked');
+      expect(next.blockedReason).toBe('user_stopped');
+      expect(next.status).toBe('idle');
+      expect(next.enabled).toBe(false);
+      expect(next.pauseReason).toBeUndefined();
+      expect(next.needsCrossTurnResume).toBe(false);
+      expect(next.degraded).toBe(false);
+    });
+
+    it('from blocked + user_stopped → no-op (stop is idempotent)', () => {
+      const state = makeState({
+        orchestrationState: 'blocked',
+        blockedReason: 'user_stopped',
+        enabled: false,
+        status: 'idle',
+        lastActivityAt: NOW - 5000,
+      });
+      const next = orchestratorReducer(state, {
+        type: 'stop_requested', runId: 'run-1', now: NOW,
+      });
+      expect(next).toBe(state);
+    });
   });
 
   // ─── ADR-020 step 4: coupled aux resets ride into the reducer ───────
