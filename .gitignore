@@ -36,3 +36,6 @@ graphify-out/
 
 # Claude Code worktree checkouts（临时分支 checkout，不入库）
 .claude/worktrees/
+
+# 机器本地 MCP 配置（codegraph 等工具级 server，不入库）
+.mcp.json
