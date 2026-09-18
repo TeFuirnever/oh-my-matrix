@@ -16,7 +16,6 @@ const JSONL_EXT = '.jsonl';
 /** Suffix of an in-progress purge rewrite (see purgeFile). */
 const TMP_SUFFIX = '.tmp';
 const OBSERVATIONS_FAMILY = 'observations';
-const OBSERVATIONS_FILE = `${OBSERVATIONS_FAMILY}${JSONL_EXT}`;
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB → rotate
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days → purge
 
@@ -78,21 +77,86 @@ export function projectId(workspaceDir: string): string {
   }
 }
 
+// ── File family ───────────────────────────────────────────────────────────
+// A "family" is one logical JSONL log: the base `<family>.jsonl` plus its
+// `<family>-N.jsonl` rotations. Append, purge and recall all agree on the same
+// membership test and the same recency order through these four helpers.
+
+/**
+ * True when `file` belongs to `family`: exactly `<family>.jsonl`, or one of its
+ * `<family>-N.jsonl` rotations. Deliberately not a prefix test — `observations`
+ * must not scan a future `observations-summary.jsonl` family as its own.
+ */
+function isFamilyFile(file: string, family: string, ext = JSONL_EXT): boolean {
+  if (!file.endsWith(ext)) return false;
+  const stem = file.slice(0, -ext.length);
+  if (stem === family) return true;
+  return stem.startsWith(`${family}-`) && /^\d+$/.test(stem.slice(family.length + 1));
+}
+
+/** Filename of a family member by rotation number; 0 is the base file. */
+function familyFileName(family: string, key: number): string {
+  return key === 0 ? `${family}${JSONL_EXT}` : `${family}-${key}${JSONL_EXT}`;
+}
+
+/**
+ * Sort key for a file of `family` where LARGER = NEWER. The base
+ * `<family>.jsonl` is the OLDEST (key 0): writes roll into `<family>-N.jsonl`
+ * only after the base fills, so `-N` is newer than the base and `-2` newer than
+ * `-1`. The suffix is parsed numerically, not lexically, so `-10` ranks above
+ * `-2` — the trap `auditFileRecencyKey` already documents in permission-policy.
+ *
+ * Only the canonical name for a key earns that key; anything else ranks below
+ * every member (-1), so it sorts oldest and never displaces a real rotation.
+ * `observations-0.jsonl` and `observations-007.jsonl` are the cases that matter:
+ * this code never writes either, but an operator or a restore can leave one,
+ * and a naive parse would hand them key 0 and key 7 — colliding with the base
+ * file and with `observations-7.jsonl`, re-inverting recall. Exported for tests.
+ */
+export function familyFileRecencyKey(file: string, family: string): number {
+  if (!isFamilyFile(file, family)) return -1;
+  if (file === familyFileName(family, 0)) return 0;
+  const key = Number(file.slice(family.length + 1, -JSONL_EXT.length));
+  // Round-trip: the name must be the one familyFileName would produce.
+  return familyFileName(family, key) === file ? key : -1;
+}
+
+/** JSONL files of one family under .instinct/, unsorted. Throws if `dir` is unreadable. */
+function listFamilyFiles(dir: string, family: string): string[] {
+  return fs.readdirSync(dir).filter((f) => isFamilyFile(f, family));
+}
+
 // ── Store path + rotation ─────────────────────────────────────────────────
+/**
+ * Path to write the next observation into: the newest file of the family,
+ * rolling to the next rotation number once it fills.
+ *
+ * Probing upward from the base file instead would send writes back to
+ * `observations.jsonl` whenever a purge left it below `MAX_FILE_BYTES` — by
+ * deleting it (every entry expired) or merely by rewriting it smaller — while
+ * newer rotations survived. The newest entries would then sit in the file recall
+ * treats as oldest, breaking the invariant recall depends on (#177).
+ */
 function observationsPath(workspaceDir: string): string {
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
-  let candidate = path.join(dir, OBSERVATIONS_FILE);
-  let suffix = 1;
-  while (fs.existsSync(candidate)) {
-    try {
-      if (fs.statSync(candidate).size < MAX_FILE_BYTES) break;
-    } catch {
-      break;
-    }
-    candidate = path.join(dir, `observations-${suffix}.jsonl`);
-    suffix++;
+  let files: string[] = [];
+  try {
+    files = listFamilyFiles(dir, OBSERVATIONS_FAMILY);
+  } catch {
+    /* .instinct/ does not exist yet — appendObservation creates it */
   }
-  return candidate;
+  // Non-canonical names (key -1) are read last but never written to.
+  const keys = files.map((f) => familyFileRecencyKey(f, OBSERVATIONS_FAMILY)).filter((k) => k >= 0);
+  if (keys.length === 0) return path.join(dir, familyFileName(OBSERVATIONS_FAMILY, 0));
+
+  const newestKey = Math.max(...keys);
+  const newest = path.join(dir, familyFileName(OBSERVATIONS_FAMILY, newestKey));
+  try {
+    if (fs.statSync(newest).size < MAX_FILE_BYTES) return newest;
+  } catch {
+    return newest; // unreadable — let the append surface the failure
+  }
+  return path.join(dir, familyFileName(OBSERVATIONS_FAMILY, newestKey + 1));
 }
 
 let _writeFailures = 0;
@@ -128,23 +192,6 @@ export function appendObservation(obs: Observation, workspaceDir: string): void 
 }
 
 // ── Retention purge ───────────────────────────────────────────────────────
-/**
- * True when `file` belongs to `family`: exactly `<family>.jsonl`, or one of its
- * `<family>-N.jsonl` rotations. Deliberately not a prefix test — `observations`
- * must not scan a future `observations-summary.jsonl` family as its own.
- */
-function isFamilyFile(file: string, family: string, ext = JSONL_EXT): boolean {
-  if (!file.endsWith(ext)) return false;
-  const stem = file.slice(0, -ext.length);
-  if (stem === family) return true;
-  return stem.startsWith(`${family}-`) && /^\d+$/.test(stem.slice(family.length + 1));
-}
-
-/** JSONL files of one family under .instinct/, unsorted. Throws if `dir` is unreadable. */
-function listFamilyFiles(dir: string, family: string): string[] {
-  return fs.readdirSync(dir).filter((f) => isFamilyFile(f, family));
-}
-
 /** Non-empty lines of a JSONL file. Throws if the file is unreadable. */
 function readJsonlLines(filePath: string): string[] {
   return fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
@@ -253,15 +300,11 @@ export function loadRecentObservations(
   } catch {
     return [];
   }
-  // Newest rotation first: observations.jsonl is the live (newest) file,
-  // observations-N.jsonl are older as N grows.
-  files.sort((a, b) => {
-    if (a === OBSERVATIONS_FILE) return -1;
-    if (b === OBSERVATIONS_FILE) return 1;
-    const na = Number(a.match(/-(\d+)\./)?.[1] ?? 0);
-    const nb = Number(b.match(/-(\d+)\./)?.[1] ?? 0);
-    return na - nb;
-  });
+  // Newest rotation first. The base file is the OLDEST: writes roll into
+  // observations-N.jsonl only after it fills, so larger N is newer (#177).
+  files.sort(
+    (a, b) => familyFileRecencyKey(b, OBSERVATIONS_FAMILY) - familyFileRecencyKey(a, OBSERVATIONS_FAMILY),
+  );
 
   const out: Observation[] = [];
   for (const f of files) {
