@@ -1,13 +1,21 @@
 {
   "name": "@oh-my-matrix/instinct",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Cross-session context memory: observes tool calls (scrubbed) and recalls recent observations at session start, closing the autopilot context-memory gap.",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/TeFuirnever/oh-my-matrix.git", "directory": "packages/instinct" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TeFuirnever/oh-my-matrix.git",
+    "directory": "packages/instinct"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
