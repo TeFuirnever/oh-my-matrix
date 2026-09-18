@@ -4,12 +4,12 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — 587def4
 
-- [ ] 分类信号采集（totalContinuations<=1 时分类一次）
-- [ ] 4 tier → thinking intensity 映射（trivial→low, small→low/medium, large→high）
-- [ ] 与 model-routing 联动（large → premium tier）
-- [ ] 测试：4 tier 分类正确性
+- [x] 分类信号采集（totalContinuations<=1 时分类一次）— autopilot-state.ts:97 via classifyTaskSize
+- [x] 4 tier → thinking intensity 映射（trivial→low, small→medium, large→high）— effort-injection.ts
+- [x] 与 model-routing 联动（large → premium tier）— model-routing.ts + index.ts taskTier passthrough
+- [x] 测试：4 tier 分类正确性 — size-classifier.test.ts (7) + effort-injection.test.ts (8 new cases)
 
 ## 参考
 ecc-intake-recommendation.md §3.1 #3（3 信号 4 tier 表已定）；autopilot-verification-floor-design.md T06。

@@ -11,12 +11,12 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — templates/reusable-block.prose added; B2-B7 YAGNI-deferred; SKILL.md 445 lines (within ~50 line growth budget); test-prompts 4 cases all green
 
 - [x] B2-B7 deferred（触发条件驱动，无需求验证 = YAGNI）
 - [x] Block 模板补齐（templates/reusable-block.prose）
-- [ ] SKILL.md 净涨幅可控（合计 ~50 行）
-- [ ] test-prompts 无回归
+- [x] SKILL.md 净涨幅可控（合计 ~50 行）
+- [x] test-prompts 无回归
 
 ## 参考
 dynamic-workflows-design.md §11.8 阶段 B 表（触发条件/前置依赖/预估工作量已定）。

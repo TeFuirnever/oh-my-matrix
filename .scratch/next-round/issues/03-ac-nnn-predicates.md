@@ -4,9 +4,9 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — bdf4815
 
-- [ ] goal 可携带 AC 列表（向后兼容 free-text，AC 块内嵌 goal 字符串方案）
+- [x] goal 可携带 AC 列表（向后兼容 free-text，AC 块内嵌 goal 字符串方案）— acceptance-criteria.ts
 - [x] 每条 AC 含验证方法字段，可映射到验证命令
 - [x] 带 AC 的 goal 在证据门判定时可对照 AC（展示/可追踪）
 - [x] 文档更新：goal 格式说明
