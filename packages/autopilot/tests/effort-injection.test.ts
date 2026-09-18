@@ -148,6 +148,16 @@ describe('phase-detection alignment (effort-injection <-> model-routing)', () =>
     expect(resolveModelTier(5, undefined, false, stdCfg, 'large')).toBe('premium');
   });
 
+  // Pins the CONFIG-DRIVEN contract: large reuses initialTurnTier verbatim and
+  // does NOT clamp to a hardcoded 'premium' floor. An operator who lowers
+  // initialTurnTier is opting out of premium everywhere, and that must be
+  // respected. Without this case, the test above passes even if the function
+  // hardcoded 'premium' — which was the ticket-04 review finding.
+  it('large taskTier follows a non-premium initialTurnTier (no hardcoded floor)', () => {
+    const lowCfg = { defaultTier: 'budget' as const, initialTurnTier: 'standard' as const };
+    expect(resolveModelTier(5, undefined, false, lowCfg, 'large')).toBe('standard');
+  });
+
   it('large taskTier does NOT override subagent tier', () => {
     const subCfg = { defaultTier: 'standard' as const, subagentTier: 'budget' as const };
     expect(resolveModelTier(5, undefined, true, subCfg, 'large')).toBe('budget');

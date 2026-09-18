@@ -1885,6 +1885,12 @@ export function register(api: OpenClawPluginApi): void {
           // MA host, which would cause a lookup or reconnect against undefined
           // and leave the run permanently stranded even if recovery is attempted.
           if (!state.sessionKey) continue;
+          // Guard: a run may be restored from checkpoint with an active
+          // orchestrationState but enabled=false (e.g. a crash mid-deactivation).
+          // Every other handler in this plugin gates on enabled; the host has no
+          // way to tell an enabled from a disabled entry in this response, so a
+          // disabled run must not be advertised as resumable.
+          if (!state.enabled) continue;
           sessions.push({
             sessionKey: state.sessionKey,
             status: state.status,
