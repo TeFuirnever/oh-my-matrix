@@ -49,6 +49,17 @@
 - **覆盖率门禁生效**：3 包 vitest coverage 阈值 + CI/`pnpm verify` 强制执行（autopilot 93.5/85.8/96.3/93.5、dw 89/75/100/89、pp 80/92/94/80 实测）。
 - **host smoke 补跑通过**：MA 宿主升级 4.0.0 + `scripts/smoke-plugin-runtime.mjs`（真实 SDK：12 hooks + 7 RPC + destructive blocked / safe allowed）——host-deploy §5 兑现。**（2026-08-18 核实修正：脚本仅存在于 MA 悬空 commit `ddb6246e`，未合入任何分支，当前 dev 工作区不可用；恢复/重建由 issue #171 跟进。）**
 
+## 待发版（changeset 已写，pending → autopilot 4.5.0）
+
+| 变更 | 内容 | commit |
+|---|---|---|
+| size-classifier → effort/model 接线 | `taskTier` 此前只喂 `resolveThinkingIntensity`，model routing 完全忽略。现两端都读：continuation 轮（`totalContinuations >= 2`）`small` 封顶 medium、`large` 钉 high；`small` 仍让位于显式 `configIntensity:'low'`（不覆盖运营方成本控制）。初始轮与验证阶段仍优先于 tier | `587def4` |
+| large → `initialTurnTier` | `large` 在 continuation 轮复用 `initialTurnTier`，不落回更弱的 `defaultTier`。**刻意不设硬编码 premium floor**——`ModelTier` 是无序字符串，无 rank 即无 floor；运营方下调 `initialTurnTier` 即等于全局退出 premium | `587def4`、`4f5e615` |
+| projection modelTier 一致性 | `projection.ts:86` 补传 `taskTier`，投影值与实际下发 gateway 的 override 对齐（此前 large 任务实跑 premium、面板显示 standard） | `9a787e6` |
+| crash-recovery 两处加固 | `isActiveOrchestrationState` 改由 `deriveStatus` 推导（消除手工状态表漂移）；`list_resumable_sessions` 跳过 `sessionKey` undefined（半写 checkpoint）与 `enabled:false`（deactivate 中途崩溃）两类条目 | `830f422`、`4f5e615` |
+
+> 📌 `list_resumable_sessions` **有意只含活跃 orchestration state**。blocked 但可恢复的 run 走 `canResume` 独立通道（`projection.ts:143` + ticket-07 host 按钮），不经 `resumeRestoredRuns`——两轮 review 都提过这点，结论是不改。
+
 ## OMM frontier 剩余（0 张可立即开）
 
 | 项 | 阻塞 |
