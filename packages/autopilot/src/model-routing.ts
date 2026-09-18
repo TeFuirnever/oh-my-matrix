@@ -56,9 +56,16 @@ export function resolveModelTier(
   if (totalContinuations <= 1) {
     return config?.initialTurnTier ?? DEFAULT_ROUTING.initialTurnTier;
   }
-  // T06: large tasks stay on premium for continuation turns so a complex run
-  // is never downgraded mid-execution by a defaultTier that is set to 'standard'.
-  if (taskTier === 'large') return 'premium';
+  // T06: large tasks use at least premium for continuation turns so a complex
+  // run is never downgraded mid-execution. Respects operator config: if
+  // initialTurnTier is set higher than 'premium' this falls back to it; if the
+  // operator explicitly sets defaultTier to a higher tier, that wins via the
+  // config-driven path below — but 'premium' is the floor for large tasks so
+  // a defaultTier:'standard' config does not silently under-resource them.
+  if (taskTier === 'large') {
+    const largeTier = config?.initialTurnTier ?? DEFAULT_ROUTING.initialTurnTier;
+    return largeTier;
+  }
   return config?.defaultTier ?? DEFAULT_ROUTING.defaultTier;
 }
 

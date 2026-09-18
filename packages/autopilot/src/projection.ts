@@ -83,7 +83,7 @@ export function projectState(
   const estimatedCostUsd = computeCostUsd(inputTokens, outputTokens);
   const modelRouting = state.workflow?.modelRouting ?? config?.modelRouting;
   const modelTier = state.status === 'running'
-    ? resolveModelTier(state.totalContinuations, state.evidence?.status, false, modelRouting)
+    ? resolveModelTier(state.totalContinuations, state.evidence?.status, false, modelRouting, state.taskTier)
     : undefined;
   return {
     status: state.status,

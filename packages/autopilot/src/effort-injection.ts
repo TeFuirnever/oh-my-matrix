@@ -55,15 +55,15 @@ export function resolveThinkingIntensity(
   // we escalate (avoid a low-effort death loop on a misjudged complex task).
   if (taskTier === 'trivial' && totalContinuations <= 3) return 'low';
   if (evidenceStatus === 'running') return 'low';
-  // Initial turns always get high effort regardless of task tier — the first
-  // thorough analysis is cheap insurance against a wrong early decision.
+  // Initial turns always get high effort regardless of task tier, EXCEPT for
+  // trivial tasks which are guarded above (trivial fires before this check).
   if (totalContinuations <= 1) return 'high';
   // T06: tier-driven effort for continuation turns (totalContinuations >= 2).
-  // small: medium effort saves premium tokens without sacrificing quality on
-  //   straightforward tasks.
-  // large: pin to high so a complex task isn't under-resourced mid-run even
-  //   if configIntensity is set lower by the operator.
-  if (taskTier === 'small') return 'medium';
+  // small: cap at 'medium' but still respect an operator's 'low' configIntensity —
+  //   the tier saves tokens vs 'high' without ignoring explicit cost controls.
+  // large: 'high' is the ceiling of ThinkingIntensity, so this effectively
+  //   floors large tasks at the maximum — no override needed.
+  if (taskTier === 'small') return configIntensity === 'low' ? 'low' : 'medium';
   if (taskTier === 'large') return 'high';
   return configIntensity;
 }
