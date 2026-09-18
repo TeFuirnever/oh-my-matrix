@@ -425,6 +425,77 @@ describe('crash-recovery wiring — done-run deletes its checkpoint', () => {
   });
 });
 
+describe('ticket-09 — autopilot.list_resumable_sessions RPC', () => {
+  // ticket-09: crash-recovery broadcast gap. openclaw v2026.7.1 has no
+  // api.broadcast method; the equivalent is this RPC which the MA host calls
+  // on first gateway connection to enumerate restored sessions.
+  it('returns active runs restored by crash-recovery', async () => {
+    // Phase 1: activate and checkpoint a run.
+    let mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const activate = mock.gatewayMethods.get('autopilot.activate')!;
+    const sessionStart = mock.hooks.get('session_start')!;
+    await sessionStart({ sessionId: 'sid-lr1', sessionKey: 'sess-lr1' });
+    const respond1 = vi.fn();
+    await activate({ params: { sessionKey: 'sess-lr1', goal: 'lr test', workspacePath: tmpRoot }, respond: respond1 });
+    expect(respond1.mock.calls[0][0]).toBe(true);
+    await _flushAllWritesForTest();
+
+    // Phase 2: simulate restart — wipe memory, re-register (crash-recovery).
+    _resetForTest();
+    _enableCheckpointingForTest();
+    mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    expect(_getInternalStateForTest().stateByRunSize).toBe(1);
+
+    // The RPC must enumerate the restored session.
+    const listRpc = mock.gatewayMethods.get('autopilot.list_resumable_sessions')!;
+    expect(listRpc).toBeDefined();
+    const listRespond = vi.fn();
+    await listRpc({ params: {}, respond: listRespond });
+    expect(listRespond.mock.calls[0][0]).toBe(true);
+    const { sessions } = listRespond.mock.calls[0][1] as { sessions: Array<{ sessionKey: string; status: string; needsCrossTurnResume: boolean; totalContinuations: number }> };
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].sessionKey).toBe('sess-lr1');
+    expect(typeof sessions[0].status).toBe('string');
+    expect(typeof sessions[0].needsCrossTurnResume).toBe('boolean');
+    expect(typeof sessions[0].totalContinuations).toBe('number');
+  });
+
+  it('returns empty list when no crash-recovery runs exist', async () => {
+    const mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const listRpc = mock.gatewayMethods.get('autopilot.list_resumable_sessions')!;
+    const listRespond = vi.fn();
+    await listRpc({ params: {}, respond: listRespond });
+    expect(listRespond.mock.calls[0][0]).toBe(true);
+    const { sessions } = listRespond.mock.calls[0][1] as { sessions: unknown[] };
+    expect(sessions).toEqual([]);
+  });
+
+  it('excludes terminal (done/user_stopped) runs', async () => {
+    // Activate, then stop the run (user_stopped = terminal).
+    const mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const activate = mock.gatewayMethods.get('autopilot.activate')!;
+    const sessionStart = mock.hooks.get('session_start')!;
+    await sessionStart({ sessionId: 'sid-lr2', sessionKey: 'sess-lr2' });
+    const activateRespond = vi.fn();
+    await activate({ params: { sessionKey: 'sess-lr2', workspacePath: tmpRoot }, respond: activateRespond });
+    expect(activateRespond.mock.calls[0][0]).toBe(true);
+    const stop = mock.gatewayMethods.get('autopilot.stop')!;
+    await stop({ params: { sessionKey: 'sess-lr2' }, respond: vi.fn() });
+    await _flushAllWritesForTest();
+
+    const listRpc = mock.gatewayMethods.get('autopilot.list_resumable_sessions')!;
+    const listRespond = vi.fn();
+    await listRpc({ params: {}, respond: listRespond });
+    expect(listRespond.mock.calls[0][0]).toBe(true);
+    const { sessions } = listRespond.mock.calls[0][1] as { sessions: Array<{ sessionKey: string }> };
+    expect(sessions.find(s => s.sessionKey === 'sess-lr2')).toBeUndefined();
+  });
+});
+
 // Helper: does any checkpoint file reference this sessionKey?
 function lookupCheckpointForSession(sessionKey: string): boolean {
   const cpDir = path.join(tmpRoot, '.autopilot', 'checkpoints');

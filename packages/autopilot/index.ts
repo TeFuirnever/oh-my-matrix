@@ -1853,6 +1853,45 @@ export function register(api: OpenClawPluginApi): void {
       respond(true, { ok: true });
   });
 
+  // ticket 09: crash-recovery broadcast gap. The host's activeSessions Map is
+  // empty after an app restart (it is not persisted), so resumeRestoredRuns
+  // iterates an empty set and crash-recovered runs are never continued. The
+  // engine has already restored all resumable runs from checkpoints at
+  // register() time (stateByRun is populated), but the host does not know.
+  //
+  // api.broadcast('sessions.changed', ...) does not exist in openclaw
+  // v2026.7.1 — sessions.changed is emitted by the gateway's internal
+  // emitSessionsChanged function which requires GatewayRequestContext, not
+  // accessible from plugin code. The equivalent mechanism is this RPC: the
+  // host calls it on first gateway connection to enumerate which sessions have
+  // active crash-recovered runs, then re-populates activeSessions and calls
+  // resumeRestoredRuns. MA host side: confirm gateway-handlers.ts:583 guard
+  // covers previousGatewayState === undefined (ticket 08).
+  api.registerGatewayMethod('autopilot.list_resumable_sessions', async ({ respond }: GatewayCtx) => {
+      const sessions: Array<{
+        sessionKey: string;
+        status: AutopilotState['status'];
+        needsCrossTurnResume: boolean;
+        totalContinuations: number;
+      }> = [];
+      for (const state of stateByRun.values()) {
+        const orch = state.orchestrationState;
+        const isActive =
+          orch === 'running' || orch === 'claimed' ||
+          orch === 'retry_queued' || orch === 'released' || orch === 'unclaimed';
+        if (isActive) {
+          sessions.push({
+            sessionKey: state.sessionKey,
+            status: state.status,
+            needsCrossTurnResume: state.needsCrossTurnResume,
+            totalContinuations: state.totalContinuations,
+          });
+        }
+      }
+      log(`[autopilot] list_resumable_sessions: ${sessions.length} active run(s)`);
+      respond(true, { sessions });
+  });
+
   }
 
   // ─── Phase 2: Stall Detection (GAP-4) ───────────────────────────
