@@ -1879,6 +1879,12 @@ export function register(api: OpenClawPluginApi): void {
         const orch = state.orchestrationState;
         const isActive = isActiveOrchestrationState(orch);
         if (isActive) {
+          // Guard: a crash-recovered checkpoint written before sessionKey was
+          // persisted may have state.sessionKey === undefined. Silently skip
+          // such entries rather than emitting { sessionKey: undefined } to the
+          // MA host, which would cause a lookup or reconnect against undefined
+          // and leave the run permanently stranded even if recovery is attempted.
+          if (!state.sessionKey) continue;
           sessions.push({
             sessionKey: state.sessionKey,
             status: state.status,

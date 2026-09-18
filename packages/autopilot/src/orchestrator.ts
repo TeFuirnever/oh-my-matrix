@@ -67,12 +67,11 @@ export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 
 
 /**
  * True for orchestration states that map to status='running' (active family).
- * Single source of truth shared with list_resumable_sessions RPC — any new
- * active state must be added here.
+ * Expressed via deriveStatus so it cannot drift when new states are added to
+ * the 'running' branch of deriveStatus — a single edit there covers both sites.
  */
 export function isActiveOrchestrationState(orch: OrchestrationState | undefined): boolean {
-  return orch === 'running' || orch === 'claimed' || orch === 'retry_queued'
-    || orch === 'released' || orch === 'unclaimed';
+  return deriveStatus({ orchestrationState: orch, blockedReason: undefined }) === 'running';
 }
 
 /**
