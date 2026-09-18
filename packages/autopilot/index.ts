@@ -1082,6 +1082,7 @@ export function register(api: OpenClawPluginApi): void {
       state.evidence?.status,
       isSubagentSession(sessionKey),
       routing,
+      state.taskTier,
     );
     const modelId = resolveModelId(tier, routing);
     if (modelId) {

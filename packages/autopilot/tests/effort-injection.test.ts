@@ -69,6 +69,30 @@ describe('resolveThinkingIntensity', () => {
     expect(resolveThinkingIntensity(0, 'failed', 'medium')).toBe('high');
     expect(resolveThinkingIntensity(5, 'not_started', 'low')).toBe('low');
   });
+
+  // T06: tier-driven effort for continuation turns (totalContinuations >= 2)
+  it('small tier → medium effort on continuation turns', () => {
+    expect(resolveThinkingIntensity(5, undefined, 'high', 'small')).toBe('medium');
+  });
+
+  it('large tier → high effort on continuation turns regardless of configIntensity', () => {
+    expect(resolveThinkingIntensity(5, undefined, 'low', 'large')).toBe('high');
+  });
+
+  it('small/large tier does NOT override initial turns (totalContinuations <= 1)', () => {
+    // Initial turns always use 'high' regardless of tier.
+    expect(resolveThinkingIntensity(0, undefined, 'low', 'small')).toBe('high');
+    expect(resolveThinkingIntensity(1, undefined, 'low', 'large')).toBe('high');
+  });
+
+  it('small/large tier does NOT override validation phase (evidence running)', () => {
+    expect(resolveThinkingIntensity(5, 'running', 'high', 'small')).toBe('low');
+    expect(resolveThinkingIntensity(5, 'running', 'high', 'large')).toBe('low');
+  });
+
+  it('standard tier falls through to configIntensity', () => {
+    expect(resolveThinkingIntensity(5, undefined, 'medium', 'standard')).toBe('medium');
+  });
 });
 
 // ─── L3: phase-detection alignment between effort-injection and model-routing ─
@@ -116,5 +140,27 @@ describe('phase-detection alignment (effort-injection <-> model-routing)', () =>
     // continuations=0 would be initial, but evidence running must win in both.
     expect(resolveModelTier(0, 'running', false, cfg)).toBe('budget');
     expect(resolveThinkingIntensity(0, 'running', 'high')).toBe('low');
+  });
+
+  // T06: large task tier → premium model on continuation turns regardless of defaultTier
+  it('large taskTier → premium tier on continuation turns', () => {
+    const stdCfg = { defaultTier: 'standard' as const, initialTurnTier: 'premium' as const, validationTier: 'budget' as const };
+    expect(resolveModelTier(5, undefined, false, stdCfg, 'large')).toBe('premium');
+  });
+
+  it('large taskTier does NOT override subagent tier', () => {
+    const subCfg = { defaultTier: 'standard' as const, subagentTier: 'budget' as const };
+    expect(resolveModelTier(5, undefined, true, subCfg, 'large')).toBe('budget');
+  });
+
+  it('large taskTier does NOT override validation phase', () => {
+    const stdCfg = { defaultTier: 'standard' as const, validationTier: 'budget' as const };
+    expect(resolveModelTier(5, 'running', false, stdCfg, 'large')).toBe('budget');
+  });
+
+  it('small/standard taskTier falls through to defaultTier on continuation turns', () => {
+    const stdCfg = { defaultTier: 'standard' as const };
+    expect(resolveModelTier(5, undefined, false, stdCfg, 'small')).toBe('standard');
+    expect(resolveModelTier(5, undefined, false, stdCfg, 'standard')).toBe('standard');
   });
 });

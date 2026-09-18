@@ -14,6 +14,7 @@
  * modelOverride is emitted — the session inherits its declared model.
  */
 import { MODEL_TIERS, type ModelTier, type ModelRoutingConfig, type EvidenceStatus } from './types';
+import type { TaskTier } from './size-classifier';
 
 // MODEL_TIERS (from types.ts) is the single source of truth for the tier set;
 // ModelTier is derived from it, so this allowlist cannot drift out of sync.
@@ -37,6 +38,7 @@ export function resolveModelTier(
   evidenceStatus: EvidenceStatus | undefined,
   isSubagent: boolean,
   config?: ModelRoutingConfig,
+  taskTier?: TaskTier,
 ): ModelTier {
   if (isSubagent && config?.subagentTier) {
     return config.subagentTier;
@@ -54,6 +56,9 @@ export function resolveModelTier(
   if (totalContinuations <= 1) {
     return config?.initialTurnTier ?? DEFAULT_ROUTING.initialTurnTier;
   }
+  // T06: large tasks stay on premium for continuation turns so a complex run
+  // is never downgraded mid-execution by a defaultTier that is set to 'standard'.
+  if (taskTier === 'large') return 'premium';
   return config?.defaultTier ?? DEFAULT_ROUTING.defaultTier;
 }
 
