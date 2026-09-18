@@ -49,7 +49,7 @@
 - **覆盖率门禁生效**：3 包 vitest coverage 阈值 + CI/`pnpm verify` 强制执行（autopilot 93.5/85.8/96.3/93.5、dw 89/75/100/89、pp 80/92/94/80 实测）。
 - **host smoke 补跑通过**：MA 宿主升级 4.0.0 + `scripts/smoke-plugin-runtime.mjs`（真实 SDK：12 hooks + 7 RPC + destructive blocked / safe allowed）——host-deploy §5 兑现。**（2026-08-18 核实修正：脚本仅存在于 MA 悬空 commit `ddb6246e`，未合入任何分支，当前 dev 工作区不可用；恢复/重建由 issue #171 跟进。）**
 
-## 待发版（changeset 已写，pending → autopilot 4.5.0）
+## 待发版（changeset 已写，pending → autopilot 4.5.0 + instinct 0.2.0）
 
 | 变更 | 内容 | commit |
 |---|---|---|
@@ -57,6 +57,7 @@
 | large → `initialTurnTier` | `large` 在 continuation 轮复用 `initialTurnTier`，不落回更弱的 `defaultTier`。**刻意不设硬编码 premium floor**——`ModelTier` 是无序字符串，无 rank 即无 floor；运营方下调 `initialTurnTier` 即等于全局退出 premium | `587def4`、`4f5e615` |
 | projection modelTier 一致性 | `projection.ts:86` 补传 `taskTier`，投影值与实际下发 gateway 的 override 对齐（此前 large 任务实跑 premium、面板显示 standard） | `9a787e6` |
 | crash-recovery 两处加固 | `isActiveOrchestrationState` 改由 `deriveStatus` 推导（消除手工状态表漂移）；`list_resumable_sessions` 跳过 `sessionKey` undefined（半写 checkpoint）与 `enabled:false`（deactivate 中途崩溃）两类条目 | `830f422`、`4f5e615` |
+| instinct 30 天 purge + `.instinct/` gitignore | 补齐设计 §3.1 #1 的第三条保证（rotation/scrub 已在 0.1.0）。`purgeExpired()` 按 file family 精确匹配（`<family>.jsonl` / `<family>-N.jsonl`），删空文件与空目录、清崩溃遗留的 `.jsonl.tmp`，temp+rename 重写，never-throw + 失败计数；`session_start` 召回前调用。**刻意的数据损失**：`ts` 不可读的行被丢弃——合法 JSON 但缺 `ts` 的行本可召回，但无法确立年龄的记录永远满足不了 30 天上界（ticket-11） | `cb90175` |
 
 > 📌 `list_resumable_sessions` **有意只含活跃 orchestration state**。blocked 但可恢复的 run 走 `canResume` 独立通道（`projection.ts:143` + ticket-07 host 按钮），不经 `resumeRestoredRuns`——两轮 review 都提过这点，结论是不改。
 
