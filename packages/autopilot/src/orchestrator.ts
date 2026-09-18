@@ -66,6 +66,16 @@ export function deriveStatus(state: Pick<AutopilotState, 'orchestrationState' | 
 }
 
 /**
+ * True for orchestration states that map to status='running' (active family).
+ * Single source of truth shared with list_resumable_sessions RPC — any new
+ * active state must be added here.
+ */
+export function isActiveOrchestrationState(orch: OrchestrationState | undefined): boolean {
+  return orch === 'running' || orch === 'claimed' || orch === 'retry_queued'
+    || orch === 'released' || orch === 'unclaimed';
+}
+
+/**
  * Apply an orchestrator event to the current state.
  * Returns a new state object (immutable).
  *

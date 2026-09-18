@@ -19,7 +19,7 @@ import { detectCapExceeded } from './src/cost';
 import { emptyLedger, recordTurn, buildEntry, summarizeLedger, buildProgressHeadline, lastProgressTurn } from './src/progress-ledger';
 import type { CommandClass } from './src/types';
 import type { OpenClawPluginApi, PluginJsonValue, PluginHookBeforeAgentFinalizeEvent, PluginHookAfterToolCallEvent, PluginHookBeforeCompactionEvent, PluginHookAfterCompactionEvent, PluginAgentTurnPrepareEvent, PluginHookBeforeModelResolveEvent, PluginHookBeforeAgentRunEvent, PluginHookBeforeToolCallEvent, PluginHookLlmOutputEvent, PluginHookSessionStartEvent, PluginHookSessionEndEvent, PluginHookAgentEndEvent, PluginHookAgentContext } from 'openclaw/dist/plugin-sdk/plugin-runtime';
-import { orchestratorReducer, deriveStatus } from './src/orchestrator';
+import { orchestratorReducer, deriveStatus, isActiveOrchestrationState } from './src/orchestrator';
 import { classifyCommand, decidePermissionForEvent, extractCommandSegments, tokenizeShell } from '@oh-my-matrix/permission-policy';
 import { loadWorkflowConfig, DEFAULT_WORKFLOW_CONFIG } from './src/workflow-config';
 import { evaluateEvidence } from './src/evidence-gate';
@@ -1876,9 +1876,7 @@ export function register(api: OpenClawPluginApi): void {
       }> = [];
       for (const state of stateByRun.values()) {
         const orch = state.orchestrationState;
-        const isActive =
-          orch === 'running' || orch === 'claimed' ||
-          orch === 'retry_queued' || orch === 'released' || orch === 'unclaimed';
+        const isActive = isActiveOrchestrationState(orch);
         if (isActive) {
           sessions.push({
             sessionKey: state.sessionKey,
