@@ -55,7 +55,7 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 
 ### Instinct
 
-[`@oh-my-matrix/instinct`](packages/instinct/) 是跨会话上下文记忆插件（v0.1.0）。两个 hook 构成最小闭环：`after_tool_call` 把脱敏后的 `{tool, input, output}` 摘要追加到 `.instinct/observations.jsonl`（轮转、secret-scrubbed）；`session_start` 将本项目最近的观察作为 appendContext 注入，让新会话带着上一会话做过什么继续。观察→可复用模式的 LLM 蒸馏是后续阶段，本包只交付记忆基质 + 召回。
+[`@oh-my-matrix/instinct`](packages/instinct/) 是跨会话上下文记忆插件（v0.1.0）。两个 hook 构成最小闭环：`after_tool_call` 把脱敏后的 `{tool, input, output}` 摘要追加到 `.instinct/observations.jsonl`（10 MB 轮转、secret-scrubbed）；`session_start` 先清掉超过 30 天的观察，再将本项目最近的观察作为 appendContext 注入，让新会话带着上一会话做过什么继续。观察→可复用模式的 LLM 蒸馏是后续阶段，本包只交付记忆基质 + 召回。
 
 ### Runtime Guard
 

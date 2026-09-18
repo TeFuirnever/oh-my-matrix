@@ -2,7 +2,7 @@
  * instinct recall: summarizeForRecall + register hook wiring (mock API).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { register, summarizeForRecall } from '../index';
@@ -84,5 +84,28 @@ describe('register (hook wiring)', () => {
     const { api, hooks } = mockApi();
     register(api);
     expect(hooks.get('session_start')!({}, {})).toBeUndefined();
+  });
+
+  it('session_start purges observations older than 30 days before recalling', () => {
+    const file = join(dir, '.instinct', 'observations.jsonl');
+    mkdirSync(join(dir, '.instinct'), { recursive: true });
+    const now = Date.now();
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ ts: now - 31 * 24 * 60 * 60 * 1000, tool: 'Expired', input: 'old', project: 'unknown' }),
+        JSON.stringify({ ts: now, tool: 'Fresh', input: 'new', project: 'unknown' }),
+      ].join('\n') + '\n',
+      'utf-8',
+    );
+
+    const { api, hooks } = mockApi();
+    register(api); // no .git in the temp dir → projectId === 'unknown'
+    const recall = hooks.get('session_start')!({}, {}) as { appendContext?: string } | void;
+
+    expect(recall?.appendContext).toContain('Fresh');
+    expect(recall!.appendContext).not.toContain('Expired');
+    // Dropped from disk, not merely filtered out of the recall block.
+    expect(readFileSync(file, 'utf-8')).not.toContain('Expired');
   });
 });

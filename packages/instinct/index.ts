@@ -4,17 +4,17 @@
  * Two hooks form the minimal closed loop:
  *  - after_tool_call (observer): captures a scrubbed {tool, input, output}
  *    summary to .instinct/observations.jsonl (rotated, secret-scrubbed).
- *  - session_start (recall): injects the most recent observations for this
- *    project as appendContext, so a new session resumes with what the last
- *    one did.
+ *  - session_start (recall): purges observations older than 30 days, then
+ *    injects the most recent ones for this project as appendContext, so a new
+ *    session resumes with what the last one did.
  *
  * Instinct extraction (promote/evolve raw observations into reusable patterns)
  * is a later phase — this ships the memory substrate + recall, not the LLM
  * distillation (which needs a cheap-agent primitive the plugin process lacks).
  */
-import { appendObservation, loadRecentObservations, projectId, type Observation } from './src/store';
+import { appendObservation, loadRecentObservations, projectId, purgeExpired, type Observation } from './src/store';
 
-export { appendObservation, loadRecentObservations, projectId, scrubSecrets } from './src/store';
+export { appendObservation, loadRecentObservations, projectId, purgeExpired, scrubSecrets } from './src/store';
 export type { Observation } from './src/store';
 
 export const id = 'instinct';
@@ -112,6 +112,9 @@ export function register(api: any): void {
 
   // ── Recall: inject recent observations at session start ────────────────
   on('session_start', (_event: any, _ctx: any) => {
+    // Purge here, not in the observer: the rewrite is O(file) and session_start
+    // fires once per session, while after_tool_call fires on every tool call.
+    purgeExpired(cwd);
     const recent = loadRecentObservations(cwd, 20, project);
     if (recent.length === 0) return;
     const summary = summarizeForRecall(recent);

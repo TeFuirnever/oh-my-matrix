@@ -22,6 +22,9 @@ packages/*/*.tgz
 .context/
 graphify-out/
 
+# instinct observer 运行时产物（每次 tool 调用的输入输出摘要，即便已 scrub 也不入库）
+.instinct/
+
 # permission-policy audit 产物（测试/运行时 appendAuditEntry 写入 cwd），不入库
 .autopilot/
 
