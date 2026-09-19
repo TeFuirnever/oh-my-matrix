@@ -422,6 +422,12 @@ export interface Instinct {
   project?: string;
   /** Times this exact text was recorded — the observable confidence signal. */
   hits: number;
+  /**
+   * sha256 of the whitespace-normalized RAW text [:16] — the dedup identity.
+   * Matching on the stored (truncated) text alone would merge two distinct
+   * long instincts that share a 497-char prefix, silently dropping the second.
+   */
+  hash?: string;
 }
 
 /** What appendInstinct actually did — the caller-facing truth, not a request echo. */
@@ -431,9 +437,20 @@ export type InstinctAppendOutcome =
   | { status: 'hit'; scope: Instinct['scope']; hits: number }
   | { status: 'written'; scope: Instinct['scope'] };
 
+/** Dedup identity of a raw text — survives scrub, truncation and reflowing. Exported for tests. */
+export function instinctHash(raw: string): string {
+  return createHash('sha256').update(raw.replace(/\s+/g, ' ')).digest('hex').substring(0, 16);
+}
+
 /** A stored record and an incoming entry describe the same instinct slot. */
-function sameInstinctSlot(rec: Instinct, text: string, scope: Instinct['scope'], projId: string): boolean {
-  if (rec.text !== text) return false;
+function sameInstinctSlot(
+  rec: Instinct,
+  text: string,
+  hash: string,
+  scope: Instinct['scope'],
+  projId: string,
+): boolean {
+  if (rec.text !== text || rec.hash !== hash) return false;
   // Scope-class match: global↔global, or project↔project from the SAME
   // project. A cross-project or cross-scope re-record is a different slot —
   // text-only matching would swallow project B's record into project A's
@@ -443,12 +460,51 @@ function sameInstinctSlot(rec: Instinct, text: string, scope: Instinct['scope'],
 }
 
 /**
- * Upsert one instinct into the instincts family. Dedup matches exact stored
- * text (post-scrub) within the same scope class: a hit updates `ts` (floored
- * against clock skew) and increments `hits` in place rather than appending a
- * duplicate line — repeated patterns must not crowd the recall section, and
- * `hits` is the confidence proxy (ticket-09 design decision 4). The first
- * recording's scope stands; promotion is a later-phase feature.
+ * Scan the instincts family newest-first for the record occupying this entry's
+ * slot. Null when none does. An unreadable file is skipped, not fatal: a match
+ * inside it is invisible (a duplicate line becomes possible) — preferred over
+ * losing the record entirely, which blocking the append would do.
+ */
+function findInstinctSlot(
+  dir: string,
+  text: string,
+  hash: string,
+  scope: Instinct['scope'],
+  projId: string,
+): { filePath: string; lines: string[]; idx: number; rec: Instinct } | null {
+  let files: string[];
+  try {
+    files = listFamilyFilesNewestFirst(dir, INSTINCTS_FAMILY);
+  } catch {
+    return null; // no .instinct/ yet
+  }
+  for (const f of files) {
+    const filePath = path.join(dir, f);
+    let lines: string[];
+    try {
+      lines = readJsonlLines(filePath);
+    } catch {
+      continue; // unreadable — skip, see above
+    }
+    const idx = lines.findIndex((line) => {
+      try {
+        return sameInstinctSlot(JSON.parse(line) as Instinct, text, hash, scope, projId);
+      } catch {
+        return false; // leave malformed lines alone
+      }
+    });
+    if (idx !== -1) return { filePath, lines, idx, rec: JSON.parse(lines[idx]) as Instinct };
+  }
+  return null;
+}
+
+/**
+ * Upsert one instinct into the instincts family. Dedup matches the stored
+ * text AND the raw-text hash within the same scope class: a hit updates `ts`
+ * (floored against clock skew) and increments `hits` in place rather than
+ * appending a duplicate line — repeated patterns must not crowd the recall
+ * section, and `hits` is the confidence proxy (ticket-09 design decision 4).
+ * The first recording's scope stands; promotion is a later-phase feature.
  *
  * Returns the outcome so callers (the tool) report what took effect, not what
  * was requested. `now` is injectable so tests get a deterministic clock.
@@ -461,57 +517,30 @@ export function appendInstinct(
   now: number = Date.now(),
 ): InstinctAppendOutcome {
   // Cap BEFORE scrubbing — see MAX_RAW_TEXT_CHARS.
-  const text = truncate(String(entry.text ?? '').slice(0, MAX_RAW_TEXT_CHARS));
+  const raw = String(entry.text ?? '').slice(0, MAX_RAW_TEXT_CHARS);
+  const text = truncate(raw);
   if (text == null || text.trim().length === 0) return { status: 'empty' };
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
   try {
-    const projId = projectId(workspaceDir);
-    // Scan the family newest-first for a same-slot match.
-    let files: string[] = [];
-    try {
-      files = listFamilyFilesNewestFirst(dir, INSTINCTS_FAMILY);
-    } catch {
-      /* .instinct/ does not exist yet — fall through to the append */
-    }
-    for (const f of files) {
-      const filePath = path.join(dir, f);
-      let lines: string[];
-      try {
-        lines = readJsonlLines(filePath);
-      } catch {
-        // One unreadable file must not block recording: skip it and keep
-        // scanning. Trade-off: a match inside the skipped file is invisible,
-        // so a duplicate line becomes possible — preferred over losing the
-        // record entirely (the outer catch would eat every future append too).
-        continue;
-      }
-      const idx = lines.findIndex((line) => {
-        try {
-          return sameInstinctSlot(JSON.parse(line) as Instinct, text, entry.scope, projId);
-        } catch {
-          return false; // leave malformed lines alone
-        }
-      });
-      if (idx === -1) continue;
-      const rec = JSON.parse(lines[idx]) as Instinct;
+    const slot = findInstinctSlot(dir, text, instinctHash(raw), entry.scope, projectId(workspaceDir));
+    if (slot) {
       // Floor against clock skew: a hit must never regress ts — ts feeds
       // ranking and the 30-day purge countdown.
-      rec.ts = Math.max(typeof rec.ts === 'number' ? rec.ts : 0, now);
-      rec.hits = (typeof rec.hits === 'number' ? rec.hits : 0) + 1;
-      lines[idx] = JSON.stringify(rec);
-      rewriteFileAtomic(filePath, lines);
-      return { status: 'hit', scope: rec.scope, hits: rec.hits };
+      slot.rec.ts = Math.max(typeof slot.rec.ts === 'number' ? slot.rec.ts : 0, now);
+      slot.rec.hits = (typeof slot.rec.hits === 'number' ? slot.rec.hits : 0) + 1;
+      slot.lines[slot.idx] = JSON.stringify(slot.rec);
+      rewriteFileAtomic(slot.filePath, slot.lines);
+      return { status: 'hit', scope: slot.rec.scope, hits: slot.rec.hits };
     }
     const rec: Instinct = {
       ts: now,
       text,
       scope: entry.scope,
-      project: projId,
+      project: projectId(workspaceDir),
       hits: 1,
+      hash: instinctHash(raw),
     };
-    // Reuse the scan's listing: the append re-readdir would duplicate work,
-    // and the newest file is exactly files[0] when one exists.
-    appendLineWithRoll(dir, INSTINCTS_FAMILY, JSON.stringify(rec) + '\n', files.length > 0 ? files : undefined);
+    appendLineWithRoll(dir, INSTINCTS_FAMILY, JSON.stringify(rec) + '\n');
     return { status: 'written', scope: rec.scope };
   } catch (e) {
     _writeFailures++;

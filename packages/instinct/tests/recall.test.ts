@@ -167,11 +167,11 @@ describe('register (hook wiring)', () => {
     expect(readFileSync(file, 'utf-8')).not.toContain('Expired');
   });
 
-  it('recall emits two independent sections when both stores have content', () => {
+  it('recall emits two independent sections when both stores have content', async () => {
     const { api, hooks, tools } = mockToolApi();
     register(api);
     hooks.get('after_tool_call')!({ toolName: 'Bash', params: { command: 'pnpm test' } }, { sessionKey: 'agent:main' });
-    void tools[0].execute('call-1', { text: 'run pnpm verify before claiming done', scope: 'project' });
+    await tools[0].execute('call-1', { text: 'run pnpm verify before claiming done', scope: 'project' });
 
     const recall = hooks.get('agent_turn_prepare')!({}, { sessionKey: nextKey() }) as { appendContext?: string };
     const ctx = recall.appendContext!;
@@ -183,10 +183,10 @@ describe('register (hook wiring)', () => {
     expect(instinctSection).toContain('run pnpm verify');
   });
 
-  it('recall emits only the instinct section when there is no raw activity', () => {
+  it('recall emits only the instinct section when there is no raw activity', async () => {
     const { api, hooks, tools } = mockToolApi();
     register(api);
-    void tools[0].execute('call-1', { text: 'global pattern', scope: 'global' });
+    await tools[0].execute('call-1', { text: 'global pattern', scope: 'global' });
 
     const recall = hooks.get('agent_turn_prepare')!({}, { sessionKey: nextKey() }) as { appendContext?: string };
     expect(recall.appendContext).toContain('Working patterns');

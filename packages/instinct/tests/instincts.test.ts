@@ -8,6 +8,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   appendInstinct,
+  instinctHash,
   loadInstincts,
   purgeExpired,
   getWriteFailureCount,
@@ -121,7 +122,7 @@ describe('purge covers the instincts family', () => {
     mkdirSync(join(dir, '.instinct'), { recursive: true });
     // Hand-place two rotations the way real writes produce them (base oldest).
     writeFileSync(join(dir, '.instinct', 'instincts.jsonl'),
-      JSON.stringify({ ts: t, text: 'known pattern', scope: 'global', project: 'p', hits: 1 }) + '\n', 'utf-8');
+      JSON.stringify({ ts: t, text: 'known pattern', scope: 'global', project: 'p', hits: 1, hash: instinctHash('known pattern') }) + '\n', 'utf-8');
     writeFileSync(join(dir, '.instinct', 'instincts-1.jsonl'),
       JSON.stringify({ ts: t + 1, text: 'other', scope: 'global', project: 'p', hits: 1 }) + '\n', 'utf-8');
 
@@ -157,5 +158,32 @@ describe('purge covers the instincts family', () => {
     const texts = loadInstincts(dir, 10).map((i) => i.text);
     expect(texts).toContain('second');
     expect(texts).toContain('first');
+  });
+});
+
+describe('truncation-safe dedup (hash identity)', () => {
+  it('does NOT merge two distinct instincts sharing a 497-char prefix', () => {
+    const prefix = 'P'.repeat(497);
+    const t = Date.now();
+    appendInstinct(dir, { text: `${prefix}-ALPHA-tail-one`, scope: 'global' }, t);
+    appendInstinct(dir, { text: `${prefix}-BETA-tail-two`, scope: 'global' }, t + 1);
+
+    const recs = (readFileSync(join(dir, '.instinct', 'instincts.jsonl'), 'utf-8').split('\n').filter(Boolean)).map((l) => JSON.parse(l) as Instinct);
+    // Both stored as distinct records — truncation must not collapse them.
+    expect(recs).toHaveLength(2);
+    expect(recs.every((r) => r.hits === 1)).toBe(true);
+    // Stored text is the same truncated prefix (…tail lost); identity is the hash.
+    expect(recs[0].text).toBe(recs[1].text);
+    expect(recs[0].hash).not.toBe(recs[1].hash);
+  });
+
+  it('still dedups the same long text across the truncation boundary', () => {
+    const long = `${'L'.repeat(600)}-identical`;
+    const t = Date.now();
+    const first = appendInstinct(dir, { text: long, scope: 'global' }, t);
+    const second = appendInstinct(dir, { text: long, scope: 'global' }, t + 1);
+
+    expect(first.status).toBe('written');
+    expect(second).toMatchObject({ status: 'hit', hits: 2 });
   });
 });
