@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — shipped in dynamic-workflows 1.2.0（description "use proactively" + EN/ZH 通用场景触发词，SKILL.md 已含）
 
 - [ ] SKILL.md frontmatter description 加 "use proactively" + 通用场景触发词
 - [ ] 触发词与 19 角色库 Use when 对齐（不重叠、不冲突）

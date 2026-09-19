@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — afd5d4b + 87d4935（pull RPC 路线，见实现说明；MA 侧消费在 ticket-08）
 
 - [x] crash-recovery 后通知宿主哪些 session 有活跃 run（用 pull RPC 替代 push broadcast，见实现说明）
 - [x] 返回内容包含 `status`、`needsCrossTurnResume`、`totalContinuations`（MA 宿主消费所需字段）

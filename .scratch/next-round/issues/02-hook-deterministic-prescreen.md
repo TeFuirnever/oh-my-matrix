@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done — shipped in dynamic-workflows 1.2.0（agent_turn_prepare priority 12 主会话预筛，index.ts:142）
 
 - [ ] 插件注册 `agent_turn_prepare`（复用现有 on/registerHook 封装）
 - [ ] 任务特征规则：文件数 / 词数阈值 / 信号词（对齐 research 三测试：独立性 + 规模 + 自然并行）
