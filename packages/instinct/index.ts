@@ -44,7 +44,7 @@ export type { Instinct, Observation } from './src/store';
 
 export const id = 'instinct';
 export const name = 'Instinct (context memory)';
-export const version = '0.3.1';
+export const version = '0.3.2';
 
 /** Pull a short input summary from a tool event (any shape — scrubbed downstream). */
 function extractInputSummary(event: any): string | undefined {
