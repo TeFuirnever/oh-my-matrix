@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/instinct",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Cross-session context memory: observes tool calls (scrubbed) and recalls recent observations at session start, closing the autopilot context-memory gap.",
   "publishConfig": {
     "access": "public"
