@@ -21,6 +21,16 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+function mockToolApi() {
+  const hooks = new Map<string, (...args: unknown[]) => unknown>();
+  const tools: { name: string; label: string; execute: (id: string, params: unknown) => Promise<unknown> }[] = [];
+  const api = {
+    on: (name: string, handler: (...args: unknown[]) => unknown) => hooks.set(name, handler),
+    registerTool: (tool: { name: string; label: string; execute: unknown }) => tools.push(tool as never),
+  };
+  return { api, hooks, tools };
+}
+
 describe('summarizeForRecall', () => {
   it('groups by tool with counts + last input', () => {
     const obs: Observation[] = [
@@ -107,5 +117,75 @@ describe('register (hook wiring)', () => {
     expect(recall!.appendContext).not.toContain('Expired');
     // Dropped from disk, not merely filtered out of the recall block.
     expect(readFileSync(file, 'utf-8')).not.toContain('Expired');
+  });
+
+  it('session_start emits two independent sections when both stores have content', () => {
+    const { api, hooks, tools } = mockToolApi();
+    register(api);
+    hooks.get('after_tool_call')!({ toolName: 'Bash', params: { command: 'pnpm test' } }, { sessionKey: 'agent:main' });
+    void (tools[0] as { execute: (id: string, p: unknown) => Promise<unknown> }).execute('call-1', {
+      text: 'run pnpm verify before claiming done',
+      scope: 'project',
+    });
+
+    const recall = hooks.get('session_start')!({}, {}) as { appendContext?: string };
+    const ctx = recall.appendContext!;
+    // Two separately-trimmable sections, in fixed order.
+    const [rawSection, instinctSection] = ctx.split('\n\n');
+    expect(rawSection).toContain('Recent activity');
+    expect(rawSection).toContain('Bash ×1');
+    expect(instinctSection).toContain('Working patterns');
+    expect(instinctSection).toContain('run pnpm verify');
+  });
+
+  it('session_start emits only the instinct section when there is no raw activity', () => {
+    const { api, hooks, tools } = mockToolApi();
+    register(api);
+    void (tools[0] as { execute: (id: string, p: unknown) => Promise<unknown> }).execute('call-1', {
+      text: 'global pattern',
+      scope: 'global',
+    });
+
+    const recall = hooks.get('session_start')!({}, {}) as { appendContext?: string };
+    expect(recall.appendContext).toContain('Working patterns');
+    expect(recall.appendContext).not.toContain('Recent activity');
+  });
+});
+
+describe('register (instinct_record tool wiring)', () => {
+  it('registers instinct_record with the SDK tool contract shape', () => {
+    const { api, tools } = mockToolApi();
+    register(api);
+    expect(tools).toHaveLength(1);
+    const tool = tools[0] as { name: string; label: string; description: string; parameters: Record<string, unknown> };
+    // AgentTool contract (openclaw 2026.7.1-2): name + label + description +
+    // parameters schema + async execute returning {content:[{type:'text'}], details}.
+    expect(tool.name).toBe('instinct_record');
+    expect(typeof tool.label).toBe('string');
+    expect(tool.description.length).toBeGreaterThan(20);
+    const props = (tool.parameters as { properties: Record<string, { enum?: string[] }> }).properties;
+    expect(props.scope.enum).toEqual(['project', 'global']);
+  });
+
+  it('execute persists the instinct and returns text content', async () => {
+    const { api, tools } = mockToolApi();
+    register(api);
+    const result = (await (tools[0] as { execute: (id: string, p: unknown) => Promise<unknown> }).execute('call-1', {
+      text: 'never skip typecheck',
+      scope: 'project',
+    })) as { content: { type: string; text: string }[]; details: unknown };
+    expect(result.content[0].type).toBe('text');
+    expect(result.content[0].text).toContain('recorded');
+    const file = join(dir, '.instinct', 'instincts.jsonl');
+    const stored = JSON.parse(readFileSync(file, 'utf-8'));
+    expect(stored.text).toBe('never skip typecheck');
+  });
+
+  it('degrades gracefully when registerTool is unavailable (hooks still work)', () => {
+    const hooks = new Map<string, (...args: unknown[]) => unknown>();
+    const api = { on: (name: string, handler: (...args: unknown[]) => unknown) => hooks.set(name, handler) };
+    expect(() => register(api)).not.toThrow(); // no registerTool on api
+    expect(hooks.has('after_tool_call')).toBe(true); // observer unaffected
+    expect(hooks.has('session_start')).toBe(true); // recall unaffected
   });
 });

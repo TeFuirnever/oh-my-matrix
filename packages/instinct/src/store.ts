@@ -16,6 +16,7 @@ const JSONL_EXT = '.jsonl';
 /** Suffix of an in-progress purge rewrite (see purgeFile). */
 const TMP_SUFFIX = '.tmp';
 const OBSERVATIONS_FAMILY = 'observations';
+const INSTINCTS_FAMILY = 'instincts';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB → rotate
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days → purge
 
@@ -128,35 +129,35 @@ function listFamilyFiles(dir: string, family: string): string[] {
 
 // ── Store path + rotation ─────────────────────────────────────────────────
 /**
- * Path to write the next observation into: the newest file of the family,
- * rolling to the next rotation number once it fills.
+ * Path to write the next entry into: the newest file of the family, rolling
+ * to the next rotation number once it fills.
  *
  * Probing upward from the base file instead would send writes back to
- * `observations.jsonl` whenever a purge left it below `MAX_FILE_BYTES` — by
+ * `<family>.jsonl` whenever a purge left it below `MAX_FILE_BYTES` — by
  * deleting it (every entry expired) or merely by rewriting it smaller — while
  * newer rotations survived. The newest entries would then sit in the file recall
  * treats as oldest, breaking the invariant recall depends on (#177).
  */
-function observationsPath(workspaceDir: string): string {
+function familyWritePath(workspaceDir: string, family: string): string {
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
   let files: string[] = [];
   try {
-    files = listFamilyFiles(dir, OBSERVATIONS_FAMILY);
+    files = listFamilyFiles(dir, family);
   } catch {
-    /* .instinct/ does not exist yet — appendObservation creates it */
+    /* .instinct/ does not exist yet — the appenders create it */
   }
   // Non-canonical names (key -1) are read last but never written to.
-  const keys = files.map((f) => familyFileRecencyKey(f, OBSERVATIONS_FAMILY)).filter((k) => k >= 0);
-  if (keys.length === 0) return path.join(dir, familyFileName(OBSERVATIONS_FAMILY, 0));
+  const keys = files.map((f) => familyFileRecencyKey(f, family)).filter((k) => k >= 0);
+  if (keys.length === 0) return path.join(dir, familyFileName(family, 0));
 
   const newestKey = Math.max(...keys);
-  const newest = path.join(dir, familyFileName(OBSERVATIONS_FAMILY, newestKey));
+  const newest = path.join(dir, familyFileName(family, newestKey));
   try {
     if (fs.statSync(newest).size < MAX_FILE_BYTES) return newest;
   } catch {
     return newest; // unreadable — let the append surface the failure
   }
-  return path.join(dir, familyFileName(OBSERVATIONS_FAMILY, newestKey + 1));
+  return path.join(dir, familyFileName(family, newestKey + 1));
 }
 
 let _writeFailures = 0;
@@ -182,7 +183,7 @@ export function appendObservation(obs: Observation, workspaceDir: string): void 
     project: obs.project,
   };
   try {
-    const filePath = observationsPath(workspaceDir);
+    const filePath = familyWritePath(workspaceDir, OBSERVATIONS_FAMILY);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.appendFileSync(filePath, JSON.stringify(clean) + '\n', 'utf-8');
   } catch (e) {
@@ -324,5 +325,128 @@ export function loadRecentObservations(
       /* skip unreadable file */
     }
   }
+  return out.slice(0, limit);
+}
+
+// ── Instincts (distilled patterns, ticket-09) ─────────────────────────────
+export interface Instinct {
+  ts: number;
+  /** The pattern itself (scrubbed, truncated). */
+  text: string;
+  /** 'project' = only recalled for the recording project; 'global' = everywhere. */
+  scope: 'project' | 'global';
+  /** Recording project id — provenance, stamped even on global instincts. */
+  project?: string;
+  /** Times this exact text was recorded — the observable confidence signal. */
+  hits: number;
+}
+
+/**
+ * Upsert one instinct into the instincts family. Dedup is on EXACT stored
+ * text (post-scrub): a hit updates `ts` and increments `hits` in place rather
+ * than appending a duplicate line — repeated patterns must not crowd the recall
+ * section, and `hits` is the confidence proxy (ticket-09 design decision 4).
+ * Dedup deliberately ignores `scope`: the first recording's scope stands.
+ *
+ * `now` is injectable so tests get a deterministic clock.
+ * Never throws, matching appendObservation's contract.
+ */
+export function appendInstinct(
+  workspaceDir: string,
+  entry: { text: string; scope: Instinct['scope'] },
+  now: number = Date.now(),
+): void {
+  const text = truncate(entry.text);
+  if (text == null || text.length === 0) return; // nothing recordable
+  const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
+  try {
+    // Scan the family newest-first for an exact stored-text match.
+    let files: string[] = [];
+    try {
+      files = listFamilyFiles(dir, INSTINCTS_FAMILY).sort(
+        (a, b) => familyFileRecencyKey(b, INSTINCTS_FAMILY) - familyFileRecencyKey(a, INSTINCTS_FAMILY),
+      );
+    } catch {
+      /* .instinct/ does not exist yet — fall through to the append */
+    }
+    for (const f of files) {
+      const filePath = path.join(dir, f);
+      let hit = false;
+      const rewritten = readJsonlLines(filePath).map((line) => {
+        if (hit) return line;
+        try {
+          const rec = JSON.parse(line) as Instinct;
+          if (rec.text === text) {
+            hit = true;
+            rec.ts = now;
+            rec.hits = (typeof rec.hits === 'number' ? rec.hits : 0) + 1;
+            return JSON.stringify(rec);
+          }
+          return line;
+        } catch {
+          return line; // leave malformed lines alone
+        }
+      });
+      if (!hit) continue;
+      // Temp + rename, same crash-safety as the purge rewrite.
+      const tmpPath = filePath + TMP_SUFFIX;
+      fs.writeFileSync(tmpPath, rewritten.join('\n') + '\n', 'utf-8');
+      fs.renameSync(tmpPath, filePath);
+      return;
+    }
+    const rec: Instinct = {
+      ts: now,
+      text,
+      scope: entry.scope,
+      project: projectId(workspaceDir),
+      hits: 1,
+    };
+    const filePath = familyWritePath(workspaceDir, INSTINCTS_FAMILY);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.appendFileSync(filePath, JSON.stringify(rec) + '\n', 'utf-8');
+  } catch (e) {
+    _writeFailures++;
+    try { console.error('[instinct] instinct append failed:', e); } catch { /* noop */ }
+  }
+}
+
+/**
+ * Load instincts for recall: global ones plus this project's own, ranked by
+ * `hits` desc (confidence) then `ts` desc, newest-first within equal hits.
+ * `project == null` returns everything, mirroring loadRecentObservations.
+ */
+export function loadInstincts(workspaceDir: string, limit: number, project?: string): Instinct[] {
+  if (limit <= 0) return [];
+  const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
+  let files: string[];
+  try {
+    files = listFamilyFiles(dir, INSTINCTS_FAMILY);
+  } catch {
+    return [];
+  }
+  files.sort(
+    (a, b) => familyFileRecencyKey(b, INSTINCTS_FAMILY) - familyFileRecencyKey(a, INSTINCTS_FAMILY),
+  );
+
+  const out: Instinct[] = [];
+  for (const f of files) {
+    try {
+      for (const line of readJsonlLines(path.join(dir, f))) {
+        try {
+          const rec = JSON.parse(line) as Instinct;
+          if (typeof rec.text !== 'string' || rec.text.length === 0) continue;
+          if (rec.scope !== 'global' && !(rec.scope === 'project' && project != null && rec.project === project)) {
+            continue;
+          }
+          out.push(rec);
+        } catch {
+          /* skip malformed line */
+        }
+      }
+    } catch {
+      /* skip unreadable file */
+    }
+  }
+  out.sort((a, b) => b.hits - a.hits || b.ts - a.ts);
   return out.slice(0, limit);
 }

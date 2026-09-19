@@ -1,21 +1,38 @@
 /**
  * @oh-my-matrix/instinct — cross-session context memory (third-gap closure).
  *
- * Two hooks form the minimal closed loop:
+ * Three surfaces form the loop:
  *  - after_tool_call (observer): captures a scrubbed {tool, input, output}
  *    summary to .instinct/observations.jsonl (rotated, secret-scrubbed).
- *  - session_start (recall): purges observations older than 30 days, then
- *    injects the most recent ones for this project as appendContext, so a new
- *    session resumes with what the last one did.
- *
- * Instinct extraction (promote/evolve raw observations into reusable patterns)
- * is a later phase — this ships the memory substrate + recall, not the LLM
- * distillation (which needs a cheap-agent primitive the plugin process lacks).
+ *  - instinct_record (tool): the main agent records a distilled working
+ *    pattern to .instinct/instincts.jsonl (exact-text dedup, hits counted).
+ *  - session_start (recall): purges both families past 30 days, then injects
+ *    a two-part appendContext — raw activity tail ("where the last session
+ *    stopped") + instincts ("how this project works"), each independently
+ *    trimmable for the shared token budget.
  */
-import { appendObservation, loadRecentObservations, projectId, purgeExpired, type Observation } from './src/store';
+import {
+  appendInstinct,
+  appendObservation,
+  getWriteFailureCount,
+  loadInstincts,
+  loadRecentObservations,
+  projectId,
+  purgeExpired,
+  type Instinct,
+  type Observation,
+} from './src/store';
 
-export { appendObservation, loadRecentObservations, projectId, purgeExpired, scrubSecrets } from './src/store';
-export type { Observation } from './src/store';
+export {
+  appendInstinct,
+  appendObservation,
+  loadInstincts,
+  loadRecentObservations,
+  projectId,
+  purgeExpired,
+  scrubSecrets,
+} from './src/store';
+export type { Instinct, Observation } from './src/store';
 
 export const id = 'instinct';
 export const name = 'Instinct (context memory)';
@@ -75,10 +92,42 @@ export function summarizeForRecall(obs: Observation[]): string {
   return lines.join('\n');
 }
 
+/** Render instincts as a compact recall block, hits-first. */
+export function summarizeInstinctsForRecall(instincts: Instinct[]): string {
+  if (instincts.length === 0) return '';
+  return instincts
+    .map((i) => `- ${i.text}${i.hits > 1 ? ` (×${i.hits})` : ''}`)
+    .join('\n');
+}
+
 type HookRegistration = {
   on?: (name: string, handler: (...args: unknown[]) => unknown, opts?: { priority?: number }) => void;
   registerHook?: (name: string, handler: (...args: unknown[]) => unknown, opts?: { priority?: number }) => void;
 };
+
+/**
+ * TypeBox-style JSON Schema for instinct_record's parameters. Hand-written
+ * literal rather than a @sinclair/typebox import: TypeBox schemas ARE plain
+ * JSON Schema objects, the plugin process receives `api` untyped at runtime,
+ * and zero dependencies is this package's posture. Shape verified against
+ * openclaw 2026.7.1-2 SDK types (Tool<TSchema> / AgentTool).
+ */
+const INSTINCT_RECORD_PARAMETERS = {
+  type: 'object',
+  properties: {
+    text: {
+      type: 'string',
+      description: 'The working pattern to remember, stated as an imperative (e.g. "run pnpm verify before claiming done")',
+    },
+    scope: {
+      type: 'string',
+      enum: ['project', 'global'],
+      description: 'project = only this project; global = every project on this machine',
+    },
+  },
+  required: ['text', 'scope'],
+  additionalProperties: false,
+} as const;
 
 export function register(api: any): void {
   const registerHook = api as HookRegistration;
@@ -110,17 +159,58 @@ export function register(api: any): void {
     );
   });
 
-  // ── Recall: inject recent observations at session start ────────────────
+  // ── Extractor: instinct_record tool ────────────────────────────────────
+  // Agent-initiated recording beats prompt-side extraction: an agent that
+  // calls the tool is confident by construction, and the prompt route's
+  // failure mode (agent ignores the format → silent, unmeasurable loss)
+  // never exists. Requires "contracts": { "tools": ["instinct_record"] } in
+  // openclaw.plugin.json — the registry drops undeclared tool registrations.
+  const registerTool = (api as { registerTool?: (tool: unknown, opts?: unknown) => void }).registerTool?.bind(api);
+  if (typeof registerTool === 'function') {
+    registerTool({
+      name: 'instinct_record',
+      label: 'Record instinct',
+      description:
+        'Record a durable working pattern for this project (or globally) so future sessions recall it. ' +
+        'Use when you learn how this codebase works — build commands, conventions, pitfalls — not for task-specific notes.',
+      parameters: INSTINCT_RECORD_PARAMETERS,
+      execute: async (_toolCallId: string, params: { text: string; scope: 'project' | 'global' }) => {
+        const text = typeof params?.text === 'string' ? params.text : '';
+        const scope = params?.scope === 'global' ? 'global' : 'project';
+        const before = getWriteFailureCount();
+        appendInstinct(cwd, { text, scope });
+        const ok = getWriteFailureCount() === before;
+        return {
+          content: [{ type: 'text', text: ok ? `instinct recorded (${scope})` : 'instinct write failed (counted, not thrown)' }],
+          details: { ok, scope },
+        };
+      },
+    });
+  } else {
+    try { console.error('[instinct] registerTool unavailable — instinct_record disabled'); } catch { /* noop */ }
+  }
+
+  // ── Recall: two-part context at session start ──────────────────────────
   on('session_start', (_event: any, _ctx: any) => {
-    // Purge here, not in the observer: the rewrite is O(file) and session_start
-    // fires once per session, while after_tool_call fires on every tool call.
+    // Purge here, not in the hot paths: the rewrite is O(file) and
+    // session_start fires once per session. Both file families age out.
     purgeExpired(cwd);
+    purgeExpired(cwd, { family: 'instincts' });
+    const sections: string[] = [];
+    // Part 1 — raw tail: "where the last session stopped".
     const recent = loadRecentObservations(cwd, 20, project);
-    if (recent.length === 0) return;
-    const summary = summarizeForRecall(recent);
-    if (!summary) return;
-    return {
-      appendContext: `[instinct] Recent activity in this project (last ${recent.length} tool calls; a prior session):\n${summary}`,
-    };
+    const raw = summarizeForRecall(recent);
+    if (raw) {
+      sections.push(`[instinct] Recent activity in this project (last ${recent.length} tool calls; a prior session):\n${raw}`);
+    }
+    // Part 2 — instincts: "how this project works". Separate section so each
+    // trims to its own token budget; session_start is a shared-budget surface.
+    const instincts = loadInstincts(cwd, 10, project);
+    const distilled = summarizeInstinctsForRecall(instincts);
+    if (distilled) {
+      sections.push(`[instinct] Working patterns for this project (${instincts.length}; from prior sessions):\n${distilled}`);
+    }
+    if (sections.length === 0) return;
+    return { appendContext: sections.join('\n\n') };
   });
 }
