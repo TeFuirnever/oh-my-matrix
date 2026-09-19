@@ -14,7 +14,7 @@ ONLY=""
 if [ "${1:-}" = "--only" ]; then
   ONLY="$2"
   case "$ONLY" in
-    permission-policy|dynamic-workflows|autopilot) ;;
+    permission-policy|dynamic-workflows|autopilot|instinct) ;;
     *) echo "FAIL: --only '$ONLY' is not a known package"; exit 1 ;;
   esac
 fi
@@ -81,6 +81,31 @@ pl_v=$(node -p "require('$TMPDIR/dw/package/openclaw.plugin.json').version")
 
 # guard registers before_tool_call
 grep -q "before_tool_call" "$TMPDIR/dw/package/dist/index.js" && check "guard registers before_tool_call" 0 || check "guard registers before_tool_call" 1
+fi
+
+# ── instinct: store retention + rotation-recency markers ────────────────────
+
+if run_pkg instinct; then
+echo "--- @oh-my-matrix/instinct ---"
+in_v=$(node -p "require('./packages/instinct/package.json').version")
+(cd "$TMPDIR" && npm pack "@oh-my-matrix/instinct@${in_v}" > /dev/null 2>&1)
+mkdir -p "$TMPDIR/in"
+tar -xzf "$TMPDIR"/oh-my-matrix-instinct-*.tgz -C "$TMPDIR/in"
+
+# 0.2.0: 30-day retention purge (ticket-11)
+grep -q "purgeExpired" "$TMPDIR/in/package/dist/src/store.js" && check "purgeExpired export present" 0 || check "purgeExpired export MISSING" 1
+
+# 0.2.0: rotation recency key (#177 fix)
+grep -q "familyFileRecencyKey" "$TMPDIR/in/package/dist/src/store.js" && check "familyFileRecencyKey present (#177)" 0 || check "familyFileRecencyKey MISSING (#177)" 1
+
+# plugin.json version aligned
+if [ -f "$TMPDIR/in/package/openclaw.plugin.json" ]; then
+  pl_v=$(node -p "require('$TMPDIR/in/package/openclaw.plugin.json').version")
+  [ "$pl_v" = "$in_v" ] && check "plugin.json version == package.json (${pl_v})" 0 || check "plugin.json version drift (plugin=${pl_v} package=${in_v})" 1
+fi
+
+# Version in dist matches package
+grep -q "$in_v" "$TMPDIR/in/package/dist/index.js" && check "version ${in_v} in dist" 0 || check "version ${in_v} not found in dist" 1
 fi
 
 # ── autopilot 4.0.0: E13 resume_run RPC + E2/E12/E5 markers ────────────────
