@@ -4,7 +4,7 @@
 
 **Blocked by:** None（原票记的 blocker「插件进程内无 headless cheap-agent 原语」对 tool 路线不成立，spike 已验证，见下）
 
-**Status:** ready-for-agent
+**Status:** done — 1270e5c + review fixes
 
 **票面修正（2026-09-18）:** 原票写「新包，四项待做」。实况是包已存在，四项里三项已落地——observer、secret scrub + 自循环守卫、项目检测 sha256[:12] 都在 `src/store.ts` 和 `index.ts` 里，16 个测试通过。唯一真缺的是 extractor。另有两处复用偏离和两个 observer 缺口，见「遗留」和 ticket-11。
 
@@ -32,12 +32,12 @@ grill 定稿 2026-09-18。
 
 ## 任务
 
-- [ ] `src/store.ts`：文件名参数化；新增 `appendInstinct`（按 `text` 精确去重，命中则更新 `ts` 并累加 `hits`）和 `loadInstincts`
-- [ ] `index.ts`：用 `api.registerTool` 注册 `instinct_record`，TypeBox parameters 为 `{text: string, scope: "project" | "global"}`；写失败不抛，沿用现有 `_writeFailures` 计数模式；`api.registerTool` 不存在时降级为禁用并 `console.error`（与现有 hook 注册缺失的处理一致）
-- [ ] `index.ts`：`session_start` recall 改两段输出（raw 尾部 + instinct），两段各自独立可裁剪
-- [ ] `openclaw.plugin.json`：补 `"tool"` capability 与 tool 声明
-- [ ] tests：tool execute 契约、去重与 `hits` 累加、两段 recall 渲染、`registerTool` 缺失时的降级路径
-- [ ] **若 ticket-11 先落地**：把它实现的 30 天 purge 扩展到 `instincts.jsonl`。ticket-11 的 purge 只覆盖 `observations.jsonl`（当时只有这一个文件族），本票新增第二个文件族，purge 不扩展就是静默缺口
+- [x] `src/store.ts`：文件名参数化；新增 `appendInstinct`（按 `text` 精确去重，命中则更新 `ts` 并累加 `hits`）和 `loadInstincts`
+- [x] `index.ts`：用 `api.registerTool` 注册 `instinct_record`，TypeBox parameters 为 `{text: string, scope: "project" | "global"}`；写失败不抛，沿用现有 `_writeFailures` 计数模式；`api.registerTool` 不存在时降级为禁用并 `console.error`（与现有 hook 注册缺失的处理一致）
+- [x] `index.ts`：`session_start` recall 改两段输出（raw 尾部 + instinct），两段各自独立可裁剪
+- [x] `openclaw.plugin.json`：补 `"tool"` capability 与 tool 声明
+- [x] tests：tool execute 契约、去重与 `hits` 累加、两段 recall 渲染、`registerTool` 缺失时的降级路径
+- [x] **若 ticket-11 先落地**：把它实现的 30 天 purge 扩展到 `instincts.jsonl`。ticket-11 的 purge 只覆盖 `observations.jsonl`（当时只有这一个文件族），本票新增第二个文件族，purge 不扩展就是静默缺口
 
 ## 遗留（不属于本票）
 
