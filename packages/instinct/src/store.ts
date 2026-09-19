@@ -153,7 +153,17 @@ function familyWritePath(workspaceDir: string, family: string): string {
   const newestKey = Math.max(...keys);
   const newest = path.join(dir, familyFileName(family, newestKey));
   try {
-    if (fs.statSync(newest).size < MAX_FILE_BYTES) return newest;
+    if (fs.statSync(newest).size < MAX_FILE_BYTES) {
+      // An unwritable newest file (permissions, not size) must not block every
+      // future append — roll to the next rotation instead. Recency holds: the
+      // new rotation ranks above the existing newest either way.
+      try {
+        fs.accessSync(newest, fs.constants.W_OK);
+        return newest;
+      } catch {
+        /* fall through to the next rotation */
+      }
+    }
   } catch {
     return newest; // unreadable — let the append surface the failure
   }
@@ -371,14 +381,26 @@ export function appendInstinct(
     }
     for (const f of files) {
       const filePath = path.join(dir, f);
+      let lines: string[];
+      try {
+        lines = readJsonlLines(filePath);
+      } catch {
+        // One unreadable file must not block recording: skip it and keep
+        // scanning. Trade-off: a match inside the skipped file is invisible,
+        // so a duplicate line becomes possible — preferred over losing the
+        // record entirely (the outer catch would eat every future append too).
+        continue;
+      }
       let hit = false;
-      const rewritten = readJsonlLines(filePath).map((line) => {
+      const rewritten = lines.map((line) => {
         if (hit) return line;
         try {
           const rec = JSON.parse(line) as Instinct;
           if (rec.text === text) {
             hit = true;
-            rec.ts = now;
+            // Floor against clock skew: a hit must never regress ts — ts
+            // feeds ranking and the 30-day purge countdown.
+            rec.ts = Math.max(typeof rec.ts === 'number' ? rec.ts : 0, now);
             rec.hits = (typeof rec.hits === 'number' ? rec.hits : 0) + 1;
             return JSON.stringify(rec);
           }
@@ -413,7 +435,8 @@ export function appendInstinct(
 /**
  * Load instincts for recall: global ones plus this project's own, ranked by
  * `hits` desc (confidence) then `ts` desc, newest-first within equal hits.
- * `project == null` returns everything, mirroring loadRecentObservations.
+ * `project == null` returns everything (global and project-scoped alike),
+ * mirroring loadRecentObservations.
  */
 export function loadInstincts(workspaceDir: string, limit: number, project?: string): Instinct[] {
   if (limit <= 0) return [];
@@ -435,9 +458,7 @@ export function loadInstincts(workspaceDir: string, limit: number, project?: str
         try {
           const rec = JSON.parse(line) as Instinct;
           if (typeof rec.text !== 'string' || rec.text.length === 0) continue;
-          if (rec.scope !== 'global' && !(rec.scope === 'project' && project != null && rec.project === project)) {
-            continue;
-          }
+          if (project != null && rec.scope === 'project' && rec.project !== project) continue;
           out.push(rec);
         } catch {
           /* skip malformed line */

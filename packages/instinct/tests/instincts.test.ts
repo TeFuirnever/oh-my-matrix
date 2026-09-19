@@ -3,7 +3,7 @@
  * hits accumulation, scope-filtered load (ticket-09).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -114,5 +114,48 @@ describe('purge covers the instincts family', () => {
     const texts = loadInstincts(dir, 10).map((i) => i.text);
     expect(texts).toEqual(['fresh']);
     expect(existsSync(join(dir, '.instinct', 'instincts.jsonl'))).toBe(true);
+  });
+
+  it('dedups across rotations: a hit in the older file rewrites it in place', () => {
+    const t = Date.now();
+    mkdirSync(join(dir, '.instinct'), { recursive: true });
+    // Hand-place two rotations the way real writes produce them (base oldest).
+    writeFileSync(join(dir, '.instinct', 'instincts.jsonl'),
+      JSON.stringify({ ts: t, text: 'known pattern', scope: 'global', project: 'p', hits: 1 }) + '\n', 'utf-8');
+    writeFileSync(join(dir, '.instinct', 'instincts-1.jsonl'),
+      JSON.stringify({ ts: t + 1, text: 'other', scope: 'global', project: 'p', hits: 1 }) + '\n', 'utf-8');
+
+    appendInstinct(dir, { text: 'known pattern', scope: 'global' }, t + 2);
+
+    // The hit landed in the base file (its own home), not appended to -1.
+    const base = (readFileSync(join(dir, '.instinct', 'instincts.jsonl'), 'utf-8').split('\n').filter(Boolean)).map((l) => JSON.parse(l) as Instinct);
+    const rot = (readFileSync(join(dir, '.instinct', 'instincts-1.jsonl'), 'utf-8').split('\n').filter(Boolean)).map((l) => JSON.parse(l) as Instinct);
+    expect(base).toHaveLength(1);
+    expect(base[0].hits).toBe(2);
+    expect(base[0].ts).toBe(t + 2);
+    expect(rot).toHaveLength(1); // untouched
+  });
+
+  it('a hit never regresses ts (clock-skew floor)', () => {
+    const t = Date.now();
+    appendInstinct(dir, { text: 'pattern', scope: 'global' }, t);
+    appendInstinct(dir, { text: 'pattern', scope: 'global' }, t - 100_000); // skewed older clock
+    const rec = (readFileSync(join(dir, '.instinct', 'instincts.jsonl'), 'utf-8').split('\n').filter(Boolean)).map((l) => JSON.parse(l) as Instinct)[0];
+    expect(rec.ts).toBe(t);
+    expect(rec.hits).toBe(2);
+  });
+
+  it('one unreadable instincts file does not block recording', () => {
+    const t = Date.now();
+    appendInstinct(dir, { text: 'first', scope: 'global' }, t);
+    chmodSync(join(dir, '.instinct', 'instincts.jsonl'), 0o000);
+
+    expect(() => appendInstinct(dir, { text: 'second', scope: 'global' }, t + 1)).not.toThrow();
+    chmodSync(join(dir, '.instinct', 'instincts.jsonl'), 0o644);
+
+    // The new record went in (append still ran); the unreadable file survived.
+    const texts = loadInstincts(dir, 10).map((i) => i.text);
+    expect(texts).toContain('second');
+    expect(texts).toContain('first');
   });
 });

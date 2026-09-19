@@ -175,8 +175,17 @@ export function register(api: any): void {
         'Use when you learn how this codebase works — build commands, conventions, pitfalls — not for task-specific notes.',
       parameters: INSTINCT_RECORD_PARAMETERS,
       execute: async (_toolCallId: string, params: { text: string; scope: 'project' | 'global' }) => {
-        const text = typeof params?.text === 'string' ? params.text : '';
+        const text = typeof params?.text === 'string' ? params.text.trim() : '';
         const scope = params?.scope === 'global' ? 'global' : 'project';
+        // An empty/whitespace text records nothing; reporting success would be
+        // the silent-loss mode the tool route exists to prevent. Schema
+        // `required` + `type: string` does not forbid ''.
+        if (text.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'ignored: empty text — nothing recorded' }],
+            details: { ok: false, scope },
+          };
+        }
         const before = getWriteFailureCount();
         appendInstinct(cwd, { text, scope });
         const ok = getWriteFailureCount() === before;

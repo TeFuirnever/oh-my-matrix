@@ -1,8 +1,8 @@
 /**
  * instinct recall: summarizeForRecall + register hook wiring (mock API).
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { register, summarizeForRecall } from '../index';
@@ -184,8 +184,39 @@ describe('register (instinct_record tool wiring)', () => {
   it('degrades gracefully when registerTool is unavailable (hooks still work)', () => {
     const hooks = new Map<string, (...args: unknown[]) => unknown>();
     const api = { on: (name: string, handler: (...args: unknown[]) => unknown) => hooks.set(name, handler) };
-    expect(() => register(api)).not.toThrow(); // no registerTool on api
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() => register(api)).not.toThrow(); // no registerTool on api
+      // Degradation is announced, not silent — same posture as missing hooks.
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('registerTool unavailable'));
+    } finally {
+      errSpy.mockRestore();
+    }
     expect(hooks.has('after_tool_call')).toBe(true); // observer unaffected
     expect(hooks.has('session_start')).toBe(true); // recall unaffected
+  });
+
+  it('execute refuses empty text honestly instead of reporting success', async () => {
+    const { api, tools } = mockToolApi();
+    register(api);
+    const result = (await (tools[0] as { execute: (id: string, p: unknown) => Promise<unknown> }).execute('call-1', {
+      text: '   ',
+      scope: 'project',
+    })) as { content: { text: string }[]; details: { ok: boolean } };
+    expect(result.details.ok).toBe(false);
+    expect(result.content[0].text).toContain('nothing recorded');
+    expect(existsSync(join(dir, '.instinct'))).toBe(false); // no store materialized
+  });
+
+  it('execute reports write failure honestly (failure counter moved)', async () => {
+    writeFileSync(join(dir, '.instinct'), 'not a directory'); // append path unwritable
+    const { api, tools } = mockToolApi();
+    register(api);
+    const result = (await (tools[0] as { execute: (id: string, p: unknown) => Promise<unknown> }).execute('call-1', {
+      text: 'real pattern',
+      scope: 'project',
+    })) as { content: { text: string }[]; details: { ok: boolean } };
+    expect(result.details.ok).toBe(false);
+    expect(result.content[0].text).toContain('write failed');
   });
 });

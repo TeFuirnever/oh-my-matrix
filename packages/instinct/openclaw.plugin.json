@@ -5,7 +5,10 @@
   "version": "0.2.0",
   "main": "dist/index.js",
   "activation": {
-    "onStartup": true
+    "onStartup": true,
+    "onCapabilities": [
+      "tool"
+    ]
   },
   "hooks": [
     "after_tool_call",
