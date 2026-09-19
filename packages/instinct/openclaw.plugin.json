@@ -2,7 +2,7 @@
   "id": "instinct",
   "name": "Instinct (context memory)",
   "description": "Cross-session context memory: observes tool calls (scrubbed), records agent instincts via the instinct_record tool, and recalls both at session start.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "main": "dist/index.js",
   "activation": {
     "onStartup": true
