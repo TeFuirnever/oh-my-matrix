@@ -10,6 +10,12 @@
 # Exit: 0 if all checks pass, 1 if any package fails verification.
 set -euo pipefail
 
+# Verify against npmjs.org — never the dev machine's configured mirror. A
+# just-published version takes time to propagate to mirrors, so `npm pack`
+# through e.g. npmmirror hangs or 404s during the release-window verify (the
+# same pitfall publish.sh pins its registry for).
+export npm_config_registry=https://registry.npmjs.org/
+
 ONLY=""
 if [ "${1:-}" = "--only" ]; then
   ONLY="$2"
