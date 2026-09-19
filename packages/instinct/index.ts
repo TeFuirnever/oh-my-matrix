@@ -36,7 +36,7 @@ export type { Instinct, Observation } from './src/store';
 
 export const id = 'instinct';
 export const name = 'Instinct (context memory)';
-export const version = '0.2.0';
+export const version = '0.3.0';
 
 export function _resetForTest(): void {
   // Re-exported for test symmetry; the store has its own reset.
