@@ -1,11 +1,14 @@
 /**
- * Observation store: JSONL append + load + rotation + purge, with secret
- * scrubbing.
+ * Instinct store: two JSONL file families under .instinct/, with secret
+ * scrubbing, size-based rotation, and 30-day retention purge.
  *
- * Observations are scrubbed tool-call records written to
- * {workspaceDir}/.instinct/observations.jsonl (rotated at 10 MB, purged after
- * 30 days). They are the raw material for cross-session recall — NOT instincts
- * (promoted/evolved patterns are a later phase).
+ *  - observations.jsonl — scrubbed tool-call records (the raw material).
+ *  - instincts.jsonl    — distilled working patterns, deduped by exact text
+ *    with hit counts (the recall-confidence signal).
+ *
+ * Both families share one file-family substrate (membership test, recency
+ * order, atomic rewrite, rolled append) — an invariant fix in one family
+ * applies to both or neither.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,12 +16,21 @@ import { createHash } from 'crypto';
 
 const INSTINCT_SUBDIR = '.instinct';
 const JSONL_EXT = '.jsonl';
-/** Suffix of an in-progress purge rewrite (see purgeFile). */
+/** Suffix of an in-progress atomic rewrite (see rewriteFileAtomic). */
 const TMP_SUFFIX = '.tmp';
+/** A rewrite tmp older than this is assumed dead (crashed before rename). */
+const TMP_STALE_MS = 60_000;
 const OBSERVATIONS_FAMILY = 'observations';
-const INSTINCTS_FAMILY = 'instincts';
+export const INSTINCTS_FAMILY = 'instincts';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB → rotate
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days → purge
+/**
+ * Raw instinct text is capped BEFORE scrubbing: the secret patterns include a
+ * lazy `[\s\S]*?` scan that goes quadratic on megabyte input without an END
+ * marker, and the tool schema's maxLength is not a guarantee for non-tool
+ * callers of this exported API.
+ */
+const MAX_RAW_TEXT_CHARS = 5_000;
 
 export interface Observation {
   ts: number;
@@ -81,7 +93,7 @@ export function projectId(workspaceDir: string): string {
 // ── File family ───────────────────────────────────────────────────────────
 // A "family" is one logical JSONL log: the base `<family>.jsonl` plus its
 // `<family>-N.jsonl` rotations. Append, purge and recall all agree on the same
-// membership test and the same recency order through these four helpers.
+// membership test and the same recency order through these helpers.
 
 /**
  * True when `file` belongs to `family`: exactly `<family>.jsonl`, or one of its
@@ -127,47 +139,96 @@ function listFamilyFiles(dir: string, family: string): string[] {
   return fs.readdirSync(dir).filter((f) => isFamilyFile(f, family));
 }
 
+/**
+ * Family files newest-first — the single home of the #177 recency order.
+ * Every reader (recall, dedup scan) goes through here so the invariant lives
+ * in one place beside its documentation in familyFileRecencyKey.
+ */
+function listFamilyFilesNewestFirst(dir: string, family: string): string[] {
+  return listFamilyFiles(dir, family).sort(
+    (a, b) => familyFileRecencyKey(b, family) - familyFileRecencyKey(a, family),
+  );
+}
+
+/** Non-empty lines of a JSONL file. Throws if the file is unreadable. */
+function readJsonlLines(filePath: string): string[] {
+  return fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+}
+
+let _tmpCounter = 0;
+/**
+ * Crash-safe full rewrite: write a sibling temp file, rename over the target.
+ * The tmp name embeds pid + a per-process sequence so two plugin processes on
+ * one workspace never share a tmp path, and a concurrent purge's stale-tmp
+ * sweep (which age-gates) cannot mistake a live rewrite's tmp for a dead one.
+ * Same idea as autopilot's atomicWriteFileSync.
+ */
+function rewriteFileAtomic(filePath: string, lines: string[]): void {
+  const tmpPath = `${filePath}.${process.pid}.${++_tmpCounter}${TMP_SUFFIX}`;
+  fs.writeFileSync(tmpPath, lines.join('\n') + '\n', 'utf-8');
+  fs.renameSync(tmpPath, filePath);
+}
+
 // ── Store path + rotation ─────────────────────────────────────────────────
 /**
- * Path to write the next entry into: the newest file of the family, rolling
- * to the next rotation number once it fills.
+ * Write target for the next append: the newest file of the family, rolling to
+ * the next rotation number once it fills.
  *
  * Probing upward from the base file instead would send writes back to
  * `<family>.jsonl` whenever a purge left it below `MAX_FILE_BYTES` — by
  * deleting it (every entry expired) or merely by rewriting it smaller — while
  * newer rotations survived. The newest entries would then sit in the file recall
  * treats as oldest, breaking the invariant recall depends on (#177).
+ *
+ * Writability is deliberately NOT probed here: access(2) diverges from the
+ * actual write under root/DAC overrides and would add a syscall to the
+ * after_tool_call hot path. The appenders roll on the write's own failure
+ * instead (appendLineWithRoll).
  */
-function familyWritePath(workspaceDir: string, family: string): string {
-  const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
-  let files: string[] = [];
+function familyWriteTarget(
+  dir: string,
+  family: string,
+  files?: string[],
+): { path: string; key: number } {
+  let listed: string[] = [];
   try {
-    files = listFamilyFiles(dir, family);
+    listed = files ?? listFamilyFiles(dir, family);
   } catch {
     /* .instinct/ does not exist yet — the appenders create it */
   }
   // Non-canonical names (key -1) are read last but never written to.
-  const keys = files.map((f) => familyFileRecencyKey(f, family)).filter((k) => k >= 0);
-  if (keys.length === 0) return path.join(dir, familyFileName(family, 0));
+  const keys = listed.map((f) => familyFileRecencyKey(f, family)).filter((k) => k >= 0);
+  if (keys.length === 0) return { path: path.join(dir, familyFileName(family, 0)), key: 0 };
 
   const newestKey = Math.max(...keys);
   const newest = path.join(dir, familyFileName(family, newestKey));
   try {
-    if (fs.statSync(newest).size < MAX_FILE_BYTES) {
-      // An unwritable newest file (permissions, not size) must not block every
-      // future append — roll to the next rotation instead. Recency holds: the
-      // new rotation ranks above the existing newest either way.
-      try {
-        fs.accessSync(newest, fs.constants.W_OK);
-        return newest;
-      } catch {
-        /* fall through to the next rotation */
-      }
-    }
+    if (fs.statSync(newest).size < MAX_FILE_BYTES) return { path: newest, key: newestKey };
   } catch {
-    return newest; // unreadable — let the append surface the failure
+    return { path: newest, key: newestKey }; // unreadable — let the append surface the failure
   }
-  return path.join(dir, familyFileName(family, newestKey + 1));
+  return { path: path.join(dir, familyFileName(family, newestKey + 1)), key: newestKey + 1 };
+}
+
+/**
+ * Append one line to a family, rolling to the next rotation when — and only
+ * when — the platform refuses the write with a permission/readonly error.
+ * Throws on other failures; callers keep their never-throw contracts.
+ */
+function appendLineWithRoll(dir: string, family: string, line: string, files?: string[]): void {
+  const target = familyWriteTarget(dir, family, files);
+  fs.mkdirSync(path.dirname(target.path), { recursive: true });
+  try {
+    fs.appendFileSync(target.path, line, 'utf-8');
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException)?.code;
+    if (code !== 'EACCES' && code !== 'EPERM' && code !== 'EROFS') throw e;
+    // Rolled write: the new rotation ranks above the unwritable newest either
+    // way, so the recency invariant holds.
+    const rolled = path.join(dir, familyFileName(family, target.key + 1));
+    fs.mkdirSync(path.dirname(rolled), { recursive: true });
+    fs.appendFileSync(rolled, line, 'utf-8');
+  }
 }
 
 let _writeFailures = 0;
@@ -193,9 +254,7 @@ export function appendObservation(obs: Observation, workspaceDir: string): void 
     project: obs.project,
   };
   try {
-    const filePath = familyWritePath(workspaceDir, OBSERVATIONS_FAMILY);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.appendFileSync(filePath, JSON.stringify(clean) + '\n', 'utf-8');
+    appendLineWithRoll(path.join(workspaceDir, INSTINCT_SUBDIR), OBSERVATIONS_FAMILY, JSON.stringify(clean) + '\n');
   } catch (e) {
     _writeFailures++;
     try { console.error('[instinct] observation append failed:', e); } catch { /* noop */ }
@@ -203,11 +262,6 @@ export function appendObservation(obs: Observation, workspaceDir: string): void 
 }
 
 // ── Retention purge ───────────────────────────────────────────────────────
-/** Non-empty lines of a JSONL file. Throws if the file is unreadable. */
-function readJsonlLines(filePath: string): string[] {
-  return fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-}
-
 /**
  * Rewrite one JSONL file without its expired entries, deleting the file when
  * nothing survives. Throws on I/O failure — purgeExpired counts it per file.
@@ -237,30 +291,49 @@ function purgeFile(filePath: string, cutoff: number): void {
     return;
   }
   if (kept.length === lines.length) return; // nothing expired — leave the file alone
-  // Temp + rename: a crash mid-rewrite must not truncate surviving entries.
-  const tmpPath = filePath + TMP_SUFFIX;
-  fs.writeFileSync(tmpPath, kept.join('\n') + '\n', 'utf-8');
-  fs.renameSync(tmpPath, filePath);
+  rewriteFileAtomic(filePath, kept); // a crash mid-rewrite must not truncate survivors
+}
+
+/**
+ * Strip the `.<pid>.<seq>` infix rewriteFileAtomic adds, yielding the data file
+ * a tmp belongs to. Null when the name is not one of its family's tmps.
+ */
+function tmpOwnerFamilyFile(file: string, family: string): string | null {
+  if (!file.endsWith(TMP_SUFFIX)) return null;
+  const stem = file.slice(0, -TMP_SUFFIX.length).replace(/\.\d+\.\d+$/, '');
+  return isFamilyFile(stem, family) ? stem : null;
 }
 
 /**
  * Drop entries older than 30 days from one JSONL file family under .instinct/,
- * deleting files — and the directory — left empty, plus any `.jsonl.tmp` left
+ * deleting files — and the directory — left empty, plus rewrite tmps left
  * behind by a rewrite that crashed before its rename.
  *
- * `family` is a parameter because ticket-09 adds a second family
- * (instincts.jsonl) that has to reuse this path rather than grow a second
- * purge; `now` is injectable so tests get a deterministic clock.
+ * A tmp is only swept when older than TMP_STALE_MS: a live concurrent
+ * rewrite's tmp exists for microseconds, while a dead one is at least a
+ * crashed-process lifetime old. Its content is a subset of the file it never
+ * replaced, so it is dropped rather than purged; leaving it would pin
+ * .instinct/ open forever — it is not a data file, so it never purges to empty.
+ *
+ * `family` is a parameter so both families share this path; `now` is injectable
+ * so tests get a deterministic clock.
  *
  * Never throws (same contract as appendObservation): a failed purge must not
  * break the hook that triggered it. Failures are counted for diagnostics.
+ *
+ * Known limitation: no cross-process serialization. Two plugin processes on
+ * one workspace can interleave read-modify-write cycles on the same file; the
+ * unique tmp names prevent tmp clobbering, but a lost update (one process's
+ * line silently overwritten by another's rename) is still possible. Locking
+ * is deliberately out of scope at this store's scale — see the ticket tracker.
  */
 export function purgeExpired(
   workspaceDir: string,
   opts: { family?: string; now?: number } = {},
 ): void {
   const family = opts.family ?? OBSERVATIONS_FAMILY;
-  const cutoff = (opts.now ?? Date.now()) - MAX_AGE_MS;
+  const now = opts.now ?? Date.now();
+  const cutoff = now - MAX_AGE_MS;
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
 
   let entries: string[];
@@ -271,16 +344,16 @@ export function purgeExpired(
   }
 
   for (const f of entries) {
-    // A leftover <family>.jsonl.tmp is a rewrite that died before its rename:
-    // its content is a subset of the file it never replaced, so it is dropped
-    // rather than purged. Leaving it would also pin .instinct/ open forever —
-    // it is not a data file, so it never purges down to empty.
-    const isStaleTmp = isFamilyFile(f, family, JSONL_EXT + TMP_SUFFIX);
-    if (!isStaleTmp && !isFamilyFile(f, family)) continue;
+    const tmpOwner = tmpOwnerFamilyFile(f, family);
+    if (!tmpOwner && !isFamilyFile(f, family)) continue;
     const filePath = path.join(dir, f);
     try {
-      if (isStaleTmp) fs.unlinkSync(filePath);
-      else purgeFile(filePath, cutoff);
+      if (tmpOwner) {
+        // Age-gated: only a dead rewrite's tmp is swept (see above).
+        if (fs.statSync(filePath).mtimeMs < now - TMP_STALE_MS) fs.unlinkSync(filePath);
+      } else {
+        purgeFile(filePath, cutoff);
+      }
     } catch (e) {
       _purgeFailures++;
       try { console.error(`[instinct] purge failed (${family}):`, e); } catch { /* noop */ }
@@ -307,15 +380,10 @@ export function loadRecentObservations(
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
   let files: string[];
   try {
-    files = listFamilyFiles(dir, OBSERVATIONS_FAMILY);
+    files = listFamilyFilesNewestFirst(dir, OBSERVATIONS_FAMILY);
   } catch {
     return [];
   }
-  // Newest rotation first. The base file is the OLDEST: writes roll into
-  // observations-N.jsonl only after it fills, so larger N is newer (#177).
-  files.sort(
-    (a, b) => familyFileRecencyKey(b, OBSERVATIONS_FAMILY) - familyFileRecencyKey(a, OBSERVATIONS_FAMILY),
-  );
 
   const out: Observation[] = [];
   for (const f of files) {
@@ -343,7 +411,12 @@ export interface Instinct {
   ts: number;
   /** The pattern itself (scrubbed, truncated). */
   text: string;
-  /** 'project' = only recalled for the recording project; 'global' = everywhere. */
+  /**
+   * 'project' = recalled only for the recording project; 'global' = recalled
+   * from any session reading this same project's store (cross-project sharing
+   * arrives with promote/evolve — the scope is stamped now because it is the
+   * one field later phases cannot reconstruct).
+   */
   scope: 'project' | 'global';
   /** Recording project id — provenance, stamped even on global instincts. */
   project?: string;
@@ -351,31 +424,52 @@ export interface Instinct {
   hits: number;
 }
 
+/** What appendInstinct actually did — the caller-facing truth, not a request echo. */
+export type InstinctAppendOutcome =
+  | { status: 'empty' }
+  | { status: 'failed' }
+  | { status: 'hit'; scope: Instinct['scope']; hits: number }
+  | { status: 'written'; scope: Instinct['scope'] };
+
+/** A stored record and an incoming entry describe the same instinct slot. */
+function sameInstinctSlot(rec: Instinct, text: string, scope: Instinct['scope'], projId: string): boolean {
+  if (rec.text !== text) return false;
+  // Scope-class match: global↔global, or project↔project from the SAME
+  // project. A cross-project or cross-scope re-record is a different slot —
+  // text-only matching would swallow project B's record into project A's
+  // (never recalled in B) or promote/demote silently against the tool's echo.
+  if (rec.scope === 'global') return scope === 'global';
+  return scope === 'project' && rec.project === projId;
+}
+
 /**
- * Upsert one instinct into the instincts family. Dedup is on EXACT stored
- * text (post-scrub): a hit updates `ts` and increments `hits` in place rather
- * than appending a duplicate line — repeated patterns must not crowd the recall
- * section, and `hits` is the confidence proxy (ticket-09 design decision 4).
- * Dedup deliberately ignores `scope`: the first recording's scope stands.
+ * Upsert one instinct into the instincts family. Dedup matches exact stored
+ * text (post-scrub) within the same scope class: a hit updates `ts` (floored
+ * against clock skew) and increments `hits` in place rather than appending a
+ * duplicate line — repeated patterns must not crowd the recall section, and
+ * `hits` is the confidence proxy (ticket-09 design decision 4). The first
+ * recording's scope stands; promotion is a later-phase feature.
  *
- * `now` is injectable so tests get a deterministic clock.
- * Never throws, matching appendObservation's contract.
+ * Returns the outcome so callers (the tool) report what took effect, not what
+ * was requested. `now` is injectable so tests get a deterministic clock.
+ * Never throws, matching appendObservation's contract; the failure counter
+ * stays for aggregate diagnostics.
  */
 export function appendInstinct(
   workspaceDir: string,
   entry: { text: string; scope: Instinct['scope'] },
   now: number = Date.now(),
-): void {
-  const text = truncate(entry.text);
-  if (text == null || text.length === 0) return; // nothing recordable
+): InstinctAppendOutcome {
+  // Cap BEFORE scrubbing — see MAX_RAW_TEXT_CHARS.
+  const text = truncate(String(entry.text ?? '').slice(0, MAX_RAW_TEXT_CHARS));
+  if (text == null || text.trim().length === 0) return { status: 'empty' };
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
   try {
-    // Scan the family newest-first for an exact stored-text match.
+    const projId = projectId(workspaceDir);
+    // Scan the family newest-first for a same-slot match.
     let files: string[] = [];
     try {
-      files = listFamilyFiles(dir, INSTINCTS_FAMILY).sort(
-        (a, b) => familyFileRecencyKey(b, INSTINCTS_FAMILY) - familyFileRecencyKey(a, INSTINCTS_FAMILY),
-      );
+      files = listFamilyFilesNewestFirst(dir, INSTINCTS_FAMILY);
     } catch {
       /* .instinct/ does not exist yet — fall through to the append */
     }
@@ -391,44 +485,38 @@ export function appendInstinct(
         // record entirely (the outer catch would eat every future append too).
         continue;
       }
-      let hit = false;
-      const rewritten = lines.map((line) => {
-        if (hit) return line;
+      const idx = lines.findIndex((line) => {
         try {
-          const rec = JSON.parse(line) as Instinct;
-          if (rec.text === text) {
-            hit = true;
-            // Floor against clock skew: a hit must never regress ts — ts
-            // feeds ranking and the 30-day purge countdown.
-            rec.ts = Math.max(typeof rec.ts === 'number' ? rec.ts : 0, now);
-            rec.hits = (typeof rec.hits === 'number' ? rec.hits : 0) + 1;
-            return JSON.stringify(rec);
-          }
-          return line;
+          return sameInstinctSlot(JSON.parse(line) as Instinct, text, entry.scope, projId);
         } catch {
-          return line; // leave malformed lines alone
+          return false; // leave malformed lines alone
         }
       });
-      if (!hit) continue;
-      // Temp + rename, same crash-safety as the purge rewrite.
-      const tmpPath = filePath + TMP_SUFFIX;
-      fs.writeFileSync(tmpPath, rewritten.join('\n') + '\n', 'utf-8');
-      fs.renameSync(tmpPath, filePath);
-      return;
+      if (idx === -1) continue;
+      const rec = JSON.parse(lines[idx]) as Instinct;
+      // Floor against clock skew: a hit must never regress ts — ts feeds
+      // ranking and the 30-day purge countdown.
+      rec.ts = Math.max(typeof rec.ts === 'number' ? rec.ts : 0, now);
+      rec.hits = (typeof rec.hits === 'number' ? rec.hits : 0) + 1;
+      lines[idx] = JSON.stringify(rec);
+      rewriteFileAtomic(filePath, lines);
+      return { status: 'hit', scope: rec.scope, hits: rec.hits };
     }
     const rec: Instinct = {
       ts: now,
       text,
       scope: entry.scope,
-      project: projectId(workspaceDir),
+      project: projId,
       hits: 1,
     };
-    const filePath = familyWritePath(workspaceDir, INSTINCTS_FAMILY);
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.appendFileSync(filePath, JSON.stringify(rec) + '\n', 'utf-8');
+    // Reuse the scan's listing: the append re-readdir would duplicate work,
+    // and the newest file is exactly files[0] when one exists.
+    appendLineWithRoll(dir, INSTINCTS_FAMILY, JSON.stringify(rec) + '\n', files.length > 0 ? files : undefined);
+    return { status: 'written', scope: rec.scope };
   } catch (e) {
     _writeFailures++;
     try { console.error('[instinct] instinct append failed:', e); } catch { /* noop */ }
+    return { status: 'failed' };
   }
 }
 
@@ -443,13 +531,10 @@ export function loadInstincts(workspaceDir: string, limit: number, project?: str
   const dir = path.join(workspaceDir, INSTINCT_SUBDIR);
   let files: string[];
   try {
-    files = listFamilyFiles(dir, INSTINCTS_FAMILY);
+    files = listFamilyFilesNewestFirst(dir, INSTINCTS_FAMILY);
   } catch {
     return [];
   }
-  files.sort(
-    (a, b) => familyFileRecencyKey(b, INSTINCTS_FAMILY) - familyFileRecencyKey(a, INSTINCTS_FAMILY),
-  );
 
   const out: Instinct[] = [];
   for (const f of files) {

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Verify that the three @oh-my-matrix packages published to npm contain the
+# Verify that the @oh-my-matrix packages published to npm contain the
 # expected content. Downloads each tarball from the registry and checks key
 # files/symbols. Run after `publish.sh` (or manually to spot-check).
 #
 # Usage:
-#   ./scripts/verify-publish.sh                    # verify all three
+#   ./scripts/verify-publish.sh                    # verify all packages
 #   ./scripts/verify-publish.sh --only <pkg>       # verify a single package
 #
 # Exit: 0 if all checks pass, 1 if any package fails verification.
@@ -94,21 +94,30 @@ fi
 if run_pkg instinct; then
 echo "--- @oh-my-matrix/instinct ---"
 in_v=$(node -p "require('./packages/instinct/package.json').version")
-(cd "$TMPDIR" && npm pack "@oh-my-matrix/instinct@${in_v}" > /dev/null 2>&1)
+# Fail loud, not silent: a pack failure (propagation lag, network) must print
+# a FAIL line before the script dies, or the operator cannot tell it from a
+# real verification failure.
+if ! (cd "$TMPDIR" && npm pack "@oh-my-matrix/instinct@${in_v}" > /dev/null 2>&1); then
+  echo "  FAIL: npm pack @oh-my-matrix/instinct@${in_v} (propagation lag or network)"
+  exit 1
+fi
 mkdir -p "$TMPDIR/in"
 tar -xzf "$TMPDIR"/oh-my-matrix-instinct-*.tgz -C "$TMPDIR/in"
 
-# 0.2.0: 30-day retention purge (ticket-11)
+# Manifest must ship: without openclaw.plugin.json the host cannot load the
+# plugin at all (and the registry drops undeclared tool registrations). A
+# missing manifest is a release blocker, not a skip.
+[ -f "$TMPDIR/in/package/openclaw.plugin.json" ] && check "openclaw.plugin.json shipped" 0 || check "openclaw.plugin.json MISSING from tarball" 1
+grep -q "instinct_record" "$TMPDIR/in/package/openclaw.plugin.json" && check "contracts.tools declares instinct_record" 0 || check "contracts.tools missing instinct_record" 1
+pl_v=$(node -p "require('$TMPDIR/in/package/openclaw.plugin.json').version" 2>/dev/null || echo none)
+[ "$pl_v" = "$in_v" ] && check "plugin.json version == package.json (${pl_v})" 0 || check "plugin.json version drift (plugin=${pl_v} package=${in_v})" 1
+
+# 0.3.0: extractor tool + two-part recall
+grep -q "instinct_record" "$TMPDIR/in/package/dist/index.js" && check "instinct_record tool present" 0 || check "instinct_record tool MISSING" 1
+grep -q "agent_turn_prepare" "$TMPDIR/in/package/dist/index.js" && check "recall at agent_turn_prepare" 0 || check "recall not at agent_turn_prepare" 1
+# 0.2.0: retention purge + rotation recency
 grep -q "purgeExpired" "$TMPDIR/in/package/dist/src/store.js" && check "purgeExpired export present" 0 || check "purgeExpired export MISSING" 1
-
-# 0.2.0: rotation recency key (#177 fix)
 grep -q "familyFileRecencyKey" "$TMPDIR/in/package/dist/src/store.js" && check "familyFileRecencyKey present (#177)" 0 || check "familyFileRecencyKey MISSING (#177)" 1
-
-# plugin.json version aligned
-if [ -f "$TMPDIR/in/package/openclaw.plugin.json" ]; then
-  pl_v=$(node -p "require('$TMPDIR/in/package/openclaw.plugin.json').version")
-  [ "$pl_v" = "$in_v" ] && check "plugin.json version == package.json (${pl_v})" 0 || check "plugin.json version drift (plugin=${pl_v} package=${in_v})" 1
-fi
 
 # Version in dist matches package
 grep -q "$in_v" "$TMPDIR/in/package/dist/index.js" && check "version ${in_v} in dist" 0 || check "version ${in_v} not found in dist" 1

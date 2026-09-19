@@ -2,7 +2,7 @@
  * instinct store: 30-day time-based purge (retention), incl. failure paths.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, utimesSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -126,14 +126,32 @@ describe('purgeExpired', () => {
     expect(getPurgeFailureCount()).toBe(0);
   });
 
-  it('clears a .jsonl.tmp left by a crashed rewrite', () => {
+  it('clears a dead rewrite tmp (unique name, past the staleness age)', () => {
     writeJsonl('observations.jsonl', [{ ts: NOW - 31 * DAY, tool: 'Old' }]);
-    writeFileSync(join(instinctDir, 'observations.jsonl.tmp'), JSON.stringify({ ts: NOW, tool: 'Half' }) + '\n', 'utf-8');
+    // rewriteFileAtomic's form: <file>.<pid>.<seq>.tmp, mtime old enough to be dead.
+    const tmp = join(instinctDir, 'observations.jsonl.99999.1.tmp');
+    writeFileSync(tmp, JSON.stringify({ ts: NOW, tool: 'Half' }) + '\n', 'utf-8');
+    const stale = (NOW - 120_000) / 1000; // older than TMP_STALE_MS (60 s)
+    utimesSync(tmp, stale, stale);
 
     purgeExpired(dir, { now: NOW });
 
     // The temp file is not a data file: left in place it would pin .instinct/ open forever.
     expect(existsSync(instinctDir)).toBe(false);
+    expect(getPurgeFailureCount()).toBe(0);
+  });
+
+  it('keeps a LIVE rewrite tmp (inside the staleness window)', () => {
+    writeJsonl('observations.jsonl', [{ ts: NOW - 31 * DAY, tool: 'Old' }]);
+    const tmp = join(instinctDir, 'observations.jsonl.99999.1.tmp');
+    writeFileSync(tmp, JSON.stringify({ ts: NOW, tool: 'InFlight' }) + '\n', 'utf-8');
+    // mtime is NOW (just written) — a concurrent process's in-flight rewrite.
+
+    purgeExpired(dir, { now: NOW });
+
+    // A live writer's tmp must survive the sweep; only the data file purged away.
+    expect(existsSync(tmp)).toBe(true);
+    expect(existsSync(join(instinctDir, 'observations.jsonl'))).toBe(false);
     expect(getPurgeFailureCount()).toBe(0);
   });
 

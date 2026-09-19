@@ -5,14 +5,13 @@
   "version": "0.3.0",
   "main": "dist/index.js",
   "activation": {
-    "onStartup": true,
-    "onCapabilities": [
-      "tool"
-    ]
+    "onStartup": true
   },
   "hooks": [
     "after_tool_call",
-    "session_start"
+    "agent_turn_prepare",
+    "session_start",
+    "session_end"
   ],
   "contracts": {
     "tools": [
