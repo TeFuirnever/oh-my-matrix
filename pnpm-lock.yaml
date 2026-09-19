@@ -85,6 +85,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.15)
 
   packages/instinct:
+    dependencies:
+      openclaw:
+        specifier: '>=2026.7.1-2 <2027'
+        version: 2026.7.1-2
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
