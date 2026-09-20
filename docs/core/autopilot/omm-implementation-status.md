@@ -59,8 +59,9 @@
 | crash-recovery 两处加固 | `isActiveOrchestrationState` 改由 `deriveStatus` 推导（消除手工状态表漂移）；`list_resumable_sessions` 跳过 `sessionKey` undefined（半写 checkpoint）与 `enabled:false`（deactivate 中途崩溃）两类条目 | `830f422`、`4f5e615` |
 | instinct 30 天 purge + `.instinct/` gitignore | 补齐设计 §3.1 #1 的第三条保证（rotation/scrub 已在 0.1.0）。`purgeExpired()` 按 file family 精确匹配（`<family>.jsonl` / `<family>-N.jsonl`），删空文件与空目录、清崩溃遗留的 `.jsonl.tmp`，temp+rename 重写，never-throw + 失败计数；`session_start` 召回前调用。**刻意的数据损失**：`ts` 不可读的行被丢弃——合法 JSON 但缺 `ts` 的行本可召回，但无法确立年龄的记录永远满足不了 30 天上界（ticket-11） | `cb90175` |
 | instinct extractor（tool 路线） | `instinct_record` tool（`registerTool` + manifest `contracts.tools`）+ 两段 recall；`session_start` 召回在此版本已迁 `agent_turn_prepare`（宿主丢弃 void hook 返回值，注入只认 prompt-injection hooks）。去重 text+hash 双匹配，`appendInstinct` 返回三态回执（ticket-09） | `1270e5c`、`46823a1`、`2481d14` |
+| crash-recovery 广播（方案 B） | `list_resumable_sessions` handler 在宿主首次 pull 时，经请求级 `GatewayRequestContext.broadcast` 逐 advertised session 广播 `sessions.changed`（`pluginExtensions.autopilot` 形状：status/needsCrossTurnResume/totalContinuations/maxTotalContinuations/lastActivityAt?）。response 同步补 maxTotalContinuations + lastActivityAt。**init 即时推送物理不可能**（activate 时无 ctx + 无订阅者时 gateway emitter 早退），push 搭首次 pull（MA X3 方案 B）。数据不是 kick（"Continuation is now EXPLICIT" 不动） | `98ee107` |
 
-> 📌 **发版事实**：autopilot `4.5.0` + instinct `0.2.0`（2026-09-19，tag 齐全）；instinct `0.3.0` 合入但**从未发布 npm**（tarball 缺 `openclaw.plugin.json`，0.2.0/0.3.0 从 npm 均不可安装）；`0.3.1`（host 契约 + 打包修复，首个可安装版）与 `0.3.2`（截断安全去重）于 09-19/20 发布，registry 验证 8/8。
+> 📌 **发版事实**：autopilot `4.5.0` + instinct `0.2.0`（2026-09-19，tag 齐全）；instinct `0.3.0` 合入但**从未发布 npm**（tarball 缺 `openclaw.plugin.json`，0.2.0/0.3.0 从 npm 均不可安装）；`0.3.1`（host 契约 + 打包修复，首个可安装版）与 `0.3.2`（截断安全去重）于 09-19/20 发布；autopilot `4.5.1`（crash-recovery 广播）2026-09-20 发布，registry 验证全过。
 
 > 📌 `list_resumable_sessions` **有意只含活跃 orchestration state**。blocked 但可恢复的 run 走 `canResume` 独立通道（`projection.ts:143` + ticket-07 host 按钮），不经 `resumeRestoredRuns`——两轮 review 都提过这点，结论是不改。
 
