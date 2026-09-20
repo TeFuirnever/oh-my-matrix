@@ -30,6 +30,15 @@ gateway 每 ~64s crash loop（`Gateway process exited code=1`），unhandled Typ
 - [x] F3 `progressGrace` 标志经 normalize 保留（migration 测试仍绿）
 - [x] MA 侧 fixture 端到端已验（resume_run 成功、cross_turn_resume_consumed 消费 flag、checkpoint 回写盘上）
 
+## 追加（2026-09-21 · MA cross-review finding 3）
+
+非对象 `folded` 值（如 corrupt 字符串）的两处 spread 洞：
+
+1. **migrateCheckpoint**（state-persister.ts v1 分支）：`{ ...migrated.ledger.folded, lastValidatedTurn: 0 }` 把字符串按 char-index 展开成 junk 对象（`0:'o'..3:'s'`）——**这是 junk 的源头**，normalizeLedger 随后视其为合法对象并按 extra-fields 契约保留。修：typeof 守卫，非对象落 `emptyLedger().folded`。
+2. **normalizeLedger**（progress-ledger.ts）：`...(l.folded ?? {})` 同病。修：非对象（含数组）落 `emptyLedger().folded`。
+
+junk 键虽不崩（下游只读命名键），但经 buildCheckpoint 写回即永久污染 checkpoint —— 违背「归一化到完整形状」对 corrupt 输入类的契约。测试：`folded:'oops'` → load 后 folded 恰好 4 个命名键、ledger 恰好 folded+entries 两键。随 autopilot 4.5.3 发布。
+
 ## 参考
 
 MA 会话 matrixassistant-78 运行时取证（4.5.1 dist `state-persister.js:397` + `progress-ledger.js:105-118`）；发现渠道：MA X3 ② 升级 4.5.0 后的 runtime 实测。

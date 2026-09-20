@@ -30,7 +30,7 @@ import type { AutopilotState } from './types';
 import type { WorkspaceRecord, RetryEntry, WorkflowConfig, EvidenceSummary } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { deriveStatus } from './orchestrator';
-import { normalizeLedger, type Ledger } from './progress-ledger';
+import { emptyLedger, normalizeLedger, type Ledger } from './progress-ledger';
 
 const CHECKPOINT_SUBDIR = path.join('.autopilot', 'checkpoints');
 const SESSION_INDEX_FILE = 'session-index.json';
@@ -339,9 +339,17 @@ function migrateCheckpoint(cp: AutopilotCheckpoint): AutopilotCheckpoint | null 
   let didNormalizeLedger = false;
 
   if (migrated.ledger && migrated.ledger.folded && migrated.ledger.folded.lastValidatedTurn === undefined) {
+    // typeof guard: a non-object folded (e.g. a corrupt string) would spread by
+    // char-index into junk keys here, which buildCheckpoint then persists
+    // forever (MA cross-review finding 3) — non-object falls to the bare
+    // migration default instead of being spread.
+    const foldedSource =
+      typeof migrated.ledger.folded === 'object' && migrated.ledger.folded !== null
+        ? migrated.ledger.folded
+        : emptyLedger().folded; // full empty shape — spread stays type-complete
     migrated.ledger = {
       ...migrated.ledger,
-      folded: { ...migrated.ledger.folded, lastValidatedTurn: 0 },
+      folded: { ...foldedSource, lastValidatedTurn: 0 },
     };
     didNormalizeLedger = true;
   }

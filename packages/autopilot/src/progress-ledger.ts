@@ -127,9 +127,17 @@ export function normalizeLedger(raw: unknown): Ledger {
   const l = raw as Partial<Ledger>;
   // Keep unknown/extra fields (e.g. migrateCheckpoint's one-shot
   // `progressGrace` flag) — only the two load-bearing structures get defaults.
+  // A non-object folded would spread by char-index into junk keys (a string
+  // 'oops' becomes 0:'o'..3:'s') that buildCheckpoint then persists forever —
+  // normalize means the COMPLETE shape for this input class, so non-object
+  // folded falls to the empty shape (MA cross-review finding 3).
+  const folded =
+    l.folded != null && typeof l.folded === 'object' && !Array.isArray(l.folded)
+      ? { ...emptyLedger().folded, ...l.folded }
+      : emptyLedger().folded;
   return {
     ...l,
-    folded: { ...emptyLedger().folded, ...(l.folded ?? {}) },
+    folded,
     entries: Array.isArray(l.entries) ? l.entries : [],
   };
 }

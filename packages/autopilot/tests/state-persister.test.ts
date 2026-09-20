@@ -126,6 +126,30 @@ describe('saveCheckpoint + loadCheckpoint round-trip', () => {
     expect(() => lastProgressTurn(loaded!.ledger)).not.toThrow();
   });
 
+  // MA cross-review finding 3 (2026-09-21): a non-object `folded` value (e.g. a
+  // string from a corrupt checkpoint) spread by char-index into junk keys, which
+  // buildCheckpoint then wrote back to disk forever. Non-object folded/entries
+  // must fall to the empty shape — normalize to the COMPLETE shape, by contract.
+  it('a non-object folded value falls to the empty folded shape, no junk keys', async () => {
+    const state = makeState({ orchestrationState: 'claimed' });
+    saveCheckpoint(state, 'run-junk-folded', tmpRoot);
+    await flushWrites();
+    const cpPath = path.join(tmpRoot, '.autopilot', 'checkpoints', 'run-junk-folded.json');
+    const raw = JSON.parse(fs.readFileSync(cpPath, 'utf-8'));
+    raw.ledger = { folded: 'oops', entries: [] };
+    fs.writeFileSync(cpPath, JSON.stringify(raw), 'utf-8');
+
+    const loaded = loadCheckpoint('run-junk-folded', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    const folded = loaded!.ledger.folded as Record<string, unknown>;
+    // Exactly the four named keys — spreading 'oops' would have added 0:'o'..3:'s'.
+    expect(Object.keys(folded).sort()).toEqual(['commandsRun', 'filesTouched', 'lastValidatedTurn', 'turns']);
+    expect(folded.turns).toBe(0);
+    expect(() => summarizeLedger(loaded!.ledger)).not.toThrow();
+    // And a save/load round-trip of the normalized state carries no junk keys.
+    expect(Object.keys(loaded!.ledger)).toEqual(['folded', 'entries']);
+  });
+
   it('preserves a complete ledger untouched by the normalization', async () => {
     const state = makeState({ orchestrationState: 'claimed', needsCrossTurnResume: true });
     state.ledger = {
