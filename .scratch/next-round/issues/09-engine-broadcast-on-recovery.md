@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** done — afd5d4b + 87d4935（pull RPC 路线，见实现说明；MA 侧消费在 ticket-08）
+**Status:** done — afd5d4b + 87d4935（pull RPC）；方案 B 广播 2026-09-20 补齐（见实现说明②）
 
 - [x] crash-recovery 后通知宿主哪些 session 有活跃 run（用 pull RPC 替代 push broadcast，见实现说明）
 - [x] 返回内容包含 `status`、`needsCrossTurnResume`、`totalContinuations`（MA 宿主消费所需字段）
@@ -24,6 +24,20 @@
 **MA 宿主侧需做（ticket-08）**：在首次 gateway 连接时调用 `autopilot.list_resumable_sessions`，用返回的 `sessions` 填充 `activeSessions` Map，然后调用 `resumeRestoredRuns`。同时确认 `gateway-handlers.ts:583` 的 `&& previousGatewayState` 守卫覆盖 `previousGatewayState === undefined`（首次启动路径）。
 
 commits: `afd5d4b`、`87d4935`（后者提取了 `isActiveOrchestrationState` 消除重复状态判断）
+
+## 实现说明②（2026-09-20 · 方案 B 广播落地）
+
+MA X3 拍板的方案 B 已落地，形态是 **pull 触发的 push**：
+
+- **init 即时推送物理不可能**（两个独立事实）：activate 时不存在 `GatewayRequestContext`；且首个 MA 连接建立前订阅者 connIds 为空，gateway 自己的 emitter 在 `connIds.size === 0` 时早退——推送无接收者。
+- 因此推送**搭宿主的首次 pull**：`autopilot.list_resumable_sessions` handler 现在持有请求级 `GatewayRequestContext`（其上有 `broadcast`——这正是 09-18 结论漏掉的面：不可达的是 activate 时的 api，不是 handler ctx），respond 前对每个 advertised session 广播一条 `sessions.changed`。
+- payload：`{ sessionKey, ts, pluginExtensions: { autopilot: { status, needsCrossTurnResume, totalContinuations, maxTotalContinuations, lastActivityAt? } } }` —— `pluginExtensions.autopilot` 形状与 gateway 自发广播一致（extractAutopilotExt 兼容形状之一）。
+- **broadcast 列表 == response 列表**（同一数组，同一组守卫：无 sessionKey 跳过、enabled=false 跳过）。
+- response 同步补 `maxTotalContinuations` + `lastActivityAt`（有则带）两个加法字段，MA 守卫消费的 totalContinuations 数值保证不变。
+- 幂等：恢复只在 process init 一次；宿主重复 pull → 重复广播被 MA 侧 idempotencyKey 去重，无害。
+- 语义边界不动：广播是数据不是 kick（"Continuation is now EXPLICIT"）；stall fallback 保留。
+
+**MA 侧验收路径**：模拟 crash-recovery 后首次连接调 `autopilot.list_resumable_sessions` —— response 列表之外，每个恢复 run 应收到一条带 `pluginExtensions.autopilot` 的 `sessions.changed`；`totalContinuations` 数值型。
 
 ## 为什么需要这张 ticket
 

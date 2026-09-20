@@ -1868,12 +1868,14 @@ export function register(api: OpenClawPluginApi): void {
   // active crash-recovered runs, then re-populates activeSessions and calls
   // resumeRestoredRuns. MA host side: confirm gateway-handlers.ts:583 guard
   // covers previousGatewayState === undefined (ticket 08).
-  api.registerGatewayMethod('autopilot.list_resumable_sessions', async ({ respond }: GatewayCtx) => {
+  api.registerGatewayMethod('autopilot.list_resumable_sessions', async ({ respond, context }: GatewayCtx) => {
       const sessions: Array<{
         sessionKey: string;
         status: AutopilotState['status'];
         needsCrossTurnResume: boolean;
         totalContinuations: number;
+        maxTotalContinuations: number;
+        lastActivityAt?: number;
       }> = [];
       for (const state of stateByRun.values()) {
         const orch = state.orchestrationState;
@@ -1888,14 +1890,31 @@ export function register(api: OpenClawPluginApi): void {
           // Guard: a run may be restored from checkpoint with an active
           // orchestrationState but enabled=false (e.g. a crash mid-deactivation).
           // Every other handler in this plugin gates on enabled; the host has no
-          // way to tell an enabled from a disabled entry in this response, so a
-          // disabled run must not be advertised as resumable.
+          // way to tell an enabled from a disabled entry in this response AND no
+          // broadcast, so a disabled run must not be advertised as resumable.
           if (!state.enabled) continue;
-          sessions.push({
+          const entry = {
             sessionKey: state.sessionKey,
             status: state.status,
             needsCrossTurnResume: state.needsCrossTurnResume,
             totalContinuations: state.totalContinuations,
+            maxTotalContinuations: state.maxTotalContinuations,
+            ...(typeof state.lastActivityAt === 'number' ? { lastActivityAt: state.lastActivityAt } : {}),
+          };
+          sessions.push(entry);
+          // 方案 B delivery (MA X3): the host consumes restored-run state off the
+          // canonical sessions.changed event path. An init-time push is physically
+          // impossible — no GatewayRequestContext exists at plugin activate, and
+          // no client is connected yet (the gateway's own emitter no-ops on zero
+          // subscribers) — so the push rides the host's first pull: the same
+          // request context that answers this RPC also broadcasts one event per
+          // advertised session. This is data, not a kick: "Continuation is now
+          // EXPLICIT" is untouched, and a repeat (host re-pull) is deduped
+          // host-side by idempotencyKey.
+          context?.broadcast?.('sessions.changed', {
+            sessionKey: entry.sessionKey,
+            ts: Date.now(),
+            pluginExtensions: { autopilot: entry },
           });
         }
       }

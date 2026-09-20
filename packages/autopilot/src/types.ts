@@ -490,8 +490,25 @@ export interface HookContext {
 /** Gateway respond callback passed to every registerGatewayMethod handler */
 export type GatewayRespond = (ok: boolean, data?: unknown, err?: { code: string; message: string }) => void;
 
-/** Destructured context shape received by each registerGatewayMethod handler */
-export type GatewayCtx = { params: Record<string, unknown>; respond: GatewayRespond };
+/**
+ * Destructured context shape received by each registerGatewayMethod handler.
+ * `context.broadcast` is the plugin's only path to gateway clients (the same
+ * channel `emitSessionsChanged` uses); it exists on the live request context
+ * and is optional here so handlers degrade gracefully on hosts that do not
+ * supply it.
+ */
+export type GatewayCtx = {
+  params: Record<string, unknown>;
+  respond: GatewayRespond;
+  context?: {
+    // Mirrors GatewayBroadcastFn's opts shape (structural subset) so the SDK's
+    // GatewayRequestContext stays assignable under strictFunctionTypes.
+    broadcast?: (event: string, payload: unknown, opts?: {
+      dropIfSlow?: boolean;
+      stateVersion?: { presence?: number; health?: number };
+    }) => void;
+  };
+};
 
 /** Result of enqueueNextTurnInjection */
 export interface InjectionResult {

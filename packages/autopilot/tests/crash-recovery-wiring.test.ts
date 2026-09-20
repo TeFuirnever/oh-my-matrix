@@ -462,6 +462,67 @@ describe('ticket-09 — autopilot.list_resumable_sessions RPC', () => {
     expect(typeof sessions[0].totalContinuations).toBe('number');
   });
 
+  it('broadcasts one sessions.changed per advertised session on the RPC call (方案 B)', async () => {
+    // Phase 1: activate and checkpoint a run.
+    let mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const activate = mock.gatewayMethods.get('autopilot.activate')!;
+    const sessionStart = mock.hooks.get('session_start')!;
+    await sessionStart({ sessionId: 'sid-lr3', sessionKey: 'sess-lr3' });
+    const respond1 = vi.fn();
+    await activate({ params: { sessionKey: 'sess-lr3', goal: 'lr bc', workspacePath: tmpRoot }, respond: respond1 });
+    expect(respond1.mock.calls[0][0]).toBe(true);
+    await _flushAllWritesForTest();
+
+    // Phase 2: simulate restart (crash-recovery), then call the RPC the way
+    // the MA host does on first gateway connection — ctx now carries a live
+    // GatewayRequestContext whose broadcast() the handler must use.
+    _resetForTest();
+    _enableCheckpointingForTest();
+    mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const broadcast = vi.fn();
+    const listRpc = mock.gatewayMethods.get('autopilot.list_resumable_sessions')!;
+    const listRespond = vi.fn();
+    await listRpc({ params: {}, respond: listRespond, context: { broadcast } });
+
+    expect(broadcast).toHaveBeenCalled();
+    const [eventName, payload] = broadcast.mock.calls[0] as [string, {
+      sessionKey: string;
+      ts: number;
+      pluginExtensions: { autopilot: Record<string, unknown> };
+    }];
+    // Canonical event name MA already consumes.
+    expect(eventName).toBe('sessions.changed');
+    expect(payload.sessionKey).toBe('sess-lr3');
+    expect(typeof payload.ts).toBe('number');
+    const a = payload.pluginExtensions.autopilot as {
+      status: string; needsCrossTurnResume: boolean; totalContinuations: number;
+      maxTotalContinuations: number; lastActivityAt?: number;
+    };
+    // MA's guard consumes these: totalContinuations must be a finite number or
+    // the host-side resume skips the run entirely.
+    expect(typeof a.status).toBe('string');
+    expect(typeof a.needsCrossTurnResume).toBe('boolean');
+    expect(Number.isFinite(a.totalContinuations)).toBe(true);
+    expect(Number.isFinite(a.maxTotalContinuations)).toBe(true);
+    expect(a.lastActivityAt === undefined || typeof a.lastActivityAt === 'number').toBe(true);
+
+    // Broadcast list == response list: exactly the advertised sessions.
+    const { sessions } = listRespond.mock.calls[0][1] as { sessions: unknown[] };
+    expect(broadcast.mock.calls).toHaveLength(sessions.length);
+  });
+
+  it('broadcasts nothing when there are no active runs', async () => {
+    const mock = createMockApi({ maxConcurrentAutopilot: 10 });
+    register(mock.api);
+    const broadcast = vi.fn();
+    const listRpc = mock.gatewayMethods.get('autopilot.list_resumable_sessions')!;
+    const listRespond = vi.fn();
+    await listRpc({ params: {}, respond: listRespond, context: { broadcast } });
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
   it('returns empty list when no crash-recovery runs exist', async () => {
     const mock = createMockApi({ maxConcurrentAutopilot: 10 });
     register(mock.api);
