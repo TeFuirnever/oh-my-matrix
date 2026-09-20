@@ -9,7 +9,7 @@ oh-my-matrix 为 OpenClaw 及衍生宿主提供 **autonomous agent runtime stack
 - **Autopilot**: 长程任务连续执行。负责目标、状态、重试、stall 检测、证据门、projection 与 `WORKFLOW.md` 配置。
 - **Dynamic Workflows**: 多 agent 编排。agent 根据自然语言生成 `.prose` 程序，经 OpenProse 执行 fan-out / pipeline / adversarial verification。
 - **Permission Policy**: 运行时边界。为 autopilot 和 workflow subagent 共用 command classification、permission decision、audit persistence。
-- **Instinct**: 跨会话上下文记忆。`after_tool_call` 观察脱敏后的工具调用摘要，`session_start` 时召回近期观察，补齐 autopilot 的上下文记忆缺口。
+- **Instinct**: 跨会话上下文记忆。`after_tool_call` 观察脱敏后的工具调用摘要，`instinct_record` tool 记录 working pattern，`agent_turn_prepare` 首轮注入两段 recall，补齐 autopilot 的上下文记忆缺口。
 
 v0.x 的 `team` / MCP / plugin 实现已移除，设计记录保留在 [`docs/archive/`](docs/archive/)。当前活跃源码位于 [`packages/`](packages/) 与 [`packages/dynamic-workflows/skill/`](packages/dynamic-workflows/skill/)。
 
@@ -55,7 +55,7 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 
 ### Instinct
 
-[`@oh-my-matrix/instinct`](packages/instinct/) 是跨会话上下文记忆插件（v0.1.0）。两个 hook 构成最小闭环：`after_tool_call` 把脱敏后的 `{tool, input, output}` 摘要追加到 `.instinct/observations.jsonl`（10 MB 轮转、secret-scrubbed）；`session_start` 先清掉超过 30 天的观察，再将本项目最近的观察作为 appendContext 注入，让新会话带着上一会话做过什么继续。观察→可复用模式的 LLM 蒸馏是后续阶段，本包只交付记忆基质 + 召回。
+[`@oh-my-matrix/instinct`](packages/instinct/) 是跨会话上下文记忆插件。三个面构成闭环：`after_tool_call` 把脱敏后的 `{tool, input, output}` 摘要追加到 `.instinct/observations.jsonl`（10 MB 轮转、secret-scrubbed）；`instinct_record` tool 让主 agent 把 working pattern 记录到 `.instinct/instincts.jsonl`（text+hash 精确去重、hits 累加）；`agent_turn_prepare` 每会话首轮注入两段 appendContext（raw 尾部 + instincts，各自独立可裁剪）。`session_start` 只负责双族 30 天 purge——宿主丢弃该 hook 的返回值，注入必须走 prompt-injection hooks。promote/evolve（跨项目聚类）是后续阶段。
 
 ### Runtime Guard
 

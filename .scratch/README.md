@@ -29,6 +29,10 @@
 
 ---
 
+## next-round（2026-09 系列，现行批次）
+
+本索引是 2026-08 autopilot 长程批的历史索引。现行批次在 [`next-round/`](next-round/)：OMM 侧票已全部 done（2026-09-20，含 instinct 0.3.2 / autopilot 4.5.0 发布）；余 MA 侧 05-08 与缓修票 12（交叉进程锁）。
+
 ## 两仓分布
 
 | 仓 | Ticket | 说明 |

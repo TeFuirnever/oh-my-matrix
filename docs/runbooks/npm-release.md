@@ -6,9 +6,10 @@
 
 ## 何时用
 
-每次 `npm publish` 一个包的新版本后立即执行。三个发布包:
+每次 `npm publish` 一个包的新版本后立即执行。四个发布包:
 
 - `packages/autopilot/`(`@oh-my-matrix/autopilot`)
+- `packages/instinct/`(`@oh-my-matrix/instinct`)
 - `packages/dynamic-workflows/`(`@oh-my-matrix/dynamic-workflows`)
 - `packages/permission-policy/`(`@oh-my-matrix/permission-policy`)
 

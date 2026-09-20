@@ -68,7 +68,7 @@ The split prevents duplicated safety logic and lets future OpenClaw plugins reus
 
 ### Instinct
 
-`packages/instinct/` hosts `@oh-my-matrix/instinct`, a cross-session context memory plugin. Two hooks close the minimal loop: `after_tool_call` appends scrubbed `{tool, input, output}` summaries to `.instinct/observations.jsonl` (rotated at 10 MB, secret-scrubbed), and `session_start` purges entries older than 30 days, then injects the most recent observations for the project so a new session resumes with what the last one did. Promoting raw observations into reusable patterns (LLM distillation) is a later phase.
+`packages/instinct/` hosts `@oh-my-matrix/instinct`, a cross-session context memory plugin. Three surfaces close the loop: `after_tool_call` appends scrubbed `{tool, input, output}` summaries to `.instinct/observations.jsonl` (rotated at 10 MB, secret-scrubbed); the `instinct_record` tool lets the main agent record distilled working patterns to `.instinct/instincts.jsonl` (exact-text+hash dedup, hit counts as the confidence signal); and `agent_turn_prepare` injects a two-part appendContext once per session — raw activity tail plus instincts, each independently trimmable. `session_start` keeps the 30-day purge for both families (the host discards its return value; context injection is only honored from the prompt-injection hooks). Cross-project promote/evolve is a later phase.
 
 ## Runtime Flow
 

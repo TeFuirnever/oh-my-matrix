@@ -47,7 +47,7 @@ Gates: `pnpm lint` (eslint), `pnpm lint:md` (markdownlint), `pnpm typecheck` (`t
 4. For docs changes, update every public surface that would otherwise contradict the new claim.
 5. Do not claim host deployment is complete unless the host dist was actually refreshed and smoke-tested.
 6. Use Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` (enforced by commitlint — local hook + CI; **body lines must stay ≤ 100 chars**).
-7. `master` is protected: PRs need the `test` check green and use squash-merge; direct pushes and force-pushes are blocked.
+7. `master` is protected: PRs need the `Test (all workspaces)` check green and use squash-merge; direct pushes and force-pushes are blocked.
 
 ## Repository Setup
 
@@ -57,7 +57,7 @@ The repo's automation and policy live under `.github/`:
 |---|---|---|
 | CI | `.github/workflows/ci.yml` | On push/PR: 4 jobs — lint (eslint + markdownlint), typecheck, commitlint (PR only), test. Concurrency cancel + pnpm cache + per-job summaries |
 | Docs deploy | `.github/workflows/docs.yml` | On push to `master`: builds `landing` + VitePress, deploys to GitHub Pages |
-| Branch protection | GitHub settings | `master` requires the `test` check green + squash-merge; direct/force pushes blocked (see Pull Request Rules above) |
+| Branch protection | GitHub settings | `master` requires the `Test (all workspaces)` check green + squash-merge; direct/force pushes blocked (see Pull Request Rules above) |
 | Dependency scan | `.github/dependabot.yml` | Dependabot watches dependency updates and security advisories |
 | Code ownership | `.github/CODEOWNERS` | Default reviewers per path |
 | PR template | `.github/PULL_REQUEST_TEMPLATE.md` | Structured PR description |
@@ -87,10 +87,11 @@ Images in this repo must be reproducible:
 
 ## Releasing
 
-The repo hosts three npm packages under `@oh-my-matrix`:
+The repo hosts four npm packages under `@oh-my-matrix`:
 [`permission-policy`](packages/permission-policy),
 [`dynamic-workflows`](packages/dynamic-workflows),
-[`autopilot`](packages/autopilot).
+[`autopilot`](packages/autopilot),
+[`instinct`](packages/instinct).
 
 Releases are managed by [Changesets](https://github.com/changesets/changesets)
 (ADR-010 follow-up #1). The flow is contributor-driven: you declare *what*
@@ -142,7 +143,7 @@ after the S14 version-const drift recurred; see `scripts/sync-plugin-versions.cj
 
 ```bash
 ./scripts/publish.sh --dry-run                # validate first (always)
-./scripts/publish.sh                          # publish all three (in dependency order)
+./scripts/publish.sh                          # publish all packages (in dependency order)
 ./scripts/publish.sh --only <pkg>             # publish a single package
 ```
 
@@ -158,7 +159,7 @@ verification).
 `export const version` in `index.ts` (if present) must always carry the same
 version. `scripts/sync-plugin-versions.cjs` propagates `package.json` into the
 other two automatically as part of the Version Packages PR. The publish script
-validates all three on every run and refuses to publish on drift, pointing at
+validates all of them on every run and refuses to publish on drift, pointing at
 the sync script as the fix.
 
 ### Release ownership & security-fix SLA
