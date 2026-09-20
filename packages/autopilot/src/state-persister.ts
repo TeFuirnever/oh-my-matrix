@@ -30,7 +30,7 @@ import type { AutopilotState } from './types';
 import type { WorkspaceRecord, RetryEntry, WorkflowConfig, EvidenceSummary } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { deriveStatus } from './orchestrator';
-import type { Ledger } from './progress-ledger';
+import { normalizeLedger, type Ledger } from './progress-ledger';
 
 const CHECKPOINT_SUBDIR = path.join('.autopilot', 'checkpoints');
 const SESSION_INDEX_FILE = 'session-index.json';
@@ -429,7 +429,12 @@ export function loadCheckpoint(
     tokenBudget: cp.tokenBudget,
     maxDurationMs: cp.maxDurationMs,
     maxCostUsd: cp.maxCostUsd,
-    ledger: cp.ledger,
+    // MA runtime bug (2026-09-20): a checkpoint whose ledger folded down to
+    // `{}` restored verbatim and crashed the gateway in a ~64s loop (stall
+    // patrol / resume_run injection hit entries/folded on undefined).
+    // Normalize to the complete shape on load; a complete ledger passes
+    // through unchanged.
+    ledger: normalizeLedger(cp.ledger),
     completionUnverified: cp.completionUnverified,
     // ticket 08 / F3-related: restore the full evidence summary (was lost — only
     // the status string was persisted pre-08). migrateCheckpoint reconstructs a

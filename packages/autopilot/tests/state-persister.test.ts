@@ -33,7 +33,7 @@ import {
   _setCheckpointRootForTest,
 } from '../src/state-persister';
 import type { AutopilotState } from '../src/types';
-import { lastProgressTurn, hasMigrationGrace } from '../src/progress-ledger';
+import { lastProgressTurn, hasMigrationGrace, summarizeLedger, buildEntry } from '../src/progress-ledger';
 
 let tmpRoot: string;
 
@@ -95,6 +95,50 @@ describe('saveCheckpoint + loadCheckpoint round-trip', () => {
     expect(loaded!.totalContinuations).toBe(42);
     expect(loaded!.sessionKey).toBe('sess-1');
     expect(loaded!.goal).toBe(state.goal);
+  });
+
+  // MA runtime bug report (2026-09-20): a checkpoint whose ledger folded down
+  // to `{}` (entries/folded gone) crashed the gateway in a ~64s loop after
+  // restore — loadCheckpoint loaded it verbatim, and the stall patrol /
+  // resume_run injection hit `folded.lastValidatedTurn` / `entries.map` on
+  // undefined. Restore must normalize a partial ledger to the full shape.
+  it('normalizes a ledger of {} from disk into a complete ledger on load', async () => {
+    const state = makeState({ orchestrationState: 'claimed', needsCrossTurnResume: true });
+    saveCheckpoint(state, 'run-empty-ledger', tmpRoot);
+    await flushWrites();
+
+    // Corrupt the ledger the way the field actually saw it: fold/cleanup left
+    // an empty object, not a missing key.
+    const cpPath = path.join(tmpRoot, '.autopilot', 'checkpoints', 'run-empty-ledger.json');
+    const raw = JSON.parse(fs.readFileSync(cpPath, 'utf-8'));
+    raw.ledger = {};
+    fs.writeFileSync(cpPath, JSON.stringify(raw), 'utf-8');
+
+    const loaded = loadCheckpoint('run-empty-ledger', tmpRoot, { validateWorkspace: false });
+    expect(loaded).not.toBeNull();
+    // Full shape restored: the patrol (folded.lastValidatedTurn) and
+    // resume_run injection (summarizeLedger → entries.map) can consume it.
+    expect(Array.isArray(loaded!.ledger.entries)).toBe(true);
+    expect(typeof loaded!.ledger.folded.lastValidatedTurn).toBe('number');
+    expect(typeof loaded!.ledger.folded.turns).toBe('number');
+    // And the consumers actually run without throwing.
+    expect(() => summarizeLedger(loaded!.ledger)).not.toThrow();
+    expect(() => lastProgressTurn(loaded!.ledger)).not.toThrow();
+  });
+
+  it('preserves a complete ledger untouched by the normalization', async () => {
+    const state = makeState({ orchestrationState: 'claimed', needsCrossTurnResume: true });
+    state.ledger = {
+      folded: { turns: 3, filesTouched: ['a.ts'], commandsRun: ['pnpm test'], lastValidatedTurn: 2 },
+      entries: [buildEntry(1, ['a.ts'], ['pnpm test'])],
+    };
+    saveCheckpoint(state, 'run-full-ledger', tmpRoot);
+    await flushWrites();
+
+    const loaded = loadCheckpoint('run-full-ledger', tmpRoot, { validateWorkspace: false });
+    expect(loaded!.ledger.folded.turns).toBe(3);
+    expect(loaded!.ledger.folded.lastValidatedTurn).toBe(2);
+    expect(loaded!.ledger.entries).toHaveLength(1);
   });
 
   it('does NOT persist permissionAudit (it has its own JSONL)', async () => {

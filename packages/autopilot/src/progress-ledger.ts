@@ -95,6 +95,45 @@ export function emptyLedger(): Ledger {
   return { folded: { turns: 0, filesTouched: [], commandsRun: [], lastValidatedTurn: 0 }, entries: [] };
 }
 
+/**
+ * Depth defense behind loadCheckpoint's normalization (see normalizeLedger):
+ * upgrades `undefined` — and now also `{}` or any partial shape — to a
+ * complete ledger. A ledger that folded down to `{}` on disk used to crash the
+ * gateway in a loop after restore (patrol read folded.lastValidatedTurn,
+ * resume_run injection read entries.map — both on undefined). Every public
+ * function here funnels its input through this instead of a bare `??`.
+ */
+export function coerceLedger(ledger: Ledger | undefined): Ledger {
+  if (
+    ledger != null &&
+    typeof ledger === 'object' &&
+    Array.isArray(ledger.entries) &&
+    ledger.folded != null && typeof ledger.folded === 'object'
+  ) {
+    return ledger;
+  }
+  return emptyLedger();
+}
+
+/**
+ * Normalize a raw ledger read back from disk into the complete shape. A
+ * complete ledger passes through unchanged (spread keeps every field); an
+ * empty/partial object gets entries/folded defaults. Used by loadCheckpoint so
+ * a checkpoint whose ledger folded down to `{}` restores to a runnable state
+ * instead of a deferred TypeError in the stall patrol.
+ */
+export function normalizeLedger(raw: unknown): Ledger {
+  if (raw == null || typeof raw !== 'object') return emptyLedger();
+  const l = raw as Partial<Ledger>;
+  // Keep unknown/extra fields (e.g. migrateCheckpoint's one-shot
+  // `progressGrace` flag) — only the two load-bearing structures get defaults.
+  return {
+    ...l,
+    folded: { ...emptyLedger().folded, ...(l.folded ?? {}) },
+    entries: Array.isArray(l.entries) ? l.entries : [],
+  };
+}
+
 /** Clamp/clean a single item (path or command) for storage. */
 function cleanItem(s: unknown): string | null {
   if (typeof s !== 'string') return null;
@@ -169,7 +208,7 @@ export function recordTurn(ledger: Ledger, entry: LedgerEntry, maxDetail = LEDGE
  * the model is less inclined to rewrite, and that compresses well.
  */
 export function summarizeLedger(ledger: Ledger | undefined): string {
-  const l = ledger ?? emptyLedger();
+  const l = coerceLedger(ledger);
   const recent = l.entries
     .map((e) => ({
       turn: e.turn,
@@ -199,7 +238,7 @@ export function summarizeLedger(ledger: Ledger | undefined): string {
  * qualifies. Returns 0 if no qualifying turn exists (detail or folded).
  */
 export function lastProgressTurn(ledger: Ledger | undefined): number {
-  const l = ledger ?? emptyLedger();
+  const l = coerceLedger(ledger);
   for (let i = l.entries.length - 1; i >= 0; i--) {
     const e = l.entries[i];
     if (countsAsProgress(e.evidenceStatus, e.skipReason)) {
@@ -226,7 +265,7 @@ export function hasMigrationGrace(ledger: Ledger | undefined): boolean {
  * grace suppression so the flag does not persist into the next patrol tick.
  */
 export function consumeMigrationGrace(ledger: Ledger | undefined): Ledger {
-  const l = ledger ?? emptyLedger();
+  const l = coerceLedger(ledger);
   if (!l.progressGrace) return l;
   const { progressGrace: _drop, ...rest } = l;
   return rest as Ledger;
@@ -239,7 +278,7 @@ export function consumeMigrationGrace(ledger: Ledger | undefined): Ledger {
  * is for agent-facing injections only.
  */
 export function buildProgressHeadline(ledger: Ledger | undefined): string {
-  const l = ledger ?? emptyLedger();
+  const l = coerceLedger(ledger);
   const last = l.entries[l.entries.length - 1];
   const turn = last?.turn ?? 0;
   // Dedup across the fold boundary: the folded aggregate is internally deduped
