@@ -34,6 +34,9 @@ graphify-out/
 # Claude Code 本地设置（含机器本地路径/权限/历史命令，不入库）
 .claude/settings.local.json
 
+# super-repo-pedant 本地工作态（inventory/execution 记录，含机器本地绝对路径，不入库）
+.azhou/
+
 # ZCode 本地会话缓存（plans/state，机器本地，不入库）
 .zcode/
 
