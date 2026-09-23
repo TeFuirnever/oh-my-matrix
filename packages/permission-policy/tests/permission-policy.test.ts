@@ -4,11 +4,15 @@
  * TDD: Written BEFORE implementation — expected to FAIL initially.
  */
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as p from 'node:path';
 import {
   classifyCommand,
   decidePermission,
   decidePermissionForEvent,
   extractCommandSegments,
+  unintrospectableWriteTools,
 } from '../src/permission-policy';
 import type { PermissionDecisionInput } from '../src/permission-policy';
 
@@ -780,26 +784,46 @@ describe('B9 — segments===0 framework tools respect defaultDeny', () => {
   const frameworkEv = (toolName: string) =>
     ({ toolName, params: {} as Record<string, unknown> });
 
+  // cwd is inside workspacePath so the Q4 workspace_write fence passes: B9 is about
+  // classification reaching through the defaultDeny gate, not about unfenced writes.
+  // With no cwd and no params.path the write target is unknown and Q4 fails closed —
+  // pinned separately below.
   const subagentOpts = {
     workflowAllowsDestructiveGit: false,
     defaultDeny: true as const,
     workspacePath: '/ws',
+    cwd: '/ws',
   };
   const trustedOpts = {
     workflowAllowsDestructiveGit: false,
     workspacePath: '/ws',
+    cwd: '/ws',
   };
 
   it('blocks unknown framework tool with defaultDeny:true', () => {
     expect(decidePermissionForEvent(frameworkEv('unknown_dangerous_tool'), subagentOpts).outcome).toBe('block');
   });
 
-  it.each(['write_file', 'apply_patch', 'apply_diff', 'code_editor'] as const)(
+  it.each(['write_file', 'code_editor'] as const)(
     'allows %s with defaultDeny:true (workspace_write)',
     (tool) => {
       expect(decidePermissionForEvent(frameworkEv(tool), subagentOpts).outcome).toBe('allow');
     },
   );
+
+  // apply_patch/apply_diff carry their targets in the patch body, so the Q4 fence
+  // cannot check them (a `--- a/../../etc/hosts` header escapes the workspace).
+  // Untrusted sessions lose them; write/edit cover the same need.
+  it.each(unintrospectableWriteTools)(
+    'blocks %s with defaultDeny:true (write target not introspectable)',
+    (tool) => {
+      expect(decidePermissionForEvent(frameworkEv(tool), subagentOpts).outcome).toBe('block');
+    },
+  );
+
+  it.each(unintrospectableWriteTools)('allows %s in a trusted session', (tool) => {
+    expect(decidePermissionForEvent(frameworkEv(tool), trustedOpts).outcome).toBe('allow');
+  });
 
   it.each(['read_file', 'sessions_spawn', 'sessions_view', 'process', 'todo_write'] as const)(
     'allows %s with defaultDeny:true (read_only)',
@@ -810,6 +834,129 @@ describe('B9 — segments===0 framework tools respect defaultDeny', () => {
 
   it('allows unknown framework tool in TRUSTED session (no defaultDeny — unchanged)', () => {
     expect(decidePermissionForEvent(frameworkEv('unknown_new_tool'), trustedOpts).outcome).toBe('allow');
+  });
+});
+
+// ─── OpenClaw real tool names: `write` / `edit` (not `write_file`) ─────────────
+// The host emits `write` and `edit` (openclaw 2026.7.1-2, docs/tools/index.md:86).
+// workspaceWriteTools only listed `write_file`, a name the host never sends, so a
+// subagent's file writes fell through to `unknown` → blocked by defaultDeny. The
+// only write channel that worked was `apply_patch`, which was spelled correctly.
+describe('OpenClaw file-write tool names are classified as workspace_write', () => {
+  it.each(['write', 'edit'] as const)('classifies %s as workspace_write', (tool) => {
+    expect(classifyCommand(tool, [])).toBe('workspace_write');
+  });
+
+  it.each(['write', 'edit'] as const)('allows %s in a subagent session (defaultDeny:true)', (tool) => {
+    const result = decidePermission({
+      toolName: tool,
+      command: [],
+      cwd: '/ws/project',
+      workspacePath: '/ws/project',
+      defaultDeny: true,
+      workflowAllowsDestructiveGit: false,
+    });
+    expect(result.outcome).toBe('allow');
+    expect(result.commandClass ?? classifyCommand(tool, [])).toBe('workspace_write');
+  });
+});
+
+// ─── Q4: workspace_write containment, subagent sessions only ──────────────────
+// Naming `write`/`edit` correctly makes them allow unconditionally, which would
+// let a subagent write ~/.ssh/authorized_keys or ~/.openclaw/openclaw.json. The
+// destructive_git branch already fences on workspace containment; workspace_write
+// reuses that fence — but ONLY under defaultDeny, so trusted autopilot main-session
+// runs (which legitimately write outside the workspace, e.g. .omc/, ~/.claude/)
+// keep byte-for-byte identical behaviour.
+describe('workspace_write containment under defaultDeny (Q4)', () => {
+  const fenced = (overrides: Partial<PermissionDecisionInput> = {}): PermissionDecisionInput => ({
+    toolName: 'write',
+    command: [],
+    cwd: '/ws/project',
+    workspacePath: '/ws/project',
+    workflowAllowsDestructiveGit: false,
+    defaultDeny: true,
+    ...overrides,
+  });
+
+  it('allows a write whose cwd is inside the workspace', () => {
+    expect(decidePermission(fenced({ cwd: '/ws/project/src' })).outcome).toBe('allow');
+  });
+
+  it('allows a write whose cwd equals the workspace exactly', () => {
+    expect(decidePermission(fenced()).outcome).toBe('allow');
+  });
+
+  it('blocks a write whose cwd escapes the workspace', () => {
+    expect(decidePermission(fenced({ cwd: '/Users/me/.ssh' })).outcome).toBe('block');
+  });
+
+  it('blocks the /ws-evil sibling-prefix escape', () => {
+    expect(decidePermission(fenced({ cwd: '/ws/project-evil' })).outcome).toBe('block');
+  });
+
+  it('blocks when workspacePath is absent — fail-closed, no workspace means no fence to pass', () => {
+    expect(decidePermission(fenced({ workspacePath: undefined })).outcome).toBe('block');
+  });
+
+  // The regression guard that matters: autopilot's main session must not be fenced.
+  it('allows an out-of-workspace write in a TRUSTED session (defaultDeny falsy — unchanged)', () => {
+    expect(decidePermission(fenced({ defaultDeny: false, cwd: '/Users/me/.claude' })).outcome).toBe('allow');
+    expect(decidePermission(fenced({ defaultDeny: undefined, cwd: '/Users/me/.claude' })).outcome).toBe('allow');
+  });
+
+  it('allows a trusted write with no workspacePath at all (unchanged)', () => {
+    expect(decidePermission(fenced({ defaultDeny: false, workspacePath: undefined, cwd: undefined })).outcome).toBe('allow');
+  });
+});
+
+// The Q4 fence must read the write TARGET, not the session cwd. openclaw's write/edit
+// both land `params.path` via resolveToCwd(path, cwd), so a subagent sitting legitimately
+// inside the workspace can still name an absolute path outside it. A cwd-only fence
+// allows that; these pin the target-based fence.
+describe('workspace_write fences params.path, not cwd (Q4 escape)', () => {
+  const ev = (params: Record<string, unknown>, toolName = 'write') => ({ toolName, params });
+  const subagent = {
+    workflowAllowsDestructiveGit: false,
+    defaultDeny: true as const,
+    workspacePath: '/ws/project',
+    cwd: '/ws/project',
+  };
+
+  it('blocks an absolute path outside the workspace even when cwd is inside', () => {
+    const d = decidePermissionForEvent(ev({ path: '/Users/me/.ssh/authorized_keys' }), subagent);
+    expect(d.outcome).toBe('block');
+  });
+
+  it('blocks a ~-prefixed path (resolveToCwd does not expand it; treat as escape)', () => {
+    expect(decidePermissionForEvent(ev({ path: '~/.openclaw/openclaw.json' }), subagent).outcome).toBe('block');
+  });
+
+  it('blocks a relative path that climbs out of the workspace', () => {
+    expect(decidePermissionForEvent(ev({ path: '../../etc/hosts' }), subagent).outcome).toBe('block');
+  });
+
+  it('allows a relative path resolving inside the workspace', () => {
+    expect(decidePermissionForEvent(ev({ path: 'src/index.ts' }), subagent).outcome).toBe('allow');
+  });
+
+  it('allows an absolute path inside the workspace', () => {
+    expect(decidePermissionForEvent(ev({ path: '/ws/project/src/index.ts' }), subagent).outcome).toBe('allow');
+  });
+
+  it('fences edit on params.path too', () => {
+    expect(decidePermissionForEvent(ev({ path: '/etc/passwd' }, 'edit'), subagent).outcome).toBe('block');
+    expect(decidePermissionForEvent(ev({ path: '/ws/project/a.ts' }, 'edit'), subagent).outcome).toBe('allow');
+  });
+
+  it('fails closed when the target is unknown (no path param, no cwd)', () => {
+    const d = decidePermissionForEvent(ev({}), { ...subagent, cwd: undefined });
+    expect(d.outcome).toBe('block');
+  });
+
+  it('leaves a TRUSTED session unfenced (defaultDeny falsy)', () => {
+    const trusted = { ...subagent, defaultDeny: false as const };
+    expect(decidePermissionForEvent(ev({ path: '/Users/me/.claude/settings.json' }), trusted).outcome).toBe('allow');
   });
 });
 
@@ -834,5 +981,53 @@ describe('B4/B6/B7 — subagent defaultDeny blocks destructive PoCs', () => {
   it('B7: git checkout -B main origin/main is BLOCKED in subagent mode', () => {
     const d = decidePermissionForEvent(execEv('git checkout -B main origin/main'), subagentOpts);
     expect(d.outcome).toBe('block');
+  });
+});
+
+// ── Q4b: write fence against a REAL filesystem ────────────────────────────
+// These use actual dirs/symlinks because the bug is asymmetric symlink
+// resolution: with fabricated paths both sides fall back to a lexical resolve
+// and agree, so the false-positive is invisible. macOS /tmp -> /private/tmp
+// reproduces it for free.
+describe('Q4b: write fence with real paths (symlink symmetry)', () => {
+  const writeEv = (targetPath: string) =>
+    ({ toolName: 'write', params: { path: targetPath } as Record<string, unknown> });
+  const deny = (workspacePath: string, cwd: string) =>
+    ({ workflowAllowsDestructiveGit: false, defaultDeny: true as const, workspacePath, cwd });
+
+  it('allows creating a NEW file when the workspace path contains a symlink', () => {
+    // os.tmpdir() is the unresolved /tmp form on macOS; the workspace exists so
+    // it resolves to /private/tmp/... while the missing target would not.
+    const ws = fs.mkdtempSync(p.join(os.tmpdir(), 'q4b-ws-'));
+    try {
+      const target = p.join(ws, 'src', 'brand-new-file.ts');
+      expect(fs.existsSync(target)).toBe(false);
+      expect(decidePermissionForEvent(writeEv(target), deny(ws, ws)).outcome).toBe('allow');
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('blocks a new file reached through an in-workspace symlink pointing out', () => {
+    const ws = fs.realpathSync(fs.mkdtempSync(p.join(os.tmpdir(), 'q4b-ws-')));
+    const outside = fs.realpathSync(fs.mkdtempSync(p.join(os.tmpdir(), 'q4b-out-')));
+    try {
+      fs.symlinkSync(outside, p.join(ws, 'escape'));
+      const target = p.join(ws, 'escape', 'planted.txt');
+      expect(decidePermissionForEvent(writeEv(target), deny(ws, ws)).outcome).toBe('block');
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('blocks a plain traversal escape from a real workspace', () => {
+    const ws = fs.realpathSync(fs.mkdtempSync(p.join(os.tmpdir(), 'q4b-ws-')));
+    try {
+      const target = p.join(ws, '..', '..', 'etc', 'hosts');
+      expect(decidePermissionForEvent(writeEv(target), deny(ws, ws)).outcome).toBe('block');
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true });
+    }
   });
 });
