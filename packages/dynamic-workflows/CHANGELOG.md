@@ -1,5 +1,26 @@
 # @oh-my-matrix/dynamic-workflows
 
+## 1.2.1
+
+### Patch Changes
+
+- [#188](https://github.com/TeFuirnever/oh-my-matrix/pull/188) [`472a53a`](https://github.com/TeFuirnever/oh-my-matrix/commit/472a53a25d98c85f6608219c0be6465bd21cd992) Thanks [@TeFuirnever](https://github.com/TeFuirnever)! - Pass `workspacePath` for ad-hoc subagents so the workspace_write fence has a boundary to enforce
+
+  An ad-hoc subagent has no workflow-assigned workspace, so the guard previously
+  left `workspacePath` unset. That is what `write`/`edit` needed fencing against:
+  both take `{ path }` and resolve it against cwd, so a subagent legitimately
+  sitting in the repo could still name `~/.ssh/authorized_keys`. The session root
+  is now passed as the workspace — writes may land anywhere under it, nowhere
+  above. Leaving it unset would instead make the fence fail closed and block every
+  subagent write.
+
+  Destructive-git containment is unchanged: it only runs when
+  `workflowAllowsDestructiveGit` is true, so destructive git still falls straight
+  to block.
+
+- Updated dependencies [[`472a53a`](https://github.com/TeFuirnever/oh-my-matrix/commit/472a53a25d98c85f6608219c0be6465bd21cd992), [`57c612c`](https://github.com/TeFuirnever/oh-my-matrix/commit/57c612c8079f0533ce3b930acf516cff3a024bcc)]:
+  - @oh-my-matrix/permission-policy@0.1.5
+
 ## 1.2.0
 
 ### Minor Changes
