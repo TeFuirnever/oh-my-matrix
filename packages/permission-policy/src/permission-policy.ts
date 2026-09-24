@@ -5,7 +5,7 @@
  * based on the current permission mode (Guarded YOLO / Full YOLO / Manual Approval).
  */
 import { realpathSync } from 'fs';
-import { resolve, relative, isAbsolute } from 'path';
+import { resolve, relative, isAbsolute, dirname, basename, join } from 'path';
 import type { CommandClass } from './types';
 
 /**
@@ -21,6 +21,117 @@ export function resolveReal(p: string): string {
   } catch {
     return resolve(p);
   }
+}
+
+/**
+ * workspace_write tools whose write target lives in the payload (a patch body)
+ * rather than a path param, so resolveWriteTargets cannot recover it and the
+ * fence has nothing to check. Blocked under defaultDeny; allowed in trusted
+ * sessions.
+ */
+export const unintrospectableWriteTools = ['apply_patch', 'apply_diff'];
+
+/**
+ * Like resolveReal, but correct for paths that do not exist yet — which is the
+ * normal case for a write target (creating a new file).
+ *
+ * resolveReal alone is asymmetric there: realpathSync throws ENOENT on the
+ * missing leaf and falls back to a *lexical* resolve, leaving symlinks in the
+ * path unresolved. Compared against a workspace that DOES exist (and so gets
+ * fully resolved), the two disagree: on macOS a workspace at /tmp/project
+ * resolves to /private/tmp/project while the target stays /tmp/project/src/new.ts,
+ * so `relative` yields `../..` and a legitimate new-file write is blocked.
+ *
+ * Walking up to the nearest existing ancestor, resolving THAT, then re-appending
+ * the missing tail makes both sides symmetric. It also closes the inverse hole:
+ * a pre-existing in-workspace symlink pointing out (`/ws/link -> /etc`) is
+ * resolved even when the leaf under it is missing, so `write({ path:
+ * 'link/new.txt' })` is seen as /etc/new.txt and fenced out.
+ */
+export function resolveRealAllowingMissing(p: string): string {
+  const abs = resolve(p);
+  const tail: string[] = [];
+  let cur = abs;
+  for (;;) {
+    try {
+      return tail.length === 0 ? realpathSync(cur) : join(realpathSync(cur), ...tail);
+    } catch {
+      const parent = dirname(cur);
+      // Hit the filesystem root without finding anything that exists.
+      if (parent === cur) return abs;
+      tail.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * Is `candidate` inside `workspacePath`? Shared by the destructive_git fence
+ * (candidate = cwd) and the workspace_write fence (candidate = the resolved
+ * write target, see resolveWriteTarget).
+ *
+ * resolveReal handles symlinks (macOS /tmp → /private/tmp); backslashes are
+ * normalised first so Windows paths (C:\foo\bar) compare correctly (X-1); and
+ * path.relative is used rather than startsWith so /workspace-evil does not
+ * falsely match /workspace.
+ *
+ * Returns false when either path is missing — callers decide what that means
+ * (destructive_git falls through to block, workspace_write blocks under
+ * defaultDeny only).
+ */
+export function isWithinWorkspace(candidate?: string, workspacePath?: string): boolean {
+  if (!candidate || !workspacePath) return false;
+  // A leading ~ is home-relative, never workspace-relative. resolveReal would
+  // splice it in as a literal directory name (`<workspace>/~/.ssh`), whose
+  // `relative` has no `..` and so reads as inside the workspace — allowing the
+  // very write the fence exists to stop.
+  if (candidate.startsWith('~')) return false;
+  // The candidate may not exist yet (creating a new file), so it needs the
+  // missing-tail-aware resolver; workspacePath always exists.
+  const normCandidate = resolveRealAllowingMissing(candidate).replace(/\\/g, '/');
+  const normWorkspace = resolveReal(workspacePath).replace(/\\/g, '/');
+  const rel = relative(normWorkspace, normCandidate);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/**
+ * The path a workspace_write tool will actually mutate, absolutised.
+ *
+ * Fencing on the session cwd is NOT sufficient for write/edit: OpenClaw's
+ * `write` and `edit` both take `{ path }` and land it via
+ * `resolveToCwd(path, cwd)` (verified in openclaw@2026.7.1-2
+ * dist/sessions-D8qGY7uC.js:7496 and :5765). A subagent whose cwd is inside the
+ * workspace can therefore still pass an absolute path outside it
+ * (`write({ path: '~/.ssh/authorized_keys' })`) — a cwd-only fence allows that.
+ *
+ * Relative paths resolve against `cwd`, matching resolveToCwd.
+ *
+ * EVERY path-shaped param is returned, not just the first match: stopping at
+ * `path` would let a benign decoy there vouch for a `file_path` the host
+ * actually writes. The caller must require all of them to be in-workspace.
+ *
+ * An empty result means no path-shaped param was present. That is NOT proof the
+ * tool writes nothing — `apply_patch` carries its targets inside the patch body
+ * — so the caller must not read "empty" as "safe"; see unintrospectableWriteTools.
+ */
+export function resolveWriteTargets(
+  params?: Record<string, unknown>,
+  cwd?: string,
+): string[] {
+  if (!params) return [];
+  const out: string[] = [];
+  for (const key of ['path', 'file_path', 'filePath']) {
+    const v = params[key];
+    if (typeof v !== 'string' || v === '') continue;
+    // A leading ~ is not expanded by resolveToCwd, but treat it as an escape
+    // attempt rather than a workspace-relative directory named "~".
+    if (isAbsolute(v) || v.startsWith('~')) out.push(v);
+    else if (cwd) out.push(resolve(cwd, v));
+    // No cwd to resolve a relative path against: record it unresolved so the
+    // fence cannot silently skip it.
+    else out.push(v);
+  }
+  return out;
 }
 
 /**
@@ -138,6 +249,11 @@ export interface PermissionDecisionInput {
    *  caller already classified the command (e.g. decidePermissionForEvent loops
    *  segments and classifies each once). */
   cmdClass?: CommandClass;
+  /** Absolutised paths a workspace_write tool will mutate (see
+   *  resolveWriteTargets). The workspace_write fence checks these rather than
+   *  `cwd`, because write/edit take an explicit `path` that can point outside
+   *  the workspace. All of them must be in-workspace, not just the first. */
+  targetPaths?: string[];
 }
 
 export type PermissionDecision =
@@ -369,8 +485,16 @@ export function classifyCommand(
   }
 
   // ─── Workspace write tools (B9 fix) ──────────────────────
+  // `write` / `edit` are the names OpenClaw actually emits (2026.7.1-2,
+  // docs/tools/index.md:86). `write_file` was aspirational — no host sends it —
+  // so subagent file writes fell through to `unknown` and were blocked by
+  // defaultDeny, leaving `apply_patch` as the only working write channel.
   const workspaceWriteTools = [
+    'write', 'edit',
     'write_file', 'apply_patch', 'apply_diff', 'code_editor',
+    // NOTE: apply_patch / apply_diff are classified here (so trusted sessions
+    // keep them) but are fenced out of untrusted ones by
+    // unintrospectableWriteTools — their targets are not in any param.
   ];
   if (workspaceWriteTools.includes(toolLower)) return 'workspace_write';
 
@@ -403,7 +527,7 @@ export function classifyCommand(
  * Decide permission for a tool call based on classification.
  */
 export function decidePermission(input: PermissionDecisionInput): PermissionDecision {
-  const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny, cmdClass: preClass } = input;
+  const { toolName, toolKind, command = [], cwd, workspacePath, workflowAllowsDestructiveGit, defaultDeny, cmdClass: preClass, targetPaths = [] } = input;
   const cmdClass = preClass ?? classifyCommand(toolName, command, toolKind);
 
   // ─── Unconditional blocks ─────────────────────────────────
@@ -437,6 +561,49 @@ export function decidePermission(input: PermissionDecisionInput): PermissionDeci
   }
 
   if (cmdClass === 'workspace_write') {
+    // Q4: fence subagent writes to the workspace. Naming `write`/`edit` correctly
+    // turns them into an unconditional allow, which would hand a subagent
+    // ~/.ssh/authorized_keys and ~/.openclaw/openclaw.json. Fail closed when there
+    // is no workspace to check against — an unfenceable write in an untrusted
+    // session is exactly the case this guard exists for.
+    //
+    // Scoped to defaultDeny so trusted autopilot main-session runs are unchanged:
+    // they legitimately write outside the workspace (.omc/, ~/.claude/).
+    //
+    // The fenced paths are the write TARGETS (targetPaths), not the session cwd
+    // — see resolveWriteTargets. Falling back to cwd keeps shell-classified
+    // writes (`tee`, `>`) fenced, since those carry no path param. That fallback
+    // is deliberately NOT a safety guarantee: for an ad-hoc subagent
+    // workspacePath === cwd, so it always passes. Any tool whose target cannot
+    // be read from params must be listed in unintrospectableWriteTools instead.
+    //
+    // `apply_patch` / `apply_diff` keep their write targets inside the patch
+    // body (diff headers), not in a param, so there is nothing to fence — and a
+    // header like `--- a/../../etc/hosts` lands outside the workspace. Parsing
+    // diff dialects to recover the targets is too fragile to be a boundary, so
+    // an untrusted session loses these tools; `write`/`edit` now work (B9), so
+    // they are no longer the only write channel. Trusted sessions keep them.
+    if (defaultDeny && unintrospectableWriteTools.includes(toolName.toLowerCase())) {
+      return {
+        outcome: 'block',
+        reason: `Workspace write with unverifiable target blocked: ${toolName}`,
+        message: `Tool "${toolName}" is not available in this session; use write/edit so the target path can be checked`,
+      };
+    }
+    // Fence every path-shaped param; an out-of-workspace one anywhere blocks.
+    if (defaultDeny) {
+      const fenced = targetPaths.length > 0 ? targetPaths : (cwd ? [cwd] : []);
+      const escaping = fenced.length === 0
+        ? 'unknown'
+        : fenced.find((t) => !isWithinWorkspace(t, workspacePath));
+      if (escaping !== undefined) {
+        return {
+          outcome: 'block',
+          reason: `Workspace write outside workspace blocked: ${toolName} (target=${escaping}, workspace=${workspacePath ?? 'unset'})`,
+          message: `Tool "${toolName}" may only write inside the session workspace`,
+        };
+      }
+    }
     return { outcome: 'allow', reason: `Workspace write: ${toolName}`, audit: true };
   }
 
@@ -446,31 +613,12 @@ export function decidePermission(input: PermissionDecisionInput): PermissionDeci
 
   // ─── Destructive git ─────────────────────────────────────
   if (cmdClass === 'destructive_git') {
-    if (workflowAllowsDestructiveGit) {
-      // Verify cwd is within workspace — use resolveReal to handle symlinks
-      // (e.g. macOS /tmp → /private/tmp) and normalise paths before comparing.
-      // We also require a path-separator boundary so that /workspace-evil does
-      // not falsely match /workspace.
-      if (workspacePath && cwd) {
-        const realCwd = resolveReal(cwd);
-        const realWorkspace = resolveReal(workspacePath);
-        // Containment check — must handle both Unix and Windows paths correctly (X-1).
-        //
-        // Strategy: normalise backslashes to forward slashes first (handles C:\foo\bar),
-        // then use path.relative() for the containment check (separator-agnostic, handles
-        // symlinks and avoids the /workspace-evil false-positive of naive startsWith).
-        const normCwd = realCwd.replace(/\\/g, '/');
-        const normWorkspace = realWorkspace.replace(/\\/g, '/');
-        const rel = relative(normWorkspace, normCwd);
-        const isContained = rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-        if (isContained) {
-          return {
-            outcome: 'allow',
-            reason: `Destructive git allowed by workflow config in workspace: ${command.join(' ')}`,
-            audit: true,
-          };
-        }
-      }
+    if (workflowAllowsDestructiveGit && isWithinWorkspace(cwd, workspacePath)) {
+      return {
+        outcome: 'allow',
+        reason: `Destructive git allowed by workflow config in workspace: ${command.join(' ')}`,
+        audit: true,
+      };
     }
     return {
       outcome: 'block',
@@ -574,6 +722,7 @@ export function decidePermissionForEvent(
       workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
       defaultDeny: opts.defaultDeny,
       cmdClass: cls,
+      targetPaths: resolveWriteTargets(event.params, cwd),
     });
     return { ...d, commandClass: cls };
   }

@@ -164,6 +164,43 @@ describe('dynamic-workflows subagent guard', () => {
     expect(result.block).toBe(true);
   });
 
+  // The guard passes workspacePath: cwd, so an ad-hoc subagent's session root IS its
+  // write fence. Without that, workspace_write fails closed and every subagent write
+  // is blocked; with a cwd-only fence, `write({ path: '~/.ssh/...' })` slips through
+  // because write/edit resolve params.path against cwd, not the cwd itself.
+  describe('write/edit are fenced to the session root', () => {
+    const call = (toolName: string, params: Record<string, unknown>, workdir?: string) => {
+      const h = mock.hooks.get('before_tool_call')!;
+      return h(
+        { toolName, params: workdir ? { ...params, workdir } : params },
+        { sessionKey: SUBAGENT_KEY },
+      ) as Promise<{ block?: boolean; blockReason?: string } | undefined>;
+    };
+
+    it('allows write to a path inside the session root', async () => {
+      expect(await call('write', { path: 'src/index.ts', content: 'x' }, process.cwd())).toBeUndefined();
+    });
+
+    it('allows edit to an absolute path inside the session root', async () => {
+      expect(await call('edit', { path: `${process.cwd()}/src/index.ts` }, process.cwd())).toBeUndefined();
+    });
+
+    it('blocks write to an absolute path outside the session root', async () => {
+      const r = await call('write', { path: '/etc/hosts', content: 'x' }, process.cwd());
+      expect(r?.block).toBe(true);
+    });
+
+    it('blocks write to a ~-prefixed path (the ~/.ssh/authorized_keys case)', async () => {
+      const r = await call('write', { path: '~/.ssh/authorized_keys', content: 'x' }, process.cwd());
+      expect(r?.block).toBe(true);
+    });
+
+    it('blocks a relative path that climbs out of the session root', async () => {
+      const r = await call('edit', { path: '../../etc/hosts' }, process.cwd());
+      expect(r?.block).toBe(true);
+    });
+  });
+
   it('does NOT register the hook when enabled=false (loud-degradation path)', () => {
     _resetForTest();
     const m2 = createMockApi({ enabled: false });

@@ -193,9 +193,15 @@ export function register(api: OpenClawPluginApi): void {
         ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
         : decidePermissionForEvent(event, {
             cwd,
-            // No workspace context for ad-hoc subagents → destructive-git containment
-            // check is skipped (only runs when workflowAllowsDestructiveGit=true), so
-            // destructive git falls straight to block. Fail-closed by design.
+            // An ad-hoc subagent has no workflow-assigned workspace, so the session
+            // root IS its workspace: writes may land anywhere under it, nowhere above.
+            // This is what fences write/edit — both take `{ path }` and resolve it
+            // against cwd, so a subagent legitimately sitting in the repo can still
+            // name ~/.ssh/authorized_keys. Omitting workspacePath would instead make
+            // the workspace_write fence fail closed and block every subagent write.
+            workspacePath: cwd,
+            // destructive-git containment only runs when workflowAllowsDestructiveGit
+            // is true, so destructive git still falls straight to block.
             workflowAllowsDestructiveGit: false,
             defaultDeny: true, // subagent: unclassified SHELL commands are blocked
           });
