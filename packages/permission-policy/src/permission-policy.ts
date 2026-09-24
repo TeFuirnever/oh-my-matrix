@@ -462,7 +462,13 @@ export function classifyCommand(
   if (toolLower === 'npx') return 'validation';
 
   // ─── Network tools ───────────────────────────────────────
-  if (toolLower === 'curl' || toolLower === 'wget') return 'network';
+  // web_fetch/web_search (ADR-021): read-egress agent tools inherited from the
+  // coding profile — they DO reach subagent tool lists, so leaving them
+  // unclassified meant defaultDeny blocked every subagent web read. curl
+  // (arbitrary URL, any method) is already here; a GET-only fetch and a search
+  // query are strictly narrower. browser/coding stay unclassified by the same
+  // ADR — see unintrospectableWriteTools' doc for the guard-blindness reason.
+  if (['curl', 'wget', 'web_fetch', 'web_search'].includes(toolLower)) return 'network';
 
   // ─── Filesystem destructive commands ─────────────────────
   if (['rm', 'rmdir', 'shred'].includes(toolLower)) {
@@ -628,7 +634,8 @@ export function decidePermission(input: PermissionDecisionInput): PermissionDeci
   }
 
   // ─── Network ─────────────────────────────────────────────
-  // Auto-execute network commands (npm install, git push/fetch/pull/clone, curl/wget).
+  // Auto-execute network commands (npm install, git push/fetch/pull/clone,
+  // curl/wget, web_fetch/web_search per ADR-021).
   // credential_access is still blocked above (separate class).
   if (cmdClass === 'network') {
     return {

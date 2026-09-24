@@ -83,3 +83,8 @@ OpenClaw bundled plugin，提供 `.prose` 编译和执行。OpenProse 执行期�
 - [ADR-014: Dynamic Workflows Product Boundary](docs/adr/014-dynamic-workflows-product-boundary.md)
 - [ADR-015: Build Artifacts (`dist/`) Are Not Committed](docs/adr/015-dist-not-committed.md)
 - [ADR-016: Autopilot `status` is a derived, sole-writer field](docs/adr/016-autopilot-status-sole-writer.md)
+- [ADR-017: INT3 — subagent declared model wins](docs/adr/017-int3-subagent-declared-model-wins.md)
+- [ADR-018: Windows CI-verified support tier](docs/adr/018-windows-ci-verified-support-tier.md)
+- [ADR-019: Conditional evidence judging boundary](docs/adr/019-conditional-evidence-judging-boundary.md)
+- [ADR-020: Reducer sole-writer extends to coupled aux](docs/adr/020-reducer-sole-writer-extends-to-coupled-aux.md)
+- [ADR-021: Subagent Tool Policy Matrix](docs/adr/021-subagent-tool-policy-matrix.md)

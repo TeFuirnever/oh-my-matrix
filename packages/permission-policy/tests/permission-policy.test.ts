@@ -1094,3 +1094,43 @@ describe('host tool-name coverage (drift guard)', () => {
     expect(classifyCommand('edit')).toBe('workspace_write');
   });
 });
+
+// ─── ADR-021: network-read tools for subagent sessions ──────────────────────
+// web_fetch/web_search come from the coding profile's inherited tool set and so
+// DO reach subagent tool lists (unlike browser, which MA must alsoAllow). They
+// were unclassified, so defaultDeny blocked all subagent web reads. curl —
+// arbitrary URL, any method — is already 'network'; a GET-only fetch tool and a
+// search query are strictly narrower, so they join it. See ADR-021 for the
+// full matrix (browser/coding/nodes/sdd_activate_workflow stay blocked).
+describe('network-read tools (web_fetch/web_search) are network', () => {
+  it('classifies web_fetch as network', () => {
+    expect(classifyCommand('web_fetch', [])).toBe('network');
+  });
+
+  it('classifies web_search as network', () => {
+    expect(classifyCommand('web_search', [])).toBe('network');
+  });
+
+  it('allows a subagent web_fetch (real event shape, defaultDeny:true)', () => {
+    const ev = { toolName: 'web_fetch', params: { url: 'https://example.com' } as Record<string, unknown> };
+    const d = decidePermissionForEvent(ev, {
+      workflowAllowsDestructiveGit: false,
+      defaultDeny: true,
+      cwd: '/ws',
+      workspacePath: '/ws',
+    });
+    expect(d.outcome).toBe('allow');
+    expect(d.commandClass).toBe('network');
+  });
+
+  it('allows a subagent web_search', () => {
+    const ev = { toolName: 'web_search', params: { query: 'openclaw plugin sdk' } as Record<string, unknown> };
+    const d = decidePermissionForEvent(ev, {
+      workflowAllowsDestructiveGit: false,
+      defaultDeny: true,
+      cwd: '/ws',
+      workspacePath: '/ws',
+    });
+    expect(d.outcome).toBe('allow');
+  });
+});
