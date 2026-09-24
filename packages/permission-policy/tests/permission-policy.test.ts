@@ -1031,3 +1031,66 @@ describe('Q4b: write fence with real paths (symlink symmetry)', () => {
     }
   });
 });
+
+// ─── Host tool-name coverage guard ──────────────────────────────────────────
+// WHY THIS EXISTS: the `write`/`edit` bug (see workspaceWriteTools, "B9 fix")
+// was a NAME DRIFT bug, not a policy bug. The classifier said `write_file`;
+// the host emits `write`. Nobody noticed because an unclassified name returns
+// 'unknown', and 'unknown' under defaultDeny silently blocks — a missing
+// classification looks exactly like a deliberate denial.
+//
+// This guard makes drift LOUD. It snapshots the tool names a consuming host
+// declares in `tools.alsoAllow` and asserts each one is either classified or
+// EXPLICITLY listed as an open question below. A new name arriving in the
+// host config with nobody having triaged it fails here.
+//
+// It deliberately does NOT assert what the policy should be. Deciding whether
+// `coding` or `browser` should reach a subagent is a security-boundary call
+// that belongs in an ADR, not in a test fixture. This guard only guarantees
+// the question gets asked.
+describe('host tool-name coverage (drift guard)', () => {
+  // Snapshot of MatrixAssistant resources/openclaw-defaults.json -> tools.alsoAllow
+  // (read 2026-09-24; MA pins @oh-my-matrix/permission-policy 0.1.4).
+  // MA is a DOWNSTREAM consumer: this is a copied snapshot, never a live read.
+  // Upstream must not depend on a consumer's config at build or test time.
+  const HOST_ALSO_ALLOW = [
+    'message', 'nodes', 'agents_list', 'browser', 'coding',
+    'sdd_activate_workflow', 'findskill', 'callmcp', 'findtool',
+  ] as const;
+
+  // Names knowingly left unclassified -> they fall to 'unknown' and are blocked
+  // in subagent sessions by defaultDeny. Each needs a policy decision before it
+  // can move out of this set. Removing a name from here without classifying it
+  // fails the test below, which is the point.
+  const AWAITING_POLICY_DECISION = new Set<string>([
+    'message', 'nodes', 'agents_list', 'browser', 'coding',
+    'sdd_activate_workflow', 'findskill', 'callmcp', 'findtool',
+  ]);
+
+  it.each(HOST_ALSO_ALLOW)('%s is classified, or explicitly awaiting a decision', (toolName) => {
+    const cls = classifyCommand(toolName);
+    if (AWAITING_POLICY_DECISION.has(toolName)) {
+      // Pinned expectation: still unclassified. When a policy decision lands and
+      // the name is classified, this flips and forces the set to be updated —
+      // so the open-question list cannot silently go stale either.
+      expect(cls).toBe('unknown');
+    } else {
+      expect(cls).not.toBe('unknown');
+    }
+  });
+
+  it('every awaiting-decision name is actually in the host config', () => {
+    // Guards the reverse drift: a name dropped from the host config should not
+    // linger here pretending to be an open question.
+    for (const name of AWAITING_POLICY_DECISION) {
+      expect(HOST_ALSO_ALLOW).toContain(name as (typeof HOST_ALSO_ALLOW)[number]);
+    }
+  });
+
+  it('write/edit stay classified — the B9 regression this guard generalises', () => {
+    // The original drift. Kept explicit so the guard's reason for existing is
+    // covered by the guard itself.
+    expect(classifyCommand('write')).toBe('workspace_write');
+    expect(classifyCommand('edit')).toBe('workspace_write');
+  });
+});
