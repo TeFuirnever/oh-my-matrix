@@ -1,6 +1,6 @@
 {
   "name": "@oh-my-matrix/dynamic-workflows",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Dynamic Workflows: runtime subagent guard (before_tool_call priority 11, fail-closed destructive-op blocking for :subagent: sessions) + LLM-driven orchestration skill (.prose generation, 11 patterns, role-prompt templates). Imports permission primitives from @oh-my-matrix/permission-policy.",
   "publishConfig": {
     "access": "public"
@@ -37,7 +37,7 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.7.1-2 <2027",
-    "@oh-my-matrix/permission-policy": "^0.1.4"
+    "@oh-my-matrix/permission-policy": "^0.1.5"
   },
   "devDependencies": {
     "openclaw": "2026.7.1-2",
