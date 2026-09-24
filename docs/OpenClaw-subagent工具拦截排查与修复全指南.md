@@ -8,6 +8,33 @@
 
 ---
 
+## 0. 2026-09-24 上游修复落地 —— 先读本节，以下原文含已被推翻的建议
+
+本文的**诊断**（§2-§4 拦截链路、插件地图、决策流）依然成立；但 **§5 的修复建议有多处已被上游实现推翻或取代**。现状：
+
+**根因确认并在上游修复**。`write`/`edit` 被 subagent 拦截的直接原因是 `@oh-my-matrix/permission-policy` 的 `workspaceWriteTools` 只列了 `write_file`——一个宿主从不发送的名字。宿主实际发 `write`/`edit`，落入 unclassified，被 `defaultDeny` 挡死；subagent 唯一能用的写通道是碰巧拼对名字的 `apply_patch`。修复在 oh-my-matrix 仓库 PR #188（发版后为 `permission-policy` 0.1.5 / `dynamic-workflows` 1.2.1）。
+
+**MA 侧正确动作**：等 npm 发版后升级 `@oh-my-matrix/permission-policy` 与 `@oh-my-matrix/dynamic-workflows`、重新部署插件（`pnpm build:dynamic-workflows-plugin` 等）、重启 gateway。**§5.1 的 dist 热修不再需要**——那份热修方案当时就从未落地过（shipped dist 一直保持 0.1.4 的 bug 版）。
+
+**已被推翻的建议**：
+
+| 原文建议 | 现状 | 原因 |
+|---|---|---|
+| §5.1 ② 把 `coding` 加进 `workspace_write` | **否决** | 本文 §4.5 自己写明：coding worker 的写文件/跑命令在独立进程里，不经过 `before_tool_call`。归 `workspace_write` = 无条件放行 = guard 盲区。subagent 若不该用 `coding`，正确杠杆是 MA 侧 `tools.subagents.tools.deny`（按名字从工具面移除） |
+| §5.1 ① 把 `browser` 归 `network` | **不再必要** | openclaw 2026.7.1-2 中 `browser` 默认不在 `coding` profile（docs/tools/subagents.md:581）；operator 已有 `tools.alsoAllow` 这个前置开关，分类器里再加一层是重复边界 |
+| §5.1 ③ 解释器命令归 `network` | **暂缓** | `network` 类在 `defaultDeny` 下是无条件 allow，把 `python3`/`node` 塞进去等于拆 guard；与 `web_fetch` 同属待决策略 |
+| §5.3 `subagentExtraAllowTools` 配置口 | **未实现** | 改为 per-tool policy 决策（走 ADR）+ drift-guard 测试：宿主 `tools.alsoAllow` 里出现分类器无意见的名字 → 测试红 |
+
+**新的边界事实**（修复引入，读 §8.3 时以本表为准）：
+
+- subagent 中 `apply_patch`/`apply_diff` 被 **block**（目标藏在 patch body 的 diff header 里，fence 无从检查；`write`/`edit` 已可用，覆盖同样需求）。可信会话（autopilot 主会话）不受影响。
+- `write`/`edit` 被**围栏到 session root**（guard 以 cwd 作为 ad-hoc subagent 的 workspace）：目标路径在界内放行，越界（含 `~/.ssh/...`、`../../etc/hosts`、符号链接逃逸）block。
+- MA `alsoAllow` 9 个名字中 5 个根本到不了 subagent 工具面：`agents_list` 在 openclaw `SUBAGENT_TOOL_DENY_ALWAYS`，`findskill`/`callmcp`/`findtool` 在 MA 自己的 `tools.subagents.tools.deny`，`message` 在 spawn 时被宿主禁用。真正待决的 4 个：`nodes`、`browser`、`coding`、`sdd_activate_workflow`，加上 `coding` profile 继承的 `web_fetch`/`web_search`。
+
+**Drift guard**：本 PR 新增测试，快照 MA `tools.alsoAllow` 全部名字，断言每个要么已分类、要么显式标记为「待 policy 决策」。新工具名进宿主配置而没人 triage 会直接红灯——本文记录的那种静默失效（`write_file` vs `write` 漂移 11 周无人发现）不会再无声发生。
+
+---
+
 ## 1. 结论（TL;DR）
 
 **不是 OpenClaw 核心的工具策略管线干的，也不是 `openclaw.json` 配置问题。**
