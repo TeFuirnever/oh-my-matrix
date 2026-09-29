@@ -135,6 +135,232 @@ export function resolveWriteTargets(
 }
 
 /**
+ * PowerShell read cmdlet family (2026-09-29 issue C). Read-shaped cmdlets are
+ * pure reads for classification; the write family is DERIVED from
+ * CMDLET_PARAM_TABLE's keys below so classification and the fence cannot drift
+ * apart (a cmdlet added to one and not the other would silently degrade the
+ * fence to the cwd fallback).
+ */
+export const POWERSHELL_READ_CMDLETS = new Set(['get-item', 'get-content', 'get-childitem']);
+
+/** How a write-cmdlet parameter relates to the write fence. */
+type CmdletParamKind = 'target' | 'value' | 'bool';
+
+/**
+ * Common parameters every cmdlet accepts (about_CommonParameters) — never
+ * targets. Value-consuming ones eat a bareword so it is not mistaken for a
+ * positional path.
+ */
+const COMMON_CMDLET_PARAMS: Record<string, CmdletParamKind> = {
+  '-verbose': 'bool', '-debug': 'bool',
+  '-erroraction': 'value', '-warningaction': 'value', '-informationaction': 'value',
+  '-outbuffer': 'value', '-pipelinevariable': 'value', '-progressaction': 'value',
+};
+
+/**
+ * Parameter tables for the write-shaped cmdlets (2026-09-29 issue C + review).
+ * `target` params contribute the fenced write target; `value` params consume a
+ * bareword (or comma array) without ever becoming a target — Copy-Item's -Path
+ * is its SOURCE, a read, hence a `value` here; `bool` params stand alone.
+ * PowerShell accepts unambiguous prefixes (`-lit` → -LiteralPath) and attached
+ * values (`-Path:x`; `-Path=x`, which PS rejects, is tolerated for symmetry);
+ * matchCmdletParam resolves prefixes, and anything unknown or ambiguous fails
+ * CLOSED — an unlisted parameter could be the one carrying the real write
+ * target, so parsing must not silently degrade to the cwd fallback for it.
+ */
+const CMDLET_PARAM_TABLE: Record<string, Record<string, CmdletParamKind>> = {
+  'set-content': {
+    '-path': 'target', '-literalpath': 'target',
+    '-value': 'value', '-encoding': 'value',
+    '-nonewline': 'bool', '-asbytestream': 'bool', '-force': 'bool',
+    '-confirm': 'bool', '-whatif': 'bool', '-passthru': 'bool',
+  },
+  'new-item': {
+    '-path': 'target', '-literalpath': 'target',
+    // -Name may itself carry a path ("you can specify the path of the new item
+    // in Name" — Microsoft Learn), so it is resolved as a target below.
+    '-name': 'value', '-value': 'value', '-type': 'value', '-itemtype': 'value',
+    '-directory': 'bool', '-force': 'bool', '-confirm': 'bool', '-whatif': 'bool',
+  },
+  'copy-item': {
+    '-destination': 'target',
+    '-path': 'value', '-literalpath': 'value',
+    '-filter': 'value', '-exclude': 'value', '-include': 'value',
+    '-recurse': 'bool', '-container': 'bool', '-force': 'bool',
+    '-confirm': 'bool', '-whatif': 'bool', '-passthru': 'bool',
+  },
+};
+
+/** The write family, derived from the fence tables (single source of truth). */
+export const POWERSHELL_WRITE_CMDLETS = new Set(Object.keys(CMDLET_PARAM_TABLE));
+
+/**
+ * Fail-closed sentinel returned by resolveWriteTargetsFromArgv when a write
+ * cmdlet's target is UNVERIFIABLE: an unknown or ambiguous parameter, a target
+ * arriving by pipeline (unanalyzable after segment splitting), a $variable
+ * target PowerShell expands before binding, or a parsed argv with no target at
+ * all. The path is absolute and contains a NUL — no real path matches it. The
+ * fence in decidePermission ALSO checks identity against this sentinel
+ * explicitly: isWithinWorkspace alone would accept it under a root workspace.
+ */
+export const FENCE_SENTINEL_TARGET = '/\u0000unparseable-write-cmdlet';
+
+/**
+ * Resolve a dash-token against a cmdlet's parameter table plus the common
+ * parameters, honouring PowerShell's unambiguous-prefix abbreviation. Exact
+ * match wins; otherwise a prefix matching exactly one parameter (across both
+ * sets) wins; zero or multiple matches return undefined (unknown / ambiguous)
+ * so the caller can fail closed.
+ */
+function matchCmdletParam(
+  table: Record<string, CmdletParamKind>,
+  flag: string,
+): { name: string; kind: CmdletParamKind } | undefined {
+  const exact = table[flag] ?? COMMON_CMDLET_PARAMS[flag];
+  if (exact) return { name: flag, kind: exact };
+  const hits = [
+    ...Object.keys(table).filter((k) => k.startsWith(flag)),
+    ...Object.keys(COMMON_CMDLET_PARAMS).filter((k) => k.startsWith(flag)),
+  ];
+  if (hits.length === 1) return { name: hits[0], kind: (table[hits[0]] ?? COMMON_CMDLET_PARAMS[hits[0]])! };
+  return undefined;
+}
+
+/**
+ * Index of the cmdlet token inside argv, after wrapper prefixes — mirrors
+ * classifyCommand's own recursion (env / npx / npm|pnpm|yarn exec|dlx) so the
+ * FENCE resolves the same effective binary the CLASSIFIER did. Without this,
+ * `env Set-Content -Path /etc/hosts …` classifies workspace_write (recursion)
+ * while the fence looks up 'env', finds no table, and falls back to cwd.
+ */
+function cmdletStartIndex(argv: string[]): number {
+  const head = argv[0]?.toLowerCase();
+  let i = 0;
+  if (head === 'env') {
+    i = 1;
+    while (i < argv.length && argv[i].includes('=') && !argv[i].startsWith('-')) i++;
+  } else if (head === 'npx') {
+    i = 1;
+    while (i < argv.length && argv[i].startsWith('-')) i++;
+  } else if ((head === 'npm' || head === 'pnpm' || head === 'yarn')
+             && ['exec', 'dlx'].includes(argv[1]?.toLowerCase() ?? '')) {
+    i = 2;
+    while (i < argv.length && argv[i].startsWith('-')) i++;
+  }
+  return i;
+}
+
+/**
+ * Absolutise one target candidate the way resolveWriteTargets treats tool
+ * params, plus PowerShell specifics: comma arrays fence EVERY element
+ * (`"a,../../.ssh/x"` is two paths, not one comma filename), and a leading `$`
+ * is a variable PowerShell expands before binding ($HOME, $env:TEMP) —
+ * unanalyzable, so the sentinel. Absolute/~ pass through as-is (the fence
+ * rejects them); relatives resolve against the session cwd; no cwd leaves
+ * them unresolved (fence fails closed).
+ */
+function absolutiseTargets(raw: string, cwd?: string): string[] {
+  return raw.split(',')
+    .map((el) => el.trim())
+    .filter((el) => el !== '')
+    .flatMap((el) => {
+      if (el.startsWith('$')) return [FENCE_SENTINEL_TARGET];
+      if (isAbsolute(el) || el.startsWith('~')) return [el];
+      return cwd ? [resolve(cwd, el)] : [el];
+    });
+}
+
+/**
+ * The path(s) a write-shaped PowerShell cmdlet segment will mutate,
+ * absolutised — the argv-level sibling of resolveWriteTargets. Shell segments
+ * carry no params.path, so without this the workspace_write fence falls back
+ * to the session cwd and `Set-Content -Path /etc/hosts` issued from an
+ * in-workspace cwd would pass.
+ *
+ * Set-Content / New-Item: the target is -Path (positional 0); New-Item's
+ * -Name additionally contributes resolve(cwd, Path, Name). Copy-Item: the
+ * target is -Destination, bound to the FIRST UNBOUND positional — with a
+ * named -Path the next bareword is the destination, not a second source.
+ *
+ * Returns [FENCE_SENTINEL_TARGET] for anything unverifiable: unknown or
+ * ambiguous dash-parameter, $variable target, or a targetless write cmdlet
+ * (its real target arrives by pipeline input, which segment splitting has
+ * already made unanalyzable — `Get-Item /etc/hosts | Set-Content -Value x`).
+ * Non-write-cmdlet segments return [] — the generic cwd fallback.
+ */
+export function resolveWriteTargetsFromArgv(argv: string[], cwd?: string): string[] {
+  const start = cmdletStartIndex(argv);
+  const cmd = argv[start]?.toLowerCase() ?? '';
+  const table = CMDLET_PARAM_TABLE[cmd];
+  if (!table) return [];
+  const named = new Map<string, string>();
+  const positionals: string[] = [];
+  for (let i = start + 1; i < argv.length; i++) {
+    const tok = argv[i];
+    if (tok.startsWith('-') && tok !== '-') {
+      // Attached value forms: PowerShell's `-Path:x` (and `-Path=x`, which PS
+      // rejects but tolerating costs nothing). Split at the EARLIEST separator
+      // so a ':' inside an '='-attached value does not mis-slice the flag.
+      const sepCands = [tok.indexOf(':'), tok.indexOf('=')].filter((p) => p > 1);
+      const sep = sepCands.length ? Math.min(...sepCands) : undefined;
+      const flag = (sep !== undefined ? tok.slice(0, sep) : tok).toLowerCase();
+      const m = matchCmdletParam(table, flag);
+      // Unknown or ambiguous parameter: the write target may live in it —
+      // fail closed rather than guess (ADR-022).
+      if (!m) return [FENCE_SENTINEL_TARGET];
+      if (sep !== undefined) { named.set(m.name, tok.slice(sep + 1)); continue; }
+      if (m.kind === 'bool') continue;
+      // Value-taking parameter: consume the next token unless it is itself a
+      // resolvable parameter. A `-` follower that matches a known/common
+      // parameter IS that parameter (PS binds it, leaving ours unset); one
+      // that matches nothing is a quoted negative-looking value
+      // (`-Value "-Verbose"` — quotes were stripped by tokenizeShell, so
+      // consuming it here is the only way to keep it off the param path).
+      if (i + 1 < argv.length) {
+        const nxt = argv[i + 1];
+        if (!nxt.startsWith('-')
+            || !matchCmdletParam(table, nxt.toLowerCase().split(/[:=]/)[0])) {
+          named.set(m.name, nxt);
+          i += 1;
+        }
+      }
+      continue;
+    }
+    positionals.push(tok);
+  }
+
+  const targets: string[] = [];
+  const add = (raw?: string) => { if (raw) targets.push(...absolutiseTargets(raw, cwd)); };
+
+  if (cmd === 'copy-item') {
+    // Destination binds the first UNBOUND positional: slot 0 is Path, so with
+    // a named -Path/-LiteralPath the remaining barewords start at the
+    // destination slot.
+    const sourceNamed = named.has('-path') || named.has('-literalpath');
+    add(named.get('-destination') ?? (sourceNamed ? positionals[0] : positionals[1]));
+  } else {
+    const pathRaw = named.get('-path') ?? named.get('-literalpath');
+    add(pathRaw ?? positionals[0]);
+    if (cmd === 'new-item') {
+      // -Name may carry a path of its own; with -Path both are written through
+      // (Path/Name join), without it Name resolves against the cwd.
+      const name = named.get('-name');
+      if (name) {
+        const base = pathRaw
+          ? (isAbsolute(pathRaw) || pathRaw.startsWith('~') ? pathRaw : (cwd ? resolve(cwd, pathRaw) : pathRaw))
+          : cwd;
+        targets.push(...absolutiseTargets(base ? join(base, name) : name, undefined));
+      }
+    }
+  }
+
+  // A write cmdlet that parsed to NO target takes its Path from pipeline
+  // input — unanalyzable here, so fail closed rather than fall back to cwd.
+  if (targets.length === 0) return [FENCE_SENTINEL_TARGET];
+  return targets;
+}
+
+/**
  * Minimal view of the OpenClaw `before_tool_call` event — only the fields the
  * guard reads. The real event (`PluginHookBeforeToolCallEvent`) has exactly
  * `["toolName","params","runId","toolCallId"]` (verified live 2026-06-28): there
@@ -177,6 +403,34 @@ export function tokenizeShell(command: string): string[] {
 // bogus `["1"]` segment that defaultDeny would block (false positive).
 const SHELL_SPLIT_RE = /\s*(?:&&|\|\||\||;|(?<!>)&(?!&)|\n)\s*/;
 
+// Shell-feature regexes, platform-gated (2026-09-29 issue A + review):
+// - POSIX: ANY backtick is potential command substitution → strict flag.
+// - Windows/PowerShell: backtick is an escape prefix (`n, `t, `0 …) that never
+//   spawns a subshell; only alphanumerics are PowerShell escape chars, so a
+//   backtick followed by anything else — quote, `$`, another backtick, space,
+//   EOL — is still flagged. That keeps quoted POSIX substitution
+//   (`echo "`cmd`"`) caught on Windows too, at the cost of fail-closing the
+//   rare `" / `$ / `` escapes for subagents (ADR-022).
+const SHELL_FEATURE_POSIX_RE = /\$\(|`|<\(|>\(/;
+const SHELL_FEATURE_WIN_RE = /\$\(|`(?![a-zA-Z0-9])|<\(|>\(/;
+
+/**
+ * Detect shell features tokenizeShell cannot parse safely — command
+ * substitution `$(...)`, process substitution `<(...)`/`>(...)`, and POSIX
+ * backtick substitution. These execute arbitrary code that classifyCommand
+ * never sees (e.g. `echo $(rm -rf /)` classifies as read-only echo); callers
+ * in untrusted (subagent) mode must block when this is true.
+ *
+ * Exported with an explicit winLike flag so tests cover both semantics
+ * deterministically regardless of host platform. Residual (winLike only): a
+ * POSIX closing backtick immediately glued to a letter/digit
+ * (`echo "x`rm -rf /`y"`) reads as two PowerShell escapes and is not flagged;
+ * accepted as a narrow shape, recorded in ADR-022.
+ */
+export function detectShellFeature(raw: string, winLike: boolean): boolean {
+  return (winLike ? SHELL_FEATURE_WIN_RE : SHELL_FEATURE_POSIX_RE).test(raw);
+}
+
 /**
  * Extract argv segments + cwd from a REAL `before_tool_call` event.
  *
@@ -196,11 +450,10 @@ export function extractCommandSegments(
   const raw = params['command'];
   const workdir = typeof params['workdir'] === 'string' ? (params['workdir'] as string) : undefined;
   if (typeof raw !== 'string' || raw.trim() === '') return { segments: [], cwd: workdir, hasShellFeature: false };
-  // Shell features tokenizeShell CANNOT parse safely — command substitution `$(...)`,
-  // backticks, process substitution `<(...)`/`>(...)`. These execute arbitrary code that
-  // classifyCommand never sees (e.g. `echo $(rm -rf /)` classifies as read-only echo).
-  // Callers in untrusted (subagent) mode must block when this is true.
-  const hasShellFeature = /\$\(|`|<\(|>\(/.test(raw);
+  // Shell features tokenizeShell CANNOT parse safely — see detectShellFeature.
+  // Platform-gated: the host platform decides POSIX (strict, any backtick) vs
+  // Windows (PowerShell escape-aware) backtick semantics.
+  const hasShellFeature = detectShellFeature(raw, process.platform === 'win32');
   const segments = raw
     .split(SHELL_SPLIT_RE)
     .map((seg) => tokenizeShell(seg))
@@ -336,6 +589,15 @@ export function classifyCommand(
   // Registry modification — no Unix equivalent, equally dangerous
   if (toolLower === 'reg' || toolLower === 'reg.exe' || toolLower === 'regedit') return 'system_write';
 
+  // ─── PowerShell cmdlets (Windows hosts, 2026-09-29 issue C) ──
+  // Get-* cmdlets are pure reads. Write-shaped ones are workspace_write so the
+  // fence can check their -Path/-Destination targets (resolveWriteTargetsFromArgv).
+  // Remove-Item is deliberately NOT classified: workspace_cleanup is blocked even
+  // in trusted sessions, which would regress main-session Remove-Item usage —
+  // unknown keeps subagents fail-closed without touching trusted behaviour.
+  if (POWERSHELL_READ_CMDLETS.has(toolLower)) return 'read_only';
+  if (POWERSHELL_WRITE_CMDLETS.has(toolLower)) return 'workspace_write';
+
   // ─── Credential access ───────────────────────────────────
   if (toolLower.includes('credential') || toolLower.includes('keychain') || toolLower.includes('ssh-key')) {
     return 'credential_access';
@@ -439,7 +701,9 @@ export function classifyCommand(
   // ─── Package managers ────────────────────────────────────
   if (toolLower === 'pnpm' || toolLower === 'npm' || toolLower === 'yarn') {
     const sub = args[0];
-    if (sub === 'install' || sub === 'add' || sub === 'update') return 'network';
+    // `dlx` (pnpm-style one-liners) downloads and runs a package — same class as
+    // install: arbitrary fetch+execute, allowed with audit (2026-09-29 issue B).
+    if (sub === 'install' || sub === 'add' || sub === 'update' || sub === 'dlx') return 'network';
     // `test` runs the conventional package.json test script — keep as validation.
     if (sub === 'test') return 'validation';
     // ponytail: `run <script>` is intentionally NOT validation. It executes an
@@ -468,7 +732,15 @@ export function classifyCommand(
   // (arbitrary URL, any method) is already here; a GET-only fetch and a search
   // query are strictly narrower. browser/coding stay unclassified by the same
   // ADR — see unintrospectableWriteTools' doc for the guard-blindness reason.
-  if (['curl', 'wget', 'web_fetch', 'web_search'].includes(toolLower)) return 'network';
+  if (['curl', 'wget', 'web_fetch', 'web_search',
+       // Interpreters / script runners (2026-09-29 issue B): `node -e`, `python -c`,
+       // `pip install`, `uv …` execute arbitrary code and/or fetch packages. The
+       // 2026-09-12 host diagnostic proposed classifying them network ("allow but
+       // audit") so subagents can build/verify via shell at all; the alternative
+       // lever is the companion issue's operator-side subagentExtraAllowTools.
+       // Trusted sessions are unchanged (unknown→allow either way); the class only
+       // decides allow-with-audit vs fail-closed under defaultDeny.
+       'node', 'python', 'python3', 'pip', 'pip3', 'uv'].includes(toolLower)) return 'network';
 
   // ─── Filesystem destructive commands ─────────────────────
   if (['rm', 'rmdir', 'shred'].includes(toolLower)) {
@@ -601,7 +873,7 @@ export function decidePermission(input: PermissionDecisionInput): PermissionDeci
       const fenced = targetPaths.length > 0 ? targetPaths : (cwd ? [cwd] : []);
       const escaping = fenced.length === 0
         ? 'unknown'
-        : fenced.find((t) => !isWithinWorkspace(t, workspacePath));
+        : fenced.find((t) => t === FENCE_SENTINEL_TARGET || !isWithinWorkspace(t, workspacePath));
       if (escaping !== undefined) {
         return {
           outcome: 'block',
@@ -753,6 +1025,10 @@ export function decidePermissionForEvent(
       workflowAllowsDestructiveGit: opts.workflowAllowsDestructiveGit,
       defaultDeny: opts.defaultDeny,
       cmdClass: cls,
+      // Cmdlet-shaped shell writes carry their target in argv, not params —
+      // extract it so the workspace_write fence checks the real -Path (2026-09-29
+      // issue C). [] for everything else keeps the cwd fallback.
+      targetPaths: resolveWriteTargetsFromArgv(seg, cwd),
     });
     if (d.outcome === 'block') return { ...d, commandClass: cls };
     if (!allowReason) allowReason = d.reason;

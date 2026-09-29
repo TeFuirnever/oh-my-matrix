@@ -11,7 +11,9 @@ import {
   classifyCommand,
   decidePermission,
   decidePermissionForEvent,
+  detectShellFeature,
   extractCommandSegments,
+  POWERSHELL_WRITE_CMDLETS,
   unintrospectableWriteTools,
 } from '../src/permission-policy';
 import type { PermissionDecisionInput } from '../src/permission-policy';
@@ -1132,5 +1134,328 @@ describe('network-read tools (web_fetch/web_search) are network', () => {
       workspacePath: '/ws',
     });
     expect(d.outcome).toBe('allow');
+  });
+});
+
+// ─── 2026-09-29 issue: subagent exec gaps — A backtick bug, B interpreters, C cmdlets
+// Upstream issue draft docs/2026-09-29-omm-subagent-exec-command-classification-gaps.md.
+// TDD: written BEFORE the fix — expected to FAIL initially.
+describe('Issue A — PowerShell backtick escapes are not command substitution (platform-gated)', () => {
+  const isWin = process.platform === 'win32';
+
+  it('detectShellFeature: Windows semantics treat `n/`t escapes as benign', () => {
+    expect(detectShellFeature('Set-Content -Path a -Value "x`ny"', true)).toBe(false);
+    expect(detectShellFeature('echo "tab`tsep"', true)).toBe(false);
+  });
+
+  it('detectShellFeature: POSIX semantics flag any backtick (strict, pre-fix behaviour)', () => {
+    expect(detectShellFeature('Set-Content -Path a -Value "x`ny"', false)).toBe(true);
+    expect(detectShellFeature('echo "tab`tsep"', false)).toBe(true);
+  });
+
+  it('detectShellFeature: quoted POSIX substitution is caught on BOTH platforms (review CRITICAL)', () => {
+    expect(detectShellFeature('echo "`cat /etc/passwd`"', true)).toBe(true);
+    expect(detectShellFeature('echo "`cat /etc/passwd`"', false)).toBe(true);
+    expect(detectShellFeature("echo '`id`'", true)).toBe(true);
+    expect(detectShellFeature('echo `id`"suffix"', true)).toBe(true);
+    expect(detectShellFeature('echo `id`$HOME', true)).toBe(true);
+  });
+
+  it('detectShellFeature: POSIX backtick substitution still caught on Windows via closing backtick', () => {
+    expect(detectShellFeature('echo `id`', true)).toBe(true);
+    expect(detectShellFeature('echo `rm -rf /`', true)).toBe(true);
+  });
+
+  it('extractCommandSegments: benign PS escapes on Windows hosts, flagged (fail-closed) on POSIX hosts', () => {
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'Set-Content -Path a -Value "x`ny"' } }).hasShellFeature).toBe(isWin ? false : true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo "tab`tsep"' } }).hasShellFeature).toBe(isWin ? false : true);
+  });
+
+  it('still flags POSIX substitution / bare backtick / $() / <() on every platform', () => {
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo `id`' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo `rm -rf /`' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo ` id`' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'echo $(rm -rf /)' } }).hasShellFeature).toBe(true);
+    expect(extractCommandSegments({ toolName: 'exec', params: { command: 'cat <(rm -rf /)' } }).hasShellFeature).toBe(true);
+  });
+
+  it('subagent: quoted POSIX substitution is blocked end-to-end (defaultDeny, every platform)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'echo "`cat /etc/passwd`"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    const d = decidePermissionForEvent(ev, {
+      workflowAllowsDestructiveGit: false,
+      defaultDeny: true,
+      cwd: '/ws',
+      workspacePath: '/ws',
+    });
+    expect(d.outcome).toBe('block');
+  });
+});
+
+describe('Issue B — interpreters are network (allow but audit)', () => {
+  it.each([
+    ['node', ['-e', 'console.log(1)']],
+    ['node', ['build.js']],
+    ['python', ['-c', 'print(1)']],
+    ['python3', ['build.py']],
+    ['pip', ['install', 'requests']],
+    ['pip3', ['install', 'requests']],
+    ['uv', ['pip', 'install', 'httpx']],
+  ] as const)('classifies %s %s as network', (tool, args) => {
+    expect(classifyCommand(tool, [...args])).toBe('network');
+  });
+
+  it('classifies pnpm dlx one-liners as network', () => {
+    expect(classifyCommand('pnpm', ['dlx', 'some-pkg'])).toBe('network');
+  });
+
+  it('allows a subagent node one-liner (real event shape, defaultDeny:true)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'node -e "require(\'fs\').writeFileSync(\'note1.md\', \'x\')"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    const d = decidePermissionForEvent(ev, {
+      workflowAllowsDestructiveGit: false,
+      defaultDeny: true,
+      cwd: '/ws',
+      workspacePath: '/ws',
+    });
+    expect(d.outcome).toBe('allow');
+    expect(d.commandClass).toBe('network');
+  });
+});
+
+describe('Issue C — PowerShell cmdlets (Windows hosts)', () => {
+  it.each(['Get-Item', 'Get-Content', 'Get-ChildItem'] as const)(
+    'classifies read-shaped cmdlet %s as read_only',
+    (cmdlet) => {
+      expect(classifyCommand(cmdlet, ['a.txt'])).toBe('read_only');
+    },
+  );
+
+  it.each(['Set-Content', 'Copy-Item', 'New-Item'] as const)(
+    'classifies write-shaped cmdlet %s as workspace_write',
+    (cmdlet) => {
+      expect(classifyCommand(cmdlet, ['-Path', 'a'])).toBe('workspace_write');
+    },
+  );
+
+  it('classifyCommand is case-insensitive for cmdlet names (PowerShell convention)', () => {
+    expect(classifyCommand('set-content', ['-Path', 'a'])).toBe('workspace_write');
+    expect(classifyCommand('get-content', ['a.txt'])).toBe('read_only');
+  });
+
+  it('Remove-Item stays unknown — fail-closed in subagents, unchanged in trusted', () => {
+    expect(classifyCommand('Remove-Item', ['-Recurse', 'a'])).toBe('unknown');
+  });
+
+  // The argv fence: shell segments carry no params.path, so resolveWriteTargets
+  // sees nothing and the workspace_write fence falls back to cwd — which would
+  // let `Set-Content -Path /etc/hosts` through when cwd is inside the workspace.
+  // The cmdlet path must be extracted from argv (-Path / -Destination).
+  const subagentOpts = {
+    workflowAllowsDestructiveGit: false,
+    defaultDeny: true as const,
+    cwd: '/ws',
+    workspacePath: '/ws',
+  };
+
+  it('subagent Set-Content with `n escapes INSIDE workspace → allow on Windows, fail-closed on POSIX', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path note1.md -Value "line1`nline2" -Encoding utf8', workdir: '/ws' } as Record<string, unknown>,
+    };
+    const d = decidePermissionForEvent(ev, subagentOpts);
+    // The `n escape is benign under PowerShell (win32) but strict POSIX backtick
+    // flagging applies on POSIX hosts — fail closed there, by design (ADR-022).
+    expect(d.outcome).toBe(process.platform === 'win32' ? 'allow' : 'block');
+    if (process.platform === 'win32') expect(d.commandClass).toBe('workspace_write');
+  });
+
+  it('subagent Set-Content -LiteralPath OUTSIDE workspace → block (review HIGH)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -LiteralPath /etc/hosts -Value "pwn"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Set-Content -LiteralPath inside workspace → allow', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -LiteralPath note1.md -Value "x"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('allow');
+  });
+
+  it('subagent Set-Content -Lit (PS unambiguous abbreviation) OUTSIDE workspace → block', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Lit /etc/hosts -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Set-Content with UNKNOWN parameter → block (fail-closed sentinel)', () => {
+    // An unlisted dash-param could be the one carrying the real write target —
+    // the parser must not silently degrade to the cwd fallback for it.
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -FromKey /etc/hosts -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Copy-Item -Container does not shift positionals (review MEDIUM)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Copy-Item -Container a /etc/dst', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Copy-Item with AMBIGUOUS abbreviation (-P) → block (fail-closed; PS errors too)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Copy-Item -P a b.txt', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Set-Content -Path OUTSIDE workspace → block (fence on -Path)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path /etc/hosts -Value "x"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Set-Content with ../ escape path → block', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path ../outside.md -Value "x"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('subagent Set-Content positional path inside workspace → allow', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content note1.md "x"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('allow');
+  });
+
+  it('subagent Copy-Item destination inside workspace → allow; outside → block', () => {
+    const inside = {
+      toolName: 'exec',
+      params: { command: 'Copy-Item a.txt b.txt', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(inside, subagentOpts).outcome).toBe('allow');
+    const outside = {
+      toolName: 'exec',
+      params: { command: 'Copy-Item a.txt -Destination /etc/b.txt', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(outside, subagentOpts).outcome).toBe('block');
+  });
+
+  it('trusted session Set-Content outside workspace → allow (fence is defaultDeny-only)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path ~/.gitconfig -Value "x"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, { ...subagentOpts, defaultDeny: undefined }).outcome).toBe('allow');
+  });
+
+  // ─── /code-review regressions: real PowerShell binding semantics ──────────
+  it('pipeline-bound target fails closed: Get-Item /etc/hosts | Set-Content -Value pwn → block', () => {
+    // SHELL_SPLIT_RE splits the pipeline; the Set-Content segment has no -Path
+    // because PowerShell binds it from the piped object's PSPath. Unanalyzable
+    // → sentinel, not the cwd fallback.
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Get-Item /etc/hosts | Set-Content -Value pwn', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('$variable targets fail closed (PowerShell expands before binding)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path $HOME/.ssh/authorized_keys -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('Copy-Item with NAMED source binds the next bareword as destination → block outside', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Copy-Item -Path a.txt /etc/dst', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('New-Item -Name may carry a path: ../ escape via -Name → block', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'New-Item -Name ../outside.md -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('comma-separated -Path arrays fence every element → block on escaping element', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path "note.md,../../.ssh/authorized_keys" -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('common parameters (-Verbose, -ErrorAction) do not trip the sentinel', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path note1.md -Value x -Verbose -ErrorAction Stop', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('allow');
+  });
+
+  it('PowerShell colon-attached values (-Path:value) parse as targets', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path:note1.md -Value:x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('allow');
+  });
+
+  it('wrapper-prefixed cmdlets reach the fence: env Set-Content outside → block', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'env Set-Content -Path /etc/hosts -Value x', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('block');
+  });
+
+  it('quoted dash-looking values are consumed, not treated as parameters', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -Path note.md -Value "-weird-dash-value"', workdir: '/ws' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, subagentOpts).outcome).toBe('allow');
+  });
+
+  it('root-workspace sentinel still blocks (fence checks sentinel identity)', () => {
+    const ev = {
+      toolName: 'exec',
+      params: { command: 'Set-Content -FromKey /etc/hosts -Value x', workdir: '/' } as Record<string, unknown>,
+    };
+    expect(decidePermissionForEvent(ev, { ...subagentOpts, cwd: '/', workspacePath: '/' }).outcome).toBe('block');
+  });
+
+  it('fence table and classifier cannot drift: every table key classifies workspace_write', () => {
+    for (const cmdlet of POWERSHELL_WRITE_CMDLETS) {
+      expect(classifyCommand(cmdlet, ['-Path', 'a'])).toBe('workspace_write');
+    }
   });
 });
