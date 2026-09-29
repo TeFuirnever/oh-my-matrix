@@ -162,9 +162,14 @@ Fence semantics:
 
 ## Revisit conditions
 
-- The companion `subagentExtraAllowTools` operator lever lands in
-  dynamic-workflows → hosts can deny interpreters per-deployment without a
-  library change; revisit §1 if a stricter default is then viable.
+- ~~The companion `subagentExtraAllowTools` operator lever lands in
+  dynamic-workflows~~ **Landed (2026-09-29):** the lever now exists as a
+  `pluginConfig` key in `@oh-my-matrix/dynamic-workflows`. Direction
+  correction from the original wording: it is an **allow** lever (grants
+  extra host tool names, additive, audited per grant, refuses
+  guard-disarming names at register) — it cannot *deny* interpreters; a
+  deployment wanting interpreters denied needs a classifier-level decision
+  (revisit §1 then). `highRiskTools` remains the per-name deny lever.
 - A `network_read` class with URL/egress allowlisting materializes (ADR-021
   revisit) → interpreters may want a split (`node script.js` vs
   `node -e "<network fetch>"` stays out of scope until then).

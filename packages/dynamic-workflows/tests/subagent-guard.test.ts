@@ -164,6 +164,63 @@ describe('dynamic-workflows subagent guard', () => {
     expect(result.block).toBe(true);
   });
 
+  // ─── subagentExtraAllowTools: the operator expansion lever (ADR-022 companion) ──
+  // The industry-standard shape for "subagent is too narrow" (Codex per-agent
+  // sandbox_mode TOML, Gemini policy TOML `subagent` field): a config key the
+  // OPERATOR writes, never the agent. Additive only — never widens classification
+  // for anything not named, and refuses names whose grant would disarm the guard.
+  describe('subagentExtraAllowTools (operator expansion lever)', () => {
+    const setup = (pluginConfig: Record<string, unknown>) => {
+      _resetForTest();
+      const m = createMockApi(pluginConfig);
+      register(m.api as never);
+      return m.hooks.get('before_tool_call')!;
+    };
+    const blockOf = (r: unknown) => (r as { block?: boolean } | undefined)?.block;
+
+    it('allows an operator-granted host tool in a subagent session (e.g. browser)', async () => {
+      const h = setup({ subagentExtraAllowTools: ['browser'] });
+      const result = await h({ toolName: 'browser', params: {} }, { sessionKey: SUBAGENT_KEY });
+      expect(result).toBeUndefined(); // undefined = pass/allow
+    });
+
+    it('still blocks non-granted unknown tools — the list is additive, not a blanket allow', async () => {
+      const h = setup({ subagentExtraAllowTools: ['browser'] });
+      const result = await h({ toolName: 'another_unknown_tool', params: {} }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(result)).toBe(true);
+    });
+
+    it('refuses to grant generic executors — exec stays fully classified', async () => {
+      const h = setup({ subagentExtraAllowTools: ['exec'] });
+      // A granted 'exec' would skip ALL command classification (segments,
+      // shell-feature gate, fences) — that is guard-disarm, not expansion.
+      const r1 = await h({ toolName: 'exec', params: { command: 'git reset --hard' } }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(r1)).toBe(true);
+      const r2 = await h({ toolName: 'exec', params: { command: 'totally-unknown-binary' } }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(r2)).toBe(true);
+    });
+
+    it('refuses to grant fence-relevant writers — apply_patch stays blocked, write stays fenced', async () => {
+      const h = setup({ subagentExtraAllowTools: ['apply_patch', 'write'] });
+      const r1 = await h({ toolName: 'apply_patch', params: {} }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(r1)).toBe(true);
+      const r2 = await h({ toolName: 'write', params: { path: '/etc/hosts', content: 'x' } }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(r2)).toBe(true);
+    });
+
+    it('highRiskTools wins over subagentExtraAllowTools for the same name', async () => {
+      const h = setup({ subagentExtraAllowTools: ['weird_tool'], highRiskTools: ['weird_tool'] });
+      const result = await h({ toolName: 'weird_tool', params: {} }, { sessionKey: SUBAGENT_KEY });
+      expect(blockOf(result)).toBe(true);
+    });
+
+    it('does not affect main sessions (the lever is subagent-scoped)', async () => {
+      const h = setup({ subagentExtraAllowTools: ['browser'] });
+      const result = await h({ toolName: 'another_unknown_tool', params: {} }, { sessionKey: 'agent:main:main' });
+      expect(result).toBeUndefined();
+    });
+  });
+
   // The guard passes workspacePath: cwd, so an ad-hoc subagent's session root IS its
   // write fence. Without that, workspace_write fails closed and every subagent write
   // is blocked; with a cwd-only fence, `write({ path: '~/.ssh/...' })` slips through

@@ -24,6 +24,14 @@ and the audit plugin (9), short-circuiting with `block` on destructive ops for
 **Fail-closed:** `:subagent:` sessions default-deny when the guard can't classify a
 command.
 
+## Configuration (pluginConfig)
+
+| Key | Effect |
+|---|---|
+| `enabled` | `false` disables the guard (loud log; subagents run unguarded). |
+| `highRiskTools` | Tool names blocked for subagents even if classification would allow them. |
+| `subagentExtraAllowTools` | **Operator expansion lever** (ADR-022 companion): tool names granted to subagent sessions despite the fail-closed default — for host tools the classifier leaves unclassified (browser, nodes, …). Additive only; every grant is audited as an `allow`. Guard-disarming names (`exec`/`bash`/… and `write`/`edit`/`apply_patch`/…) are refused at register with an error log: granting them would bypass command classification / the write fence wholesale. Use classifier families (ADR-022) or workspace assignment instead. When `highRiskTools` and this key carry the same name, the block wins. |
+
 ## Status
 
 v0.1.3. Tested with `vitest`. See the project

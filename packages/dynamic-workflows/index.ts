@@ -115,7 +115,22 @@ export function isFanOutCandidate(prompt: string): boolean {
 interface GuardConfig {
   enabled?: boolean;
   highRiskTools?: string[];
+  /** Operator-granted extra tool names allowed in subagent sessions (ADR-022
+   *  companion lever). Additive only; guard-disarming names are refused at
+   *  register time — see GUARD_DISARMING_TOOLS below. */
+  subagentExtraAllowTools?: string[];
 }
+
+// Names whose "grant" would disarm the guard rather than expand it: generic
+// executors skip ALL command classification (segment splitting, shell-feature
+// gate, fences), and fence-relevant writers skip the workspace write fence —
+// the only delta vs their today-behaviour is out-of-workspace writes, exactly
+// what the fence exists to stop. The levers for those are classifier families
+// (ADR-022) and workspace assignment, not a tool-name grant.
+const GUARD_DISARMING_TOOLS = new Set([
+  'exec', 'bash', 'sh', 'shell_exec', 'terminal', 'code_mode_exec',
+  'write', 'edit', 'write_file', 'apply_patch', 'apply_diff', 'code_editor',
+]);
 
 export function register(api: OpenClawPluginApi): void {
   const config = ((api as unknown as { pluginConfig?: Record<string, unknown> }).pluginConfig ?? {}) as GuardConfig;
@@ -127,6 +142,16 @@ export function register(api: OpenClawPluginApi): void {
     // runs register() in OpenClaw; a host-level disable would not).
     logWithContext('warn', 'dynamic-workflows guard DISABLED by config — workflow subagents will NOT be runtime-guarded against destructive ops', {});
     return;
+  }
+
+  // Operator expansion lever (ADR-022 companion): validate before use. Granting
+  // a guard-disarming name is a config error, not a silent foot-gun — refuse it
+  // loudly and keep the rest of the list.
+  const extraAllowRaw = Array.isArray(config.subagentExtraAllowTools) ? config.subagentExtraAllowTools : [];
+  const refusedGrants = extraAllowRaw.filter((t) => GUARD_DISARMING_TOOLS.has(t));
+  const subagentExtraAllowTools = extraAllowRaw.filter((t) => !GUARD_DISARMING_TOOLS.has(t));
+  if (refusedGrants.length > 0) {
+    logWithContext('error', 'subagentExtraAllowTools: refused guard-disarming name(s); granting these bypasses command classification / the write fence wholesale — use classifier families (ADR-022) or workspace assignment instead', { refused: refusedGrants.join(', ') });
   }
 
   const registerHook = (api as unknown as {
@@ -189,24 +214,49 @@ export function register(api: OpenClawPluginApi): void {
       const cwd = eventCwd ?? process.cwd();
 
       const isConfiguredHighRisk = Array.isArray(config.highRiskTools) && config.highRiskTools.includes(toolName);
+      const isOperatorGranted = subagentExtraAllowTools.includes(toolName);
+      // Operator block beats operator grant for the same name: when both lists
+      // carry it, the block is the more recent/considered intent and the safe
+      // resolution (a mistaken allow is a silent hole; a mistaken block is loud).
       const decision = isConfiguredHighRisk
         ? { outcome: 'block' as const, reason: `${toolName} is configured as high-risk tool`, message: `Tool "${toolName}" is blocked by operator config (highRiskTools)` }
-        : decidePermissionForEvent(event, {
-            cwd,
-            // An ad-hoc subagent has no workflow-assigned workspace, so the session
-            // root IS its workspace: writes may land anywhere under it, nowhere above.
-            // This is what fences write/edit — both take `{ path }` and resolve it
-            // against cwd, so a subagent legitimately sitting in the repo can still
-            // name ~/.ssh/authorized_keys. Omitting workspacePath would instead make
-            // the workspace_write fence fail closed and block every subagent write.
-            workspacePath: cwd,
-            // destructive-git containment only runs when workflowAllowsDestructiveGit
-            // is true, so destructive git still falls straight to block.
-            workflowAllowsDestructiveGit: false,
-            defaultDeny: true, // subagent: unclassified SHELL commands are blocked
-          });
+        : isOperatorGranted
+          ? { outcome: 'allow' as const, reason: `${toolName} operator-granted for subagents (subagentExtraAllowTools)`, audit: true }
+          : decidePermissionForEvent(event, {
+              cwd,
+              // An ad-hoc subagent has no workflow-assigned workspace, so the session
+              // root IS its workspace: writes may land anywhere under it, nowhere above.
+              // This is what fences write/edit — both take `{ path }` and resolve it
+              // against cwd, so a subagent legitimately sitting in the repo can still
+              // name ~/.ssh/authorized_keys. Omitting workspacePath would instead make
+              // the workspace_write fence fail closed and block every subagent write.
+              workspacePath: cwd,
+              // destructive-git containment only runs when workflowAllowsDestructiveGit
+              // is true, so destructive git still falls straight to block.
+              workflowAllowsDestructiveGit: false,
+              defaultDeny: true, // subagent: unclassified SHELL commands are blocked
+            });
 
-      if (decision.outcome !== 'block') return; // allow (read_only / workspace_write / network)
+      if (decision.outcome !== 'block') {
+        // Operator grants are audited as allows — expansion must be visible in
+        // the trail, not silent (the research note's invariant: every expansion
+        // is operator-owned; the audit entry is where that ownership shows).
+        if (isOperatorGranted && !isConfiguredHighRisk) {
+          appendAuditEntry(
+            {
+              at: Date.now(),
+              runId: `subagent:${sessionKey}`,
+              toolName,
+              commandClass: classifyCommand(toolName),
+              outcome: 'allow',
+              reason: decision.reason,
+              cwd,
+            },
+            cwd,
+          );
+        }
+        return; // allow (read_only / workspace_write / network / operator grant)
+      }
 
       logWithContext('info', 'before_tool_call BLOCKED (subagent guard)', { sessionKey, toolName, reason: decision.reason });
       appendAuditEntry(
