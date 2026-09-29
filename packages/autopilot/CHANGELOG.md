@@ -1,5 +1,12 @@
 # @oh-my-matrix/autopilot
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`24d74d0`](https://github.com/TeFuirnever/oh-my-matrix/commit/24d74d0175e800f6847903867240eee00c01bc67)]:
+  - @oh-my-matrix/permission-policy@0.2.0
+
 ## 4.5.3
 
 ### Patch Changes

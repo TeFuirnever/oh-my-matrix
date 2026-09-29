@@ -1,5 +1,16 @@
 # @oh-my-matrix/dynamic-workflows
 
+## 2.0.0
+
+### Minor Changes
+
+- [`24d74d0`](https://github.com/TeFuirnever/oh-my-matrix/commit/24d74d0175e800f6847903867240eee00c01bc67) - **`subagentExtraAllowTools` operator expansion lever (ADR-022 companion, [#193](https://github.com/TeFuirnever/oh-my-matrix/issues/193)).** New `pluginConfig` key granting extra tool names to subagent sessions despite the fail-closed default — the same operator-owned lever Codex ships as per-agent `sandbox_mode` TOML and Gemini as policy-TOML `subagent`-scoped rules. Additive only; every grant is audited as an `allow`; guard-disarming names (generic executors `exec`/`bash`/… and fence-relevant writers `write`/`edit`/`apply_patch`/…) are refused at register with an error log; `highRiskTools` wins same-name conflicts. README now documents all three `pluginConfig` keys; ADR-022 marks the lever landed. Tests 88 → 94.
+
+### Patch Changes
+
+- Updated dependencies [[`24d74d0`](https://github.com/TeFuirnever/oh-my-matrix/commit/24d74d0175e800f6847903867240eee00c01bc67)]:
+  - @oh-my-matrix/permission-policy@0.2.0
+
 ## 1.2.1
 
 ### Patch Changes

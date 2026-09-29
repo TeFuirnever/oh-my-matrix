@@ -1,5 +1,11 @@
 # @oh-my-matrix/permission-policy
 
+## 0.2.0
+
+### Minor Changes
+
+- [`24d74d0`](https://github.com/TeFuirnever/oh-my-matrix/commit/24d74d0175e800f6847903867240eee00c01bc67) - **Subagent `exec` classification (ADR-022, [#191](https://github.com/TeFuirnever/oh-my-matrix/issues/191)).** Backtick shell-feature detection is now platform-gated via new `detectShellFeature` — POSIX keeps the strict any-backtick flag, win32 treats alphanumeric-followed backticks as PowerShell escapes, so quoted POSIX substitution (`echo "`cmd`"`) stays caught on both platforms. Interpreters (`node`/`python`/`python3`/`pip`/`pip3`/`uv`) and package-manager `dlx` classify as `network` (allow + audit; the accepted arbitrary-code residual is recorded in ADR-022). PowerShell cmdlets: `Get-Item`/`Get-Content`/`Get-ChildItem` → `read_only`; `Set-Content`/`Copy-Item`/`New-Item` → `workspace_write` behind a new argv-level write fence (`resolveWriteTargetsFromArgv`, `FENCE_SENTINEL_TARGET`) hardened through two review rounds: PS prefix abbreviation and attached-value forms, common parameters, comma arrays fenced per element, and fail-closed sentinels for pipeline-bound, `$variable`, targetless, and unknown/ambiguous-parameter targets. Trusted main sessions unchanged; tests 322 → 333.
+
 ## 0.1.5
 
 ### Patch Changes
