@@ -73,13 +73,16 @@ tar -xzf "$TMPDIR"/oh-my-matrix-dynamic-workflows-*.tgz -C "$TMPDIR/dw"
 [ -f "$TMPDIR/dw/package/skill/SKILL.md" ] && check "SKILL.md present" 0 || check "SKILL.md present" 1
 grep -q "refute" "$TMPDIR/dw/package/skill/SKILL.md" && check "SKILL.md _refute_ leading word" 0 || check "SKILL.md _refute_ leading word" 1
 
-# 14 role-prompts
+# role-prompts + reference files: tarball count must equal the SOURCE tree
+# count (drift in either direction means files were dropped from `files:` or
+# stale ones shipped). Hardcoded counts went stale once already (14 → 19).
 role_count=$(ls "$TMPDIR/dw/package/skill/references/role-prompts/"*.md 2>/dev/null | wc -l | tr -d ' ')
-[ "$role_count" = "14" ] && check "14 role-prompts (got ${role_count})" 0 || check "14 role-prompts (got ${role_count})" 1
+role_src=$(ls ./packages/dynamic-workflows/skill/references/role-prompts/*.md 2>/dev/null | wc -l | tr -d ' ')
+[ "$role_count" = "$role_src" ] && [ "$role_count" -gt 0 ] && check "role-prompts match source (${role_count})" 0 || check "role-prompts match source (tarball=${role_count} source=${role_src})" 1
 
-# 7 reference files
 ref_count=$(ls "$TMPDIR/dw/package/skill/references/"*.md 2>/dev/null | wc -l | tr -d ' ')
-[ "$ref_count" = "7" ] && check "7 reference files (got ${ref_count})" 0 || check "7 reference files (got ${ref_count})" 1
+ref_src=$(ls ./packages/dynamic-workflows/skill/references/*.md 2>/dev/null | wc -l | tr -d ' ')
+[ "$ref_count" = "$ref_src" ] && [ "$ref_count" -gt 0 ] && check "reference files match source (${ref_count})" 0 || check "reference files match source (tarball=${ref_count} source=${ref_src})" 1
 
 # plugin.json version aligned
 pl_v=$(node -p "require('$TMPDIR/dw/package/openclaw.plugin.json').version")
