@@ -43,7 +43,7 @@
     "openclaw": "2026.7.1-2",
     "@oh-my-matrix/permission-policy": "workspace:*",
     "typescript": "^5.0.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.10",
     "@types/node": "^22.0.0"
   }
 }
